@@ -18,7 +18,9 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-var allowedBalanceRechargeAmounts = []float64{5, 10, 15, 20}
+var allowedBalanceRechargeAmounts = []float64{5, 10, 15, 20, 50, 100, 200, 500}
+
+const allowedBalanceRechargeAmountsText = "5,10,15,20,50,100,200,500"
 
 // --- Order Creation ---
 
@@ -127,7 +129,7 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	}
 	if !isAllowedBalanceRechargeAmount(req.Amount) {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be one of the allowed recharge amounts").
-			WithMetadata(map[string]string{"allowed": "5,10,15,20"})
+			WithMetadata(map[string]string{"allowed": allowedBalanceRechargeAmountsText})
 	}
 	return nil, nil
 }

@@ -307,7 +307,7 @@ const amount = ref<number | null>(null)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
-const rechargeAmounts = [5, 10, 15, 20]
+const rechargeAmounts = [5, 10, 15, 20, 50, 100, 200, 500]
 
 const paymentPhase = ref<'select' | 'paying'>('select')
 

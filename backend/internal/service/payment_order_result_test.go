@@ -138,6 +138,22 @@ func TestCalculateCreateOrderPayAmountRejectsFractionalZeroDecimal(t *testing.T)
 	}
 }
 
+func TestIsAllowedBalanceRechargeAmountIncludesLargePresets(t *testing.T) {
+	t.Parallel()
+
+	for _, amount := range []float64{5, 10, 15, 20, 50, 100, 200, 500} {
+		if !isAllowedBalanceRechargeAmount(amount) {
+			t.Fatalf("amount %v should be allowed", amount)
+		}
+	}
+
+	for _, amount := range []float64{1, 30, 1000} {
+		if isAllowedBalanceRechargeAmount(amount) {
+			t.Fatalf("amount %v should not be allowed", amount)
+		}
+	}
+}
+
 func TestMaybeBuildWeChatOAuthRequiredResponse(t *testing.T) {
 	t.Setenv("PAYMENT_RESUME_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
 
