@@ -432,6 +432,43 @@ func TestUpdatePaymentConfig_PersistsVisibleMethodRouting(t *testing.T) {
 	}
 }
 
+func TestUpdatePaymentConfig_PreservesOmittedVisibleMethodRouting(t *testing.T) {
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{
+		SettingPaymentVisibleMethodAlipayEnabled: "true",
+		SettingPaymentVisibleMethodAlipaySource:  VisibleMethodSourceEasyPayAlipay,
+		SettingPaymentVisibleMethodWxpayEnabled:  "false",
+		SettingPaymentVisibleMethodWxpaySource:   VisibleMethodSourceEasyPayWechat,
+	}}
+	svc := &PaymentConfigService{settingRepo: repo}
+
+	enabled := true
+	err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{
+		Enabled: &enabled,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePaymentConfig returned error: %v", err)
+	}
+
+	if _, ok := repo.updates[SettingPaymentVisibleMethodAlipayEnabled]; ok {
+		t.Fatalf("omitted alipay enabled should not be updated")
+	}
+	if _, ok := repo.updates[SettingPaymentVisibleMethodAlipaySource]; ok {
+		t.Fatalf("omitted alipay source should not be updated")
+	}
+	if _, ok := repo.updates[SettingPaymentVisibleMethodWxpayEnabled]; ok {
+		t.Fatalf("omitted wxpay enabled should not be updated")
+	}
+	if _, ok := repo.updates[SettingPaymentVisibleMethodWxpaySource]; ok {
+		t.Fatalf("omitted wxpay source should not be updated")
+	}
+	if repo.values[SettingPaymentVisibleMethodAlipayEnabled] != "true" {
+		t.Fatalf("alipay enabled was changed to %q", repo.values[SettingPaymentVisibleMethodAlipayEnabled])
+	}
+	if repo.values[SettingPaymentVisibleMethodAlipaySource] != VisibleMethodSourceEasyPayAlipay {
+		t.Fatalf("alipay source was changed to %q", repo.values[SettingPaymentVisibleMethodAlipaySource])
+	}
+}
+
 func paymentConfigStrPtr(value string) *string {
 	return &value
 }

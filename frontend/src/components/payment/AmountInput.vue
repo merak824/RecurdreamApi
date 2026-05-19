@@ -77,8 +77,8 @@ const filteredAmounts = computed(() =>
 
 const placeholderText = computed(() => {
   if (props.min > 0 && props.max > 0) return `${props.min} - ${props.max}`
-  if (props.min > 0) return `≥ ${props.min}`
-  if (props.max > 0) return `≤ ${props.max}`
+  if (props.min > 0) return `>= ${props.min}`
+  if (props.max > 0) return `<= ${props.max}`
   return t('payment.enterAmount')
 })
 
