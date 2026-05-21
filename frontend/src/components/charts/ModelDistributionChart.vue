@@ -345,6 +345,10 @@ const chartColors = [
   '#a855f7'
 ]
 
+const metricValue = (value: number | undefined | null): number => {
+  return Number.isFinite(value) ? Number(value) : 0
+}
+
 const displayModelStats = computed(() => {
   const sourceStats = props.source === 'upstream'
     ? props.upstreamModelStats
@@ -354,7 +358,7 @@ const displayModelStats = computed(() => {
   if (!sourceStats?.length) return []
 
   const metricKey = props.metric === 'actual_cost' ? 'actual_cost' : 'total_tokens'
-  return [...sourceStats].sort((a, b) => b[metricKey] - a[metricKey])
+  return [...sourceStats].sort((a, b) => metricValue(b[metricKey]) - metricValue(a[metricKey]))
 })
 
 const chartData = computed(() => {
@@ -364,7 +368,7 @@ const chartData = computed(() => {
     labels: displayModelStats.value.map((m) => m.model),
     datasets: [
       {
-        data: displayModelStats.value.map((m) => props.metric === 'actual_cost' ? m.actual_cost : m.total_tokens),
+        data: displayModelStats.value.map((m) => props.metric === 'actual_cost' ? metricValue(m.actual_cost) : metricValue(m.total_tokens)),
         backgroundColor: chartColors.slice(0, displayModelStats.value.length),
         borderWidth: 0
       }
@@ -470,7 +474,8 @@ const rankingDoughnutOptions = computed(() => ({
   }
 }))
 
-const formatTokens = (value: number): string => {
+const formatTokens = (value: number | undefined | null): string => {
+  value = metricValue(value)
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`
   } else if (value >= 1_000_000) {
@@ -481,7 +486,8 @@ const formatTokens = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatNumber = (value: number): string => {
+const formatNumber = (value: number | undefined | null): string => {
+  value = metricValue(value)
   return value.toLocaleString()
 }
 
@@ -495,7 +501,8 @@ const getRankingRowLabel = (item: RankingDisplayItem): string => {
   return getRankingUserLabel(item)
 }
 
-const formatCost = (value: number): string => {
+const formatCost = (value: number | undefined | null): string => {
+  value = metricValue(value)
   if (value >= 1000) {
     return (value / 1000).toFixed(2) + 'K'
   } else if (value >= 1) {

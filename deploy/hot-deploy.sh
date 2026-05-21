@@ -182,14 +182,53 @@ nginx_running() {
 
 render_nginx_config() {
     local slot="$1"
+    render_nginx_config_to "$slot" "$NGINX_CONF_FILE"
+}
+
+render_nginx_config_to() {
+    local slot="$1"
+    local output_file="$2"
     local service
     service="$(slot_service "$slot")"
-    mkdir -p "$NGINX_CONF_DIR" "$STATE_DIR"
+    mkdir -p "$(dirname "$output_file")" "$STATE_DIR"
 
     sed \
         -e "s|\${UPSTREAM_SERVICE}|${service}|g" \
         -e "s|\${CLIENT_MAX_BODY_SIZE}|${CLIENT_MAX_BODY_SIZE}|g" \
-        "$NGINX_TEMPLATE" | sed $'1s/^\xef\xbb\xbf//' > "$NGINX_CONF_FILE"
+        "$NGINX_TEMPLATE" | sed $'1s/^\xef\xbb\xbf//' > "$output_file"
+}
+
+backup_nginx_config() {
+    local backup_file=""
+    if [ -f "$NGINX_CONF_FILE" ]; then
+        backup_file="${STATE_DIR}/sub2api.conf.$(date +%Y%m%d%H%M%S).bak"
+        mkdir -p "$STATE_DIR"
+        cp "$NGINX_CONF_FILE" "$backup_file"
+    fi
+    printf '%s' "$backup_file"
+}
+
+restore_nginx_config() {
+    local backup_file="${1:-}"
+    if [ -n "$backup_file" ] && [ -f "$backup_file" ]; then
+        cp "$backup_file" "$NGINX_CONF_FILE"
+        return
+    fi
+    rm -f "$NGINX_CONF_FILE"
+}
+
+reload_nginx_or_restore() {
+    local backup_file="$1"
+    local reason="$2"
+
+    warn "$reason"
+    restore_nginx_config "$backup_file"
+    if nginx_running; then
+        compose exec -T nginx nginx -t >/dev/null 2>&1 \
+            && compose exec -T nginx nginx -s reload >/dev/null 2>&1 \
+            || true
+    fi
+    exit 1
 }
 
 wait_for_container_health() {
@@ -349,6 +388,9 @@ info "Target slot: $TARGET_SLOT"
 mkdir -p data postgres_data redis_data "$NGINX_CONF_DIR" "$STATE_DIR"
 
 if [ ! -f "$NGINX_CONF_FILE" ]; then
+    if nginx_running; then
+        fail "nginx is running but $NGINX_CONF_FILE is missing; inspect the server before hot deploy"
+    fi
     info "Creating initial nginx config for $TARGET_SLOT"
     render_nginx_config "$TARGET_SLOT"
 fi
@@ -371,15 +413,22 @@ if ! wait_for_container_health "$TARGET_CONTAINER"; then
 fi
 
 info "Switching nginx upstream to $TARGET_SERVICE"
+NGINX_CONF_BACKUP="$(backup_nginx_config)"
 render_nginx_config "$TARGET_SLOT"
 
 if ! nginx_running; then
+    info "Testing nginx config before public port handoff"
+    if ! compose run --rm --no-deps nginx nginx -t >/dev/null; then
+        restore_nginx_config "$NGINX_CONF_BACKUP"
+        fail "nginx config test failed; legacy traffic untouched"
+    fi
     if [ "$TAKEOVER_LEGACY" = "true" ] && container_running "sub2api"; then
         info "Stopping legacy sub2api container so nginx can bind the public port"
         docker stop sub2api >/dev/null
         LEGACY_STOPPED=true
     fi
     if ! compose up -d nginx; then
+        restore_nginx_config "$NGINX_CONF_BACKUP"
         if [ "$LEGACY_STOPPED" = "true" ]; then
             warn "nginx failed to start; restarting legacy sub2api container"
             docker start sub2api >/dev/null
@@ -387,10 +436,13 @@ if ! nginx_running; then
         exit 1
     fi
 else
-    compose exec -T nginx nginx -t >/dev/null
-    compose exec -T nginx nginx -s reload
+    if ! compose exec -T nginx nginx -t >/dev/null; then
+        reload_nginx_or_restore "$NGINX_CONF_BACKUP" "nginx config test failed; keeping previous traffic target"
+    fi
+    if ! compose exec -T nginx nginx -s reload; then
+        reload_nginx_or_restore "$NGINX_CONF_BACKUP" "nginx reload failed; restoring previous traffic target"
+    fi
 fi
-printf '%s\n' "$TARGET_SLOT" > "$STATE_FILE"
 
 if ! wait_for_public_health; then
     warn "Traffic switch completed, but public health check failed"
@@ -402,11 +454,14 @@ if ! wait_for_public_health; then
         printf '%s\n' "$OLD_SLOT" > "$STATE_FILE"
     elif [ "$LEGACY_STOPPED" = "true" ]; then
         warn "Restarting legacy sub2api container"
+        restore_nginx_config "$NGINX_CONF_BACKUP"
         compose stop nginx >/dev/null 2>&1 || true
         docker start sub2api >/dev/null
     fi
     exit 1
 fi
+
+printf '%s\n' "$TARGET_SLOT" > "$STATE_FILE"
 
 if [ "$KEEP_OLD" != "true" ] && container_running "$OLD_SERVICE"; then
     if [ "$DRAIN_SECONDS" -gt 0 ]; then

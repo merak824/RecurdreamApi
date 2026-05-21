@@ -15,7 +15,6 @@ x-sub2api-app: &sub2api-app
       hard: 100000
   volumes:
     - ./data:/app/data
-    - ./config.yaml:/app/data/config.yaml
   env_file:
     - .env
   environment:
