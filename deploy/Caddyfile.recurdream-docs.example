@@ -1,0 +1,26 @@
+docs.recurdream.com {
+    root * /var/www/recurdream-docs
+    try_files {path} {path}.html {path}/ /404.html
+    file_server
+
+    encode zstd gzip
+
+    @static {
+        path /assets/*
+        path *.css
+        path *.js
+        path *.svg
+        path *.png
+        path *.jpg
+        path *.jpeg
+        path *.webp
+        path *.woff
+        path *.woff2
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    log {
+        output file /var/log/caddy/recurdream-docs.log
+        format json
+    }
+}
