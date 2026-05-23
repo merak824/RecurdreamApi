@@ -105,6 +105,8 @@ docker compose -f docker-compose.hot.yml --profile green logs -f sub2api-green
 
 - 数据库迁移必须兼容旧版本。脚本能保证服务切换不断流，但不能把破坏性 schema 变更自动变成零停机。
 - 项目已有 PostgreSQL advisory lock，会避免多实例同时执行迁移。
+- 从旧 `docker-compose.local.yml` 迁移到热部署时，默认继续复用 `./data/config.yaml`；不要临时升级 PostgreSQL/Redis 镜像或移动数据目录。
+- 长连接或流式请求较多时，建议首轮使用 `KEEP_OLD=true` 或把 `DRAIN_SECONDS` 调到 120-300 秒，再手动确认旧槽位可以停。
 - 日常热部署只会拉取和替换应用镜像，不会顺手升级 PostgreSQL/Redis。
 - 默认不长期保留两个应用实例，主要是为了避免后台任务重复执行。
 - 运行时生成的 nginx 配置和活动槽位状态不会提交到 Git。

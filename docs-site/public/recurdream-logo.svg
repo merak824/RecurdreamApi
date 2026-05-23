@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Recurdream logo">
+  <defs>
+    <radialGradient id="bg" cx="34%" cy="22%" r="88%">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset=".23" stop-color="#4338ca"/>
+      <stop offset=".58" stop-color="#160a3a"/>
+      <stop offset="1" stop-color="#070816"/>
+    </radialGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset=".2" stop-color="#a5f3fc"/>
+      <stop offset=".45" stop-color="#8b5cf6"/>
+      <stop offset=".72" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#0b1020"/>
+    </radialGradient>
+    <linearGradient id="meteorA" x1="62" y1="320" x2="410" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset=".36" stop-color="#8b5cf6"/>
+      <stop offset=".72" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#f8fbff"/>
+    </linearGradient>
+    <linearGradient id="meteorB" x1="80" y1="226" x2="384" y2="336" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset=".32" stop-color="#6366f1"/>
+      <stop offset=".72" stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="meteorC" x1="116" y1="386" x2="374" y2="278" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset=".44" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#a5f3fc"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.55 0 0 0 0 0.25 0 0 0 0 1 0 0 0 .8 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#7c3aed" flood-opacity=".42"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#22d3ee" flood-opacity=".34"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <path d="M38 364c91 42 194 59 310 33 56-12 99-32 135-63v130H38V364Z" fill="#0f172a" opacity=".52"/>
+  <circle cx="386" cy="116" r="96" fill="#22d3ee" opacity=".11"/>
+  <circle cx="110" cy="426" r="116" fill="#ec4899" opacity=".12"/>
+  <g filter="url(#soft)">
+    <path fill="none" stroke="url(#meteorA)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" d="M64 338c86-120 252-140 344-36 54 61 15 139-68 143-73 3-132-52-114-116 16-59 99-73 138-27 27 32 6 72-43 68"/>
+    <path fill="none" stroke="url(#meteorB)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" opacity=".9" d="M88 228c82-54 202-54 278 11 58 49 50 126-21 150-53 18-111-8-121-54-11-47 41-79 85-57 24 12 27 40 3 53"/>
+    <path fill="none" stroke="url(#meteorC)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity=".86" d="M106 420c74-18 142-4 188 36 35 32 23 77-23 88-35 8-67-12-70-43"/>
+  </g>
+  <g filter="url(#glow)">
+    <circle cx="286" cy="314" r="70" fill="url(#core)" opacity=".5"/>
+    <circle cx="286" cy="314" r="42" fill="#07111f" opacity=".74"/>
+    <path fill="#fff" d="m286 268 10.8 26.4 27.4 10.8-27.4 10.8L286 342l-10.8-26-27.4-10.8 27.4-10.8L286 268Z"/>
+    <path fill="#fff" opacity=".9" d="m364 235 4.6 11 11.2 4.6-11.2 4.6-4.6 11-4.6-11-11.2-4.6 11.2-4.6 4.6-11ZM215 374l4 9.6 9.8 4-9.8 4-4 9.6-4-9.6-9.8-4 9.8-4 4-9.6ZM332 382l3.4 8 8.2 3.4-8.2 3.4-3.4 8-3.4-8-8.2-3.4 8.2-3.4 3.4-8Z"/>
+  </g>
+  <path fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".46" d="M164 162c82-38 184-26 255 34"/>
+  <path fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".34" d="M80 178h46M103 155v46M418 404h40M438 384v40"/>
+  <path fill="#fff" opacity=".9" d="m108 100 7.6 18.2 18.8 7.6-18.8 7.6-7.6 18.2-7.6-18.2-18.8-7.6 18.8-7.6L108 100ZM436 154l10.6 25.4 26.4 10.6-26.4 10.6L436 226l-10.6-25.4L399 190l26.4-10.6L436 154Z"/>
+</svg>

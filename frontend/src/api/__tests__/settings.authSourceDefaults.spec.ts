@@ -53,6 +53,27 @@ describe("admin settings auth source defaults helpers", () => {
       grant_on_signup: false,
       grant_on_first_bind: false,
     });
+    expect(state.github).toEqual({
+      balance: 0,
+      concurrency: 5,
+      subscriptions: [],
+      grant_on_signup: false,
+      grant_on_first_bind: false,
+    });
+    expect(state.google).toEqual({
+      balance: 0,
+      concurrency: 5,
+      subscriptions: [],
+      grant_on_signup: false,
+      grant_on_first_bind: false,
+    });
+    expect(state.dingtalk).toEqual({
+      balance: 0,
+      concurrency: 5,
+      subscriptions: [],
+      grant_on_signup: false,
+      grant_on_first_bind: false,
+    });
   });
 
   it("defaults grant-on-signup to disabled when settings are missing", () => {
@@ -62,6 +83,9 @@ describe("admin settings auth source defaults helpers", () => {
     expect(state.linuxdo.grant_on_signup).toBe(false);
     expect(state.oidc.grant_on_signup).toBe(false);
     expect(state.wechat.grant_on_signup).toBe(false);
+    expect(state.github.grant_on_signup).toBe(false);
+    expect(state.google.grant_on_signup).toBe(false);
+    expect(state.dingtalk.grant_on_signup).toBe(false);
   });
 
   it("appends auth source defaults back onto update payload", () => {
@@ -126,6 +150,21 @@ describe("admin settings auth source defaults helpers", () => {
       auth_source_default_wechat_subscriptions: [],
       auth_source_default_wechat_grant_on_signup: false,
       auth_source_default_wechat_grant_on_first_bind: false,
+      auth_source_default_github_balance: 0,
+      auth_source_default_github_concurrency: 5,
+      auth_source_default_github_subscriptions: [],
+      auth_source_default_github_grant_on_signup: false,
+      auth_source_default_github_grant_on_first_bind: false,
+      auth_source_default_google_balance: 0,
+      auth_source_default_google_concurrency: 5,
+      auth_source_default_google_subscriptions: [],
+      auth_source_default_google_grant_on_signup: false,
+      auth_source_default_google_grant_on_first_bind: false,
+      auth_source_default_dingtalk_balance: 0,
+      auth_source_default_dingtalk_concurrency: 5,
+      auth_source_default_dingtalk_subscriptions: [],
+      auth_source_default_dingtalk_grant_on_signup: false,
+      auth_source_default_dingtalk_grant_on_first_bind: false,
     });
   });
 });
