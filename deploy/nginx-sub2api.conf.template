@@ -14,6 +14,9 @@ server {
 
     client_max_body_size ${CLIENT_MAX_BODY_SIZE};
     keepalive_timeout 120s;
+    proxy_buffer_size ${PROXY_BUFFER_SIZE};
+    proxy_buffers ${PROXY_BUFFERS};
+    proxy_busy_buffers_size ${PROXY_BUSY_BUFFERS_SIZE};
 
     location = /health {
         proxy_pass http://sub2api_upstream;

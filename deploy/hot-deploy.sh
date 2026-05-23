@@ -40,8 +40,14 @@ NO_PULL="${NO_PULL:-$(dotenv_get NO_PULL false)}"
 BUILD_IMAGE="${BUILD_IMAGE:-$(dotenv_get BUILD_IMAGE false)}"
 BUILD_CONTEXT="${BUILD_CONTEXT:-$(dotenv_get BUILD_CONTEXT ..)}"
 BUILD_DOCKERFILE="${BUILD_DOCKERFILE:-$(dotenv_get BUILD_DOCKERFILE ../Dockerfile)}"
+LOAD_IMAGE_ARCHIVE="${LOAD_IMAGE_ARCHIVE:-$(dotenv_get LOAD_IMAGE_ARCHIVE "")}"
+HOT_DEPLOY_MIN_BUILD_MEM_MB="${HOT_DEPLOY_MIN_BUILD_MEM_MB:-$(dotenv_get HOT_DEPLOY_MIN_BUILD_MEM_MB 3072)}"
+ALLOW_LOW_RESOURCE_BUILD="${ALLOW_LOW_RESOURCE_BUILD:-$(dotenv_get ALLOW_LOW_RESOURCE_BUILD false)}"
 TAKEOVER_LEGACY="${TAKEOVER_LEGACY:-$(dotenv_get TAKEOVER_LEGACY true)}"
 ALLOW_ACTIVE_SLOT_DEPLOY="${ALLOW_ACTIVE_SLOT_DEPLOY:-$(dotenv_get ALLOW_ACTIVE_SLOT_DEPLOY false)}"
+PROXY_BUFFER_SIZE="${PROXY_BUFFER_SIZE:-$(dotenv_get PROXY_BUFFER_SIZE 32k)}"
+PROXY_BUFFERS="${PROXY_BUFFERS:-$(dotenv_get PROXY_BUFFERS "8 32k")}"
+PROXY_BUSY_BUFFERS_SIZE="${PROXY_BUSY_BUFFERS_SIZE:-$(dotenv_get PROXY_BUSY_BUFFERS_SIZE 64k)}"
 
 BLUE_SLOT="blue"
 GREEN_SLOT="green"
@@ -83,13 +89,14 @@ require_min_length() {
 usage() {
     cat <<'EOF'
 Usage:
-  bash hot-deploy.sh [--slot blue|green] [--image IMAGE] [--build] [--no-pull] [--keep-old]
+  bash hot-deploy.sh [--slot blue|green] [--image IMAGE] [--build] [--load-image ARCHIVE] [--no-pull] [--keep-old]
 
 Environment:
   POSTGRES_PASSWORD          Required. Must not be the example value.
   JWT_SECRET                 Required. At least 32 characters.
   TOTP_ENCRYPTION_KEY        Required. At least 32 characters.
   SUB2API_IMAGE              Image to deploy. Default: weishaw/sub2api:latest
+  LOAD_IMAGE_ARCHIVE         docker save tar/tar.gz archive to load before deploy.
   SERVER_PORT                Host port exposed by nginx. Default: 8080
   BIND_HOST                  Host bind address. Default: 0.0.0.0
   HEALTH_TIMEOUT             Seconds to wait for the new slot. Default: 180
@@ -97,6 +104,9 @@ Environment:
   BUILD_CONTEXT              Docker build context for --build. Default: ..
   BUILD_DOCKERFILE           Dockerfile path for --build. Default: ../Dockerfile
   BUILD_TAG                  Image tag for --build. Default: sub2api-hot:<timestamp>
+  HOT_DEPLOY_MIN_BUILD_MEM_MB Refuse --build below this MemTotal. Default: 3072.
+  ALLOW_LOW_RESOURCE_BUILD=true
+                             Allow --build on hosts below HOT_DEPLOY_MIN_BUILD_MEM_MB.
   TAKEOVER_LEGACY=true       Stop legacy container "sub2api" only when nginx first takes over.
   ALLOW_ACTIVE_SLOT_DEPLOY=false
                              Allow deploying into the active slot. This is not hot.
@@ -106,6 +116,7 @@ Environment:
 Examples:
   bash hot-deploy.sh
   bash hot-deploy.sh --build
+  bash hot-deploy.sh --load-image /tmp/sub2api-hot.tar.gz --keep-old
   bash hot-deploy.sh --image ghcr.io/merak824/recurdreamapi:latest
   SUB2API_IMAGE=weishaw/sub2api:v1.2.3 bash hot-deploy.sh
 EOF
@@ -131,6 +142,12 @@ while [ "$#" -gt 0 ]; do
             BUILD_IMAGE=true
             NO_PULL=true
             shift
+            ;;
+        --load-image)
+            [ "$#" -ge 2 ] || fail "--load-image requires a docker save tar or tar.gz archive"
+            LOAD_IMAGE_ARCHIVE="$2"
+            NO_PULL=true
+            shift 2
             ;;
         --keep-old)
             KEEP_OLD=true
@@ -195,6 +212,9 @@ render_nginx_config_to() {
     sed \
         -e "s|\${UPSTREAM_SERVICE}|${service}|g" \
         -e "s|\${CLIENT_MAX_BODY_SIZE}|${CLIENT_MAX_BODY_SIZE}|g" \
+        -e "s|\${PROXY_BUFFER_SIZE}|${PROXY_BUFFER_SIZE}|g" \
+        -e "s|\${PROXY_BUFFERS}|${PROXY_BUFFERS}|g" \
+        -e "s|\${PROXY_BUSY_BUFFERS_SIZE}|${PROXY_BUSY_BUFFERS_SIZE}|g" \
         "$NGINX_TEMPLATE" | sed $'1s/^\xef\xbb\xbf//' > "$output_file"
 }
 
@@ -275,6 +295,79 @@ wait_for_public_health() {
 
     warn "curl not found; skipped public health check at $url"
     return 0
+}
+
+host_mem_total_mb() {
+    if [ -r /proc/meminfo ]; then
+        awk '/^MemTotal:/ { printf "%d", $2 / 1024 }' /proc/meminfo
+        return
+    fi
+    printf '0'
+}
+
+check_build_resources() {
+    if [ "$BUILD_IMAGE" != "true" ] || [ "$ALLOW_LOW_RESOURCE_BUILD" = "true" ]; then
+        return
+    fi
+    case "$HOT_DEPLOY_MIN_BUILD_MEM_MB" in
+        ''|*[!0-9]*) return ;;
+    esac
+
+    local mem_total_mb
+    mem_total_mb="$(host_mem_total_mb)"
+    if [ "$mem_total_mb" -gt 0 ] && [ "$mem_total_mb" -lt "$HOT_DEPLOY_MIN_BUILD_MEM_MB" ]; then
+        fail "host memory is ${mem_total_mb}MiB; refusing --build below HOT_DEPLOY_MIN_BUILD_MEM_MB=${HOT_DEPLOY_MIN_BUILD_MEM_MB}. Build the image on a larger machine, copy it with docker save/load, then run: bash hot-deploy.sh --load-image ARCHIVE --keep-old. To override, set ALLOW_LOW_RESOURCE_BUILD=true."
+    fi
+}
+
+prepare_runtime_config() {
+    mkdir -p data
+
+    if [ ! -f "config.yaml" ]; then
+        return
+    fi
+
+    if [ ! -f "data/config.yaml" ]; then
+        warn "legacy ./config.yaml exists and ./data/config.yaml is missing; copying it for the hot-deploy volume layout"
+        cp -p "config.yaml" "data/config.yaml"
+        return
+    fi
+
+    if ! cmp -s "config.yaml" "data/config.yaml"; then
+        fail "both ./config.yaml and ./data/config.yaml exist but differ. This can silently change runtime config after deploy because docker-compose.hot.yml mounts ./data. Copy the active config to ./data/config.yaml or remove the stale file, then rerun."
+    fi
+}
+
+load_image_archive() {
+    local archive="$1"
+    local load_output
+    local loaded_image
+
+    [ -f "$archive" ] || fail "image archive not found: $archive"
+    info "Loading image archive: $archive"
+
+    case "$archive" in
+        *.tar.gz|*.tgz|*.gz)
+            command -v gzip >/dev/null 2>&1 || fail "gzip is required to load compressed image archives"
+            if ! load_output="$(gzip -dc "$archive" | docker load 2>&1)"; then
+                printf '%s\n' "$load_output"
+                fail "docker load failed"
+            fi
+            ;;
+        *)
+            if ! load_output="$(docker load -i "$archive" 2>&1)"; then
+                printf '%s\n' "$load_output"
+                fail "docker load failed"
+            fi
+            ;;
+    esac
+
+    printf '%s\n' "$load_output"
+    loaded_image="$(printf '%s\n' "$load_output" | awk -F': ' '/Loaded image:/ { image=$2 } END { print image }')"
+    if [ -z "${SUB2API_IMAGE:-}" ]; then
+        [ -n "$loaded_image" ] || fail "image archive loaded without a tag; pass --image IMAGE explicitly"
+        export SUB2API_IMAGE="$loaded_image"
+    fi
 }
 
 active_slot_from_state() {
@@ -370,6 +463,13 @@ require_setting JWT_SECRET "$JWT_SECRET_VALUE"
 require_min_length JWT_SECRET "$JWT_SECRET_VALUE" 32
 require_setting TOTP_ENCRYPTION_KEY "$TOTP_ENCRYPTION_KEY_VALUE"
 require_min_length TOTP_ENCRYPTION_KEY "$TOTP_ENCRYPTION_KEY_VALUE" 32
+
+check_build_resources
+prepare_runtime_config
+
+if [ -n "$LOAD_IMAGE_ARCHIVE" ]; then
+    load_image_archive "$LOAD_IMAGE_ARCHIVE"
+fi
 
 if [ "$BUILD_IMAGE" = "true" ]; then
     BUILD_TAG="${BUILD_TAG:-sub2api-hot:$(date +%Y%m%d%H%M%S)}"
