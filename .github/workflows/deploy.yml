@@ -1,0 +1,219 @@
+name: Deploy to server
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_path:
+        description: "Server runtime directory"
+        required: true
+        type: string
+        default: "/data/sub2api"
+      keep_old:
+        description: "Keep the previous blue/green slot running after traffic switches"
+        required: true
+        type: boolean
+        default: true
+      drain_seconds:
+        description: "Drain window before stopping the old slot when keep_old is false"
+        required: true
+        type: string
+        default: "300"
+      health_url:
+        description: "Public health URL to verify after deployment"
+        required: false
+        type: string
+        default: "https://api.recurdream.com/health"
+      cleanup_archive:
+        description: "Remove uploaded image archive from /tmp after a successful deploy"
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build image and hot deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ inputs.deploy_path }}
+      KEEP_OLD_INPUT: ${{ inputs.keep_old }}
+      DRAIN_SECONDS_INPUT: ${{ inputs.drain_seconds }}
+      HEALTH_URL: ${{ inputs.health_url }}
+      CLEANUP_ARCHIVE: ${{ inputs.cleanup_archive }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          for name in SERVER_HOST SERVER_USER SERVER_SSH_KEY DEPLOY_PATH DRAIN_SECONDS_INPUT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required"
+              exit 1
+            fi
+          done
+
+          case "$DRAIN_SECONDS_INPUT" in
+            ''|*[!0-9]*)
+              echo "::error::drain_seconds must be a non-negative integer"
+              exit 1
+              ;;
+          esac
+
+          case "$SERVER_PORT" in
+            ''|*[!0-9]*)
+              echo "::error::SERVER_PORT must be a numeric secret when set"
+              exit 1
+              ;;
+          esac
+
+      - name: Prepare image metadata
+        id: meta
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          short_sha="${GITHUB_SHA::12}"
+          image_tag="sub2api-hot:${short_sha}"
+          archive_name="sub2api-hot-${short_sha}.tar.gz"
+          runtime_bundle="sub2api-runtime-${short_sha}.tar.gz"
+
+          {
+            echo "image_tag=${image_tag}"
+            echo "archive_name=${archive_name}"
+            echo "archive_path=${RUNNER_TEMP}/${archive_name}"
+            echo "remote_archive=/tmp/${archive_name}"
+            echo "runtime_bundle=${runtime_bundle}"
+            echo "runtime_bundle_path=${RUNNER_TEMP}/${runtime_bundle}"
+            echo "remote_runtime_bundle=/tmp/${runtime_bundle}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and save Docker image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash deploy/build_image.sh \
+            --tag "${{ steps.meta.outputs.image_tag }}" \
+            --save "${{ steps.meta.outputs.archive_path }}"
+
+      - name: Pack runtime deployment files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tar -czf "${{ steps.meta.outputs.runtime_bundle_path }}" \
+            -C deploy \
+            hot-deploy.sh \
+            docker-compose.hot.yml \
+            nginx-sub2api.conf.template \
+            .env.example \
+            README.md \
+            HOT_DEPLOY_CN.md
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${SERVER_SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SERVER_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Upload image and runtime bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scp -P "$SERVER_PORT" -i ~/.ssh/deploy_key \
+            "${{ steps.meta.outputs.archive_path }}" \
+            "${{ steps.meta.outputs.runtime_bundle_path }}" \
+            "${SERVER_USER}@${SERVER_HOST}:/tmp/"
+
+      - name: Hot deploy on server
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key "${SERVER_USER}@${SERVER_HOST}" \
+            DEPLOY_PATH="$DEPLOY_PATH" \
+            REMOTE_ARCHIVE="${{ steps.meta.outputs.remote_archive }}" \
+            REMOTE_RUNTIME_BUNDLE="${{ steps.meta.outputs.remote_runtime_bundle }}" \
+            KEEP_OLD_INPUT="$KEEP_OLD_INPUT" \
+            DRAIN_SECONDS_INPUT="$DRAIN_SECONDS_INPUT" \
+            CLEANUP_ARCHIVE="$CLEANUP_ARCHIVE" \
+            'bash -s' <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "[ERROR] Missing required file: $1" >&2
+              exit 1
+            fi
+          }
+
+          require_file "$REMOTE_ARCHIVE"
+          require_file "$REMOTE_RUNTIME_BUNDLE"
+          mkdir -p "$DEPLOY_PATH"
+
+          tmp_dir="$(mktemp -d /tmp/sub2api-runtime.XXXXXX)"
+          cleanup() {
+            rm -rf "$tmp_dir"
+          }
+          trap cleanup EXIT
+
+          tar -xzf "$REMOTE_RUNTIME_BUNDLE" -C "$tmp_dir"
+          install -m 0755 "$tmp_dir/hot-deploy.sh" "$DEPLOY_PATH/hot-deploy.sh"
+          install -m 0644 "$tmp_dir/docker-compose.hot.yml" "$DEPLOY_PATH/docker-compose.hot.yml"
+          install -m 0644 "$tmp_dir/nginx-sub2api.conf.template" "$DEPLOY_PATH/nginx-sub2api.conf.template"
+          install -m 0644 "$tmp_dir/README.md" "$DEPLOY_PATH/README.md"
+          install -m 0644 "$tmp_dir/HOT_DEPLOY_CN.md" "$DEPLOY_PATH/HOT_DEPLOY_CN.md"
+          if [ ! -f "$DEPLOY_PATH/.env.example" ]; then
+            install -m 0644 "$tmp_dir/.env.example" "$DEPLOY_PATH/.env.example"
+          fi
+
+          cd "$DEPLOY_PATH"
+          if [ ! -f ".env" ]; then
+            echo "[ERROR] $DEPLOY_PATH/.env is missing; refusing to deploy without production secrets" >&2
+            exit 1
+          fi
+
+          deploy_args=(--load-image "$REMOTE_ARCHIVE")
+          if [ "$KEEP_OLD_INPUT" = "true" ]; then
+            deploy_args+=(--keep-old)
+          fi
+
+          DRAIN_SECONDS="$DRAIN_SECONDS_INPUT" bash hot-deploy.sh "${deploy_args[@]}"
+
+          docker compose -f docker-compose.hot.yml --profile blue --profile green ps
+
+          if [ "$CLEANUP_ARCHIVE" = "true" ]; then
+            rm -f "$REMOTE_ARCHIVE" "$REMOTE_RUNTIME_BUNDLE"
+          fi
+          REMOTE_SCRIPT
+
+      - name: Verify public health
+        if: ${{ inputs.health_url != '' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 8 --retry-delay 5 --max-time 15 "$HEALTH_URL"
