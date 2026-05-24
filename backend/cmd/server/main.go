@@ -121,9 +121,9 @@ func runSetupServer() {
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           r,
-		Protocols:         protocols,
 		ReadHeaderTimeout: 30 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		Protocols:         protocols,
 	}
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
