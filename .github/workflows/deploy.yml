@@ -90,12 +90,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           short_sha="${GITHUB_SHA::12}"
-          image_tag="sub2api-hot:${short_sha}"
-          archive_name="sub2api-hot-${short_sha}.tar.gz"
-          runtime_bundle="sub2api-runtime-${short_sha}.tar.gz"
+          version="$(tr -d '\r\n[:space:]' < backend/cmd/server/VERSION)"
+          if [ -z "$version" ]; then
+            echo "::error::backend/cmd/server/VERSION is empty"
+            exit 1
+          fi
+          version_tag="v${version}-${short_sha}"
+          image_tag="sub2api-hot:${version_tag}"
+          archive_name="sub2api-hot-${version_tag}.tar.gz"
+          runtime_bundle="sub2api-runtime-${version_tag}.tar.gz"
 
           {
             echo "image_tag=${image_tag}"
+            echo "version_tag=${version_tag}"
             echo "archive_name=${archive_name}"
             echo "archive_path=${RUNNER_TEMP}/${archive_name}"
             echo "remote_archive=/tmp/${archive_name}"
