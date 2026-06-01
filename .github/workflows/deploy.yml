@@ -165,6 +165,7 @@ jobs:
             DEPLOY_PATH="$DEPLOY_PATH" \
             REMOTE_ARCHIVE="${{ steps.meta.outputs.remote_archive }}" \
             REMOTE_RUNTIME_BUNDLE="${{ steps.meta.outputs.remote_runtime_bundle }}" \
+            IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
             KEEP_OLD_INPUT="$KEEP_OLD_INPUT" \
             DRAIN_SECONDS_INPUT="$DRAIN_SECONDS_INPUT" \
             CLEANUP_ARCHIVE="$CLEANUP_ARCHIVE" \
@@ -204,7 +205,7 @@ jobs:
             exit 1
           fi
 
-          deploy_args=(--load-image "$REMOTE_ARCHIVE")
+          deploy_args=(--load-image "$REMOTE_ARCHIVE" --image "$IMAGE_TAG")
           if [ "$KEEP_OLD_INPUT" = "true" ]; then
             deploy_args+=(--keep-old)
           fi
