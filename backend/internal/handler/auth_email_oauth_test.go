@@ -433,6 +433,10 @@ func (r *oauthEmailAffiliateRepoStub) GetAffiliateUserOverview(context.Context, 
 	panic("unexpected GetAffiliateUserOverview call")
 }
 
+func (r *oauthEmailAffiliateRepoStub) GetAffiliateAgentUsage(context.Context, int64, time.Time, time.Time) (*service.AffiliateAgentUsageSummary, error) {
+	panic("unexpected GetAffiliateAgentUsage call")
+}
+
 func findSetCookieValue(cookies []*http.Cookie, name string) string {
 	for _, cookie := range cookies {
 		if cookie != nil && strings.EqualFold(cookie.Name, name) && cookie.MaxAge >= 0 {
