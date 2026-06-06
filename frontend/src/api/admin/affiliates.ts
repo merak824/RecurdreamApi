@@ -5,12 +5,13 @@
  */
 
 import { apiClient } from '../client'
-import type { PaginatedResponse } from '@/types'
+import type { AffiliateWithdrawal, PaginatedResponse } from '@/types'
 
 export interface AffiliateAdminEntry {
   user_id: number
   email: string
   username: string
+  role: string
   aff_code: string
   aff_code_custom: boolean
   aff_rebate_rate_percent?: number | null
@@ -77,6 +78,34 @@ export interface AffiliateTransferRecord {
   created_at: string
 }
 
+export interface AffiliateWithdrawalRecord {
+  id: number
+  record_type: 'transfer' | 'withdrawal' | string
+  destination: 'balance' | 'alipay_wechat' | string
+  user_id: number
+  user_email?: string
+  username?: string
+  amount: number
+  status: 'pending' | 'paid' | 'rejected' | 'completed' | string
+  collection_qr_data?: string
+  collection_qr_mime?: string
+  collection_qr_size?: number
+  payment_proof_data?: string
+  payment_proof_mime?: string
+  payment_proof_size?: number
+  reject_reason?: string
+  admin_note?: string
+  processed_by?: number | null
+  processed_at?: string | null
+  balance_after?: number | null
+  available_quota_after?: number | null
+  frozen_quota_after?: number | null
+  history_quota_after?: number | null
+  snapshot_available?: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface AffiliateUserOverview {
   user_id: number
   email: string
@@ -87,6 +116,44 @@ export interface AffiliateUserOverview {
   rebated_invitee_count: number
   available_quota: number
   history_quota: number
+}
+
+export interface AffiliateAgentDailyUsage {
+  date: string
+  total_tokens: number
+  request_count: number
+  actual_cost: number
+}
+
+export interface AffiliateAgentInviteeUsage {
+  user_id: number
+  email: string
+  username: string
+  total_tokens: number
+  average_daily_tokens: number
+  request_count: number
+  actual_cost: number
+}
+
+export interface AffiliateAgentUsageSummary {
+  agent_user_id: number
+  week_start: string
+  week_end: string
+  total_tokens: number
+  average_daily_tokens: number
+  request_count: number
+  actual_cost: number
+  invitee_count: number
+  active_invitee_count: number
+  suggested_rebate_rate_percent: number
+  daily: AffiliateAgentDailyUsage[]
+  invitees: AffiliateAgentInviteeUsage[]
+}
+
+export interface GetAffiliateAgentUsageParams {
+  start_at?: string
+  end_at?: string
+  timezone?: string
 }
 
 export interface UpdateAffiliateUserRequest {
@@ -101,6 +168,16 @@ export interface BatchSetRateRequest {
   aff_rebate_rate_percent?: number | null
   /** Set true to clear rates instead of setting. */
   clear?: boolean
+}
+
+export interface MarkWithdrawalPaidRequest {
+  payment_proof_data?: string
+  admin_note?: string
+}
+
+export interface RejectWithdrawalRequest {
+  reject_reason?: string
+  admin_note?: string
 }
 
 export interface SimpleUser {
@@ -206,11 +283,60 @@ export async function listTransferRecords(
   return data
 }
 
+export async function listWithdrawalRecords(
+  params: ListAffiliateRecordsParams = {},
+): Promise<PaginatedResponse<AffiliateWithdrawalRecord>> {
+  const { data } = await apiClient.get<PaginatedResponse<AffiliateWithdrawalRecord>>(
+    '/admin/affiliates/withdrawals',
+    { params: recordParams(params) },
+  )
+  return data
+}
+
+export async function markWithdrawalPaid(
+  id: number,
+  payload: MarkWithdrawalPaidRequest,
+): Promise<AffiliateWithdrawal> {
+  const { data } = await apiClient.post<AffiliateWithdrawal>(
+    `/admin/affiliates/withdrawals/${id}/paid`,
+    payload,
+  )
+  return data
+}
+
+export async function rejectWithdrawal(
+  id: number,
+  payload: RejectWithdrawalRequest,
+): Promise<AffiliateWithdrawal> {
+  const { data } = await apiClient.post<AffiliateWithdrawal>(
+    `/admin/affiliates/withdrawals/${id}/reject`,
+    payload,
+  )
+  return data
+}
+
 export async function getUserOverview(
   userId: number,
 ): Promise<AffiliateUserOverview> {
   const { data } = await apiClient.get<AffiliateUserOverview>(
     `/admin/affiliates/users/${userId}/overview`,
+  )
+  return data
+}
+
+export async function getAgentUsage(
+  userId: number,
+  params: GetAffiliateAgentUsageParams = {},
+): Promise<AffiliateAgentUsageSummary> {
+  const { data } = await apiClient.get<AffiliateAgentUsageSummary>(
+    `/admin/affiliates/users/${userId}/usage`,
+    {
+      params: {
+        start_at: params.start_at || undefined,
+        end_at: params.end_at || undefined,
+        timezone: params.timezone || undefined,
+      },
+    },
   )
   return data
 }
@@ -224,7 +350,11 @@ export const affiliatesAPI = {
   listInviteRecords,
   listRebateRecords,
   listTransferRecords,
+  listWithdrawalRecords,
+  markWithdrawalPaid,
+  rejectWithdrawal,
   getUserOverview,
+  getAgentUsage,
 }
 
 export default affiliatesAPI

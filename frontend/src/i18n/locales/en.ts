@@ -356,6 +356,7 @@ export default {
     affiliateInviteRecords: 'Invite Records',
     affiliateRebateRecords: 'Rebate Records',
     affiliateTransferRecords: 'Transfer Records',
+    affiliateWithdrawalRecords: 'Withdrawal Records',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',
@@ -1071,11 +1072,53 @@ export default {
     },
     transfer: {
       title: 'Transfer Rebate Quota',
-      description: 'Move available rebate quota into your account balance',
+      description: 'Choose a fixed amount to move available rebate quota into your account balance',
       button: 'Transfer to Balance',
+      amount: 'Transfer Amount',
+      available: 'Transferable: {amount}',
       transferring: 'Transferring...',
+      submit: 'Confirm Transfer',
       empty: 'No available rebate quota',
+      invalidAmount: 'Please choose an available transfer amount',
       success: '{amount} has been transferred to your balance'
+    },
+    normal: {
+      identity: 'User Rebate'
+    },
+    agent: {
+      identity: 'Agent Rebate',
+      mode: 'Agent mode',
+      pending: 'Submitted',
+      paid: 'Paid Withdrawal',
+      tip: 'Agents can transfer rebate quota to balance or request manual withdrawal.'
+    },
+    withdraw: {
+      title: 'Agent Withdrawal',
+      description: 'Request a manual payout from your available agent rebate quota',
+      button: 'Request Withdrawal',
+      amount: 'Withdrawal Amount',
+      available: 'Available: {amount}',
+      collectionQr: 'Collection QR',
+      imageHint: 'PNG, JPG or WebP, up to 2 MB',
+      invalidImage: 'Please upload a valid PNG, JPG or WebP image',
+      imageTooLarge: 'Image must be 2 MB or smaller',
+      invalidAmount: 'Please choose an available withdrawal amount',
+      qrRequired: 'Please upload a collection QR image',
+      submitting: 'Submitting...',
+      submit: 'Submit Request',
+      success: 'Withdrawal request submitted',
+      failed: 'Failed to submit withdrawal request',
+      records: 'Withdrawal Records',
+      empty: 'No withdrawal records yet',
+      status: 'Status',
+      proof: 'Payment Proof',
+      createdAt: 'Created At',
+      note: 'Note',
+      statuses: {
+        pending: 'Pending',
+        paid: 'Paid',
+        rejected: 'Rejected'
+      }
     },
     invitees: {
       title: 'Invited Users',
@@ -1717,8 +1760,10 @@ export default {
       invitesDescription: 'View site-wide inviter and invitee relationships',
       rebatesDescription: 'View recharge orders that generated affiliate rebates',
       transfersDescription: 'View affiliate quota transfers into account balance',
+      withdrawalsDescription: 'Review rebate withdrawal records and process manual agent payouts',
       errors: {
-        loadFailed: 'Failed to load affiliate records'
+        loadFailed: 'Failed to load affiliate records',
+        actionFailed: 'Failed to update withdrawal'
       },
       records: {
         search: 'Search',
@@ -1743,7 +1788,35 @@ export default {
         historyQuotaAfter: 'Historical Rebate After',
         invitedAt: 'Invited At',
         rebatedAt: 'Rebated At',
-        transferredAt: 'Transferred At'
+        transferredAt: 'Transferred At',
+        createdAt: 'Created At',
+        amount: 'Amount',
+        withdrawalAmount: 'Withdrawal Amount',
+        destination: 'Withdraw To',
+        status: 'Status',
+        collectionQr: 'Collection QR',
+        paymentProof: 'Payment Proof',
+        processedAt: 'Processed At',
+        note: 'Note',
+        actions: 'Actions',
+        markPaid: 'Mark Paid',
+        reject: 'Reject',
+        adminNote: 'Admin Note',
+        rejectReason: 'Reject Reason',
+        uploadProof: 'Upload Payment Proof',
+        paidSuccess: 'Withdrawal marked paid',
+        rejectSuccess: 'Withdrawal rejected',
+        imageHint: 'PNG, JPG or WebP, up to 2 MB',
+        destinations: {
+          balance: 'Balance',
+          alipay_wechat: 'Alipay/WeChat'
+        },
+        statuses: {
+          pending: 'Pending',
+          paid: 'Paid',
+          rejected: 'Rejected',
+          completed: 'Completed'
+        }
       },
       overview: {
         title: 'Affiliate User Overview',
@@ -1931,6 +2004,7 @@ export default {
       totalRecharged: 'Total Recharged',
       roles: {
         admin: 'Admin',
+        agent: 'Agent',
         user: 'User'
       },
       // Settings Dropdowns
@@ -5357,27 +5431,52 @@ export default {
           perInviteeCap: 'Per-Invitee Rebate Cap',
           perInviteeCapDesc: 'Maximum total rebate from a single invitee. 0 = no limit.',
           customUsers: {
-            title: 'Per-User Overrides',
-            description: 'Set a custom invite code or exclusive rebate rate for specific users. Lists only users that have an override applied.',
-            addButton: 'Add Custom User',
+            title: 'Dedicated Agent Config',
+            description: 'Set dedicated invite codes or rebate rates for agents, and review last week usage from their invited users.',
+            addButton: 'Add Agent',
             searchPlaceholder: 'Search by email or username',
             batchButton: 'Batch Set Rate ({count} selected)',
-            empty: 'No users with custom affiliate settings yet',
+            empty: 'No dedicated agent settings yet',
             customBadge: 'custom',
+            agentBadge: 'Agent',
+            userBadge: 'User',
             useGlobal: 'use global',
-            resetTitle: 'Reset Custom Settings',
+            viewUsage: 'View Usage',
+            resetTitle: 'Reset Agent Settings',
             resetMessage: 'Reset all custom settings for {email}?\n• The exclusive rebate rate will be cleared (fall back to the global rate)\n• The invite code will be regenerated as a new system code (previously shared links will stop working)',
             totalLabel: '{total} total',
             col: {
               email: 'Email',
               username: 'Username',
+              role: 'Role',
               code: 'Invite Code',
               rate: 'Custom Rate',
               actions: 'Actions',
             },
           },
+          usageModal: {
+            title: 'Agent Invitee Usage',
+            weekUsage: 'Weekly Usage',
+            avgDailyUsage: 'Avg Daily Usage',
+            invitees: 'Active / Total Invitees',
+            suggestedRate: 'Suggested Rate',
+            noSuggestion: 'No rebate',
+            ruleHint: 'Suggestion rule: last week average daily usage > 1B = 20%, > 2B = 30%, > 3B = 40%. This is only a hint; save the custom rate manually.',
+            dailyTitle: 'Daily Usage',
+            inviteesTitle: 'Invitee Details',
+            emptyDaily: 'No daily usage',
+            emptyInvitees: 'No invitees',
+            table: {
+              date: 'Date',
+              user: 'User',
+              totalUsage: 'Total Usage',
+              avgDailyUsage: 'Avg Daily',
+              requests: 'Requests',
+              cost: 'Cost',
+            },
+          },
           modal: {
-            addTitle: 'Add Custom User',
+            addTitle: 'Add Agent',
             editTitle: 'Edit Custom Settings',
             userLabel: 'User',
             userPlaceholder: 'Search by email or username',

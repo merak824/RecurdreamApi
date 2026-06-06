@@ -355,7 +355,8 @@ export default {
     affiliateManagement: '邀请返利',
     affiliateInviteRecords: '邀请记录',
     affiliateRebateRecords: '返利记录',
-    affiliateTransferRecords: '提取记录',
+    affiliateTransferRecords: '转余额记录',
+    affiliateWithdrawalRecords: '提现记录',
     profile: '个人资料',
     users: '用户管理',
     groups: '分组管理',
@@ -1075,11 +1076,53 @@ export default {
     },
     transfer: {
       title: '返利额度转余额',
-      description: '将当前可用返利额度一键转入账户余额',
+      description: '选择固定金额，将可用返利额度转入账户余额',
       button: '转入余额',
+      amount: '转入余额',
+      available: '可转余额：{amount}',
       transferring: '转入中...',
+      submit: '确认转入',
       empty: '当前没有可转入额度',
+      invalidAmount: '请选择可用的转入金额',
       success: '已转入余额：{amount}'
+    },
+    normal: {
+      identity: '普通返利'
+    },
+    agent: {
+      identity: '代理返利',
+      mode: '代理模式',
+      pending: '已申请',
+      paid: '已打款',
+      tip: '代理可将返利转入余额，也可以发起人工提现申请。'
+    },
+    withdraw: {
+      title: '代理提现',
+      description: '从可提现的代理返利额度中发起人工打款申请',
+      button: '申请提现',
+      amount: '提现金额',
+      available: '可提现：{amount}',
+      collectionQr: '收款码',
+      imageHint: '支持 PNG、JPG、WebP，最大 2 MB',
+      invalidImage: '请上传有效的 PNG、JPG 或 WebP 图片',
+      imageTooLarge: '图片不能超过 2 MB',
+      invalidAmount: '请选择可用的提现金额',
+      qrRequired: '请上传收款码',
+      submitting: '提交中...',
+      submit: '提交申请',
+      success: '提现申请已提交',
+      failed: '提现申请提交失败',
+      records: '提现记录',
+      empty: '暂无提现记录',
+      status: '状态',
+      proof: '打款凭证',
+      createdAt: '申请时间',
+      note: '备注',
+      statuses: {
+        pending: '待处理',
+        paid: '已打款',
+        rejected: '已驳回'
+      }
     },
     invitees: {
       title: '已邀请用户',
@@ -1737,9 +1780,11 @@ export default {
     affiliates: {
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
-      transfersDescription: '查看返利额度转入账户余额的提取流水',
+      transfersDescription: '查看返利额度转入账户余额的流水',
+      withdrawalsDescription: '查看返利提现记录，并处理代理人工打款申请',
       errors: {
-        loadFailed: '加载邀请返利记录失败'
+        loadFailed: '加载邀请返利记录失败',
+        actionFailed: '提现处理失败'
       },
       records: {
         search: '搜索',
@@ -1764,7 +1809,35 @@ export default {
         historyQuotaAfter: '提取后历史返利',
         invitedAt: '邀请时间',
         rebatedAt: '返利时间',
-        transferredAt: '提取时间'
+        transferredAt: '提取时间',
+        createdAt: '申请时间',
+        amount: '金额',
+        withdrawalAmount: '提现金额',
+        destination: '提现到',
+        status: '状态',
+        collectionQr: '收款码',
+        paymentProof: '打款凭证',
+        processedAt: '处理时间',
+        note: '备注',
+        actions: '操作',
+        markPaid: '标记已打款',
+        reject: '驳回',
+        adminNote: '管理员备注',
+        rejectReason: '驳回原因',
+        uploadProof: '上传打款凭证',
+        paidSuccess: '已标记为已打款',
+        rejectSuccess: '已驳回提现申请',
+        imageHint: '支持 PNG、JPG、WebP，最大 2 MB',
+        destinations: {
+          balance: '余额',
+          alipay_wechat: '支付宝/微信'
+        },
+        statuses: {
+          pending: '待处理',
+          paid: '已打款',
+          rejected: '已驳回',
+          completed: '已完成'
+        }
       },
       overview: {
         title: '用户返利概览',
@@ -1876,6 +1949,7 @@ export default {
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
         admin: '管理员',
+        agent: '代理',
         user: '用户'
       },
       form: {
@@ -5517,27 +5591,52 @@ export default {
           perInviteeCap: '单人返利上限',
           perInviteeCapDesc: '每个被邀请用户最多产生的返利总额。0 = 无上限。',
           customUsers: {
-            title: '专属用户配置',
-            description: '为指定用户设置专属邀请码或专属返利比例。仅展示已设置过专属配置的用户。',
-            addButton: '添加专属用户',
+            title: '专属代理配置',
+            description: '为代理设置专属邀请码或专属返利比例，并查看该代理邀请用户的上周用量。',
+            addButton: '添加专属代理',
             searchPlaceholder: '搜索邮箱或用户名',
             batchButton: '批量设置比例（已选 {count}）',
-            empty: '暂无专属配置用户',
+            empty: '暂无专属代理配置',
             customBadge: '自定义',
+            agentBadge: '代理',
+            userBadge: '用户',
             useGlobal: '沿用全局',
-            resetTitle: '重置该用户的专属配置',
+            viewUsage: '查看用量',
+            resetTitle: '重置该代理的专属配置',
             resetMessage: '确认将 {email} 的专属配置全部重置为默认？\n• 专属返利比例将清除（沿用全局）\n• 邀请码将重新生成为系统随机码（已分发的旧邀请链接将失效）',
             totalLabel: '共 {total} 条',
             col: {
               email: '邮箱',
               username: '用户名',
+              role: '身份',
               code: '邀请码',
               rate: '专属比例',
               actions: '操作',
             },
           },
+          usageModal: {
+            title: '代理邀请用量',
+            weekUsage: '周用量',
+            avgDailyUsage: '平均日用量',
+            invitees: '活跃 / 总邀请',
+            suggestedRate: '建议返利比例',
+            noSuggestion: '不建议返利',
+            ruleHint: '建议规则：上周平均日用量 > 1B 为 20%，> 2B 为 30%，> 3B 为 40%。建议值仅供参考，需要你手动保存专属比例。',
+            dailyTitle: '每日用量',
+            inviteesTitle: '邀请用户明细',
+            emptyDaily: '暂无每日用量',
+            emptyInvitees: '暂无邀请用户',
+            table: {
+              date: '日期',
+              user: '用户',
+              totalUsage: '总用量',
+              avgDailyUsage: '日均用量',
+              requests: '请求数',
+              cost: '费用',
+            },
+          },
           modal: {
-            addTitle: '添加专属用户',
+            addTitle: '添加专属代理',
             editTitle: '编辑专属配置',
             userLabel: '用户',
             userPlaceholder: '搜索邮箱或用户名',

@@ -5366,7 +5366,7 @@
                 </p>
               </div>
 
-              <!-- 专属用户管理 -->
+              <!-- 专属代理管理 -->
               <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
                 <div class="mb-3 flex items-center justify-between">
                   <div>
@@ -5417,6 +5417,7 @@
                         </th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.email') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.role') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
@@ -5424,12 +5425,12 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
                       <tr v-if="affiliateState.loading">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('common.loading') }}
                         </td>
                       </tr>
                       <tr v-else-if="affiliateState.entries.length === 0">
-                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('admin.settings.features.affiliate.customUsers.empty') }}
                         </td>
                       </tr>
@@ -5443,8 +5444,14 @@
                         </td>
                         <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ entry.email }}</td>
                         <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{{ entry.username }}</td>
+                        <td class="px-3 py-2 text-sm">
+                          <span :class="['badge', isAffiliateAgent(entry) ? 'badge-blue' : 'badge-gray']">
+                            {{ isAffiliateAgent(entry) ? t('admin.settings.features.affiliate.customUsers.agentBadge') : t('admin.settings.features.affiliate.customUsers.userBadge') }}
+                          </span>
+                        </td>
                         <td class="px-3 py-2 text-sm font-mono">
-                          {{ entry.aff_code }}
+                          <span v-if="entry.aff_code">{{ entry.aff_code }}</span>
+                          <span v-else class="text-gray-400">-</span>
                           <span
                             v-if="entry.aff_code_custom"
                             class="ml-1 inline-block rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
@@ -5455,7 +5462,15 @@
                           <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
                         </td>
                         <td class="px-3 py-2 text-sm">
-                          <div class="flex items-center gap-2">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <button
+                              v-if="isAffiliateAgent(entry)"
+                              type="button"
+                              class="text-blue-600 hover:underline dark:text-blue-400"
+                              @click="openAffiliateUsageModal(entry)"
+                            >
+                              {{ t('admin.settings.features.affiliate.customUsers.viewUsage') }}
+                            </button>
                             <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
                             </button>
@@ -5667,6 +5682,148 @@
               >
                 {{ affiliateBatchModal.saving ? t('common.saving') : t('common.save') }}
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Affiliate agent usage modal -->
+        <div
+          v-if="affiliateUsageModal.open"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          @click.self="closeAffiliateUsageModal"
+        >
+          <div class="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-dark-900">
+            <div class="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-dark-700">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.settings.features.affiliate.usageModal.title') }}
+                </h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ affiliateUsageModal.entry?.email || '-' }}
+                  <span v-if="affiliateUsageModal.data">
+                    · {{ formatAffiliateUsageRange(affiliateUsageModal.data) }}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-800 dark:hover:text-gray-200"
+                :title="t('common.close')"
+                @click="closeAffiliateUsageModal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div class="overflow-y-auto p-6">
+              <div v-if="affiliateUsageModal.loading" class="flex items-center justify-center py-16 text-sm text-gray-500">
+                {{ t('common.loading') }}
+              </div>
+              <div v-else-if="affiliateUsageModal.data" class="space-y-6">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.weekUsage') }}</p>
+                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
+                      {{ formatAffiliateTokens(affiliateUsageModal.data.total_tokens) }}
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.avgDailyUsage') }}</p>
+                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
+                      {{ formatAffiliateTokens(affiliateUsageModal.data.average_daily_tokens) }}
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.invitees') }}</p>
+                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
+                      {{ affiliateUsageModal.data.active_invitee_count }} / {{ affiliateUsageModal.data.invitee_count }}
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.suggestedRate') }}</p>
+                    <p class="mt-2 text-xl font-semibold text-primary-600 dark:text-primary-400">
+                      {{ affiliateUsageModal.data.suggested_rebate_rate_percent > 0 ? `${affiliateUsageModal.data.suggested_rebate_rate_percent}%` : t('admin.settings.features.affiliate.usageModal.noSuggestion') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/60 dark:bg-blue-900/20 dark:text-blue-300">
+                  {{ t('admin.settings.features.affiliate.usageModal.ruleHint') }}
+                </div>
+
+                <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+                    <div class="border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                        {{ t('admin.settings.features.affiliate.usageModal.dailyTitle') }}
+                      </h4>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
+                        <thead class="bg-gray-50 dark:bg-dark-800">
+                          <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.date') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.totalUsage') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.requests') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.cost') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                          <tr v-if="affiliateUsageModal.data.daily.length === 0">
+                            <td colspan="4" class="px-3 py-6 text-center text-gray-500">
+                              {{ t('admin.settings.features.affiliate.usageModal.emptyDaily') }}
+                            </td>
+                          </tr>
+                          <tr v-for="item in affiliateUsageModal.data.daily" :key="item.date">
+                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{{ item.date }}</td>
+                            <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ formatAffiliateTokens(item.total_tokens) }}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ item.request_count }}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateCost(item.actual_cost) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+                    <div class="border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                        {{ t('admin.settings.features.affiliate.usageModal.inviteesTitle') }}
+                      </h4>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
+                        <thead class="bg-gray-50 dark:bg-dark-800">
+                          <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.user') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.totalUsage') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.avgDailyUsage') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.requests') }}</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.cost') }}</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                          <tr v-if="affiliateUsageModal.data.invitees.length === 0">
+                            <td colspan="5" class="px-3 py-6 text-center text-gray-500">
+                              {{ t('admin.settings.features.affiliate.usageModal.emptyInvitees') }}
+                            </td>
+                          </tr>
+                          <tr v-for="item in affiliateUsageModal.data.invitees" :key="item.user_id">
+                            <td class="px-3 py-2">
+                              <div class="font-medium text-gray-900 dark:text-white">{{ item.email || `#${item.user_id}` }}</div>
+                              <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.username || `ID ${item.user_id}` }}</div>
+                            </td>
+                            <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ formatAffiliateTokens(item.total_tokens) }}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateTokens(item.average_daily_tokens) }}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ item.request_count }}</td>
+                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateCost(item.actual_cost) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -6711,8 +6868,14 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import { useClipboard } from "@/composables/useClipboard";
-import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
+import {
+  affiliatesAPI,
+  type AffiliateAdminEntry,
+  type AffiliateAgentUsageSummary,
+  type SimpleUser as AffiliateSimpleUser,
+} from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
+import { formatCompactNumber, formatCurrency, formatDateOnly } from "@/utils/format";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
@@ -9318,6 +9481,18 @@ const affiliateBatchModal = reactive<{
   rate: "",
 });
 
+const affiliateUsageModal = reactive<{
+  open: boolean;
+  loading: boolean;
+  entry: AffiliateAdminEntry | null;
+  data: AffiliateAgentUsageSummary | null;
+}>({
+  open: false,
+  loading: false,
+  entry: null,
+  data: null,
+});
+
 // affiliateConfirmDialog drives the project-standard <ConfirmDialog>. We can't
 // `await` the user's response from the dialog component, so the confirm action
 // runs from the @confirm callback once the user clicks the dialog's confirm
@@ -9436,6 +9611,48 @@ function toggleAffiliateSelect(userId: number) {
   const idx = affiliateState.selected.indexOf(userId);
   if (idx >= 0) affiliateState.selected.splice(idx, 1);
   else affiliateState.selected.push(userId);
+}
+
+function isAffiliateAgent(entry: AffiliateAdminEntry | null | undefined): boolean {
+  return String(entry?.role ?? "").toLowerCase() === "agent";
+}
+
+async function openAffiliateUsageModal(entry: AffiliateAdminEntry) {
+  affiliateUsageModal.open = true;
+  affiliateUsageModal.loading = true;
+  affiliateUsageModal.entry = entry;
+  affiliateUsageModal.data = null;
+  try {
+    affiliateUsageModal.data = await affiliatesAPI.getAgentUsage(entry.user_id);
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t("common.error")));
+    affiliateUsageModal.open = false;
+  } finally {
+    affiliateUsageModal.loading = false;
+  }
+}
+
+function closeAffiliateUsageModal() {
+  affiliateUsageModal.open = false;
+  affiliateUsageModal.loading = false;
+  affiliateUsageModal.entry = null;
+  affiliateUsageModal.data = null;
+}
+
+function formatAffiliateTokens(value: number | null | undefined): string {
+  return `${formatCompactNumber(Math.round(Number(value ?? 0)), { allowBillions: true })} tokens`;
+}
+
+function formatAffiliateCost(value: number | null | undefined): string {
+  return formatCurrency(Number(value ?? 0), "USD");
+}
+
+function formatAffiliateUsageRange(data: AffiliateAgentUsageSummary): string {
+  const end = new Date(data.week_end);
+  if (!Number.isNaN(end.getTime())) {
+    end.setDate(end.getDate() - 1);
+  }
+  return `${formatDateOnly(data.week_start)} - ${formatDateOnly(end)}`;
 }
 
 // openAffiliateModal opens the add/edit modal, prefilling fields from the

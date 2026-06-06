@@ -7,6 +7,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -201,6 +202,23 @@ func (h *AffiliateHandler) GetUserOverview(c *gin.Context) {
 	response.Success(c, overview)
 }
 
+// GetAgentUsage returns the previous complete week's invited-user usage for one agent.
+// GET /api/v1/admin/affiliates/users/:user_id/usage
+func (h *AffiliateHandler) GetAgentUsage(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+	if err != nil || userID <= 0 {
+		response.BadRequest(c, "Invalid user_id")
+		return
+	}
+	startAt, endAt := parseAffiliateAgentUsageWindow(c)
+	summary, err := h.affiliateService.AdminGetAgentUsage(c.Request.Context(), userID, startAt, endAt)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, summary)
+}
+
 // ListInviteRecords returns all inviter-invitee relationships.
 // GET /api/v1/admin/affiliates/invites
 func (h *AffiliateHandler) ListInviteRecords(c *gin.Context) {
@@ -240,6 +258,81 @@ func (h *AffiliateHandler) ListTransferRecords(c *gin.Context) {
 	response.Paginated(c, items, total, filter.Page, filter.PageSize)
 }
 
+// ListWithdrawalRecords returns agent affiliate withdrawal requests and records.
+// GET /api/v1/admin/affiliates/withdrawals
+func (h *AffiliateHandler) ListWithdrawalRecords(c *gin.Context) {
+	page, pageSize := response.ParsePagination(c)
+	filter := parseAffiliateRecordFilter(c, page, pageSize)
+	items, total, err := h.affiliateService.AdminListWithdrawalRecords(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, items, total, filter.Page, filter.PageSize)
+}
+
+type AffiliateWithdrawalPaidRequest struct {
+	PaymentProofData string `json:"payment_proof_data"`
+	AdminNote        string `json:"admin_note"`
+}
+
+// MarkWithdrawalPaid marks a pending agent withdrawal as paid.
+// POST /api/v1/admin/affiliates/withdrawals/:id/paid
+func (h *AffiliateHandler) MarkWithdrawalPaid(c *gin.Context) {
+	withdrawalID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || withdrawalID <= 0 {
+		response.BadRequest(c, "Invalid withdrawal id")
+		return
+	}
+	var req AffiliateWithdrawalPaidRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	item, err := h.affiliateService.AdminMarkWithdrawalPaid(c.Request.Context(), withdrawalID, service.AffiliateWithdrawalAdminActionInput{
+		AdminID:          subject.UserID,
+		PaymentProofData: req.PaymentProofData,
+		AdminNote:        req.AdminNote,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
+type AffiliateWithdrawalRejectRequest struct {
+	RejectReason string `json:"reject_reason"`
+	AdminNote    string `json:"admin_note"`
+}
+
+// RejectWithdrawal rejects a pending agent withdrawal and returns its quota.
+// POST /api/v1/admin/affiliates/withdrawals/:id/reject
+func (h *AffiliateHandler) RejectWithdrawal(c *gin.Context) {
+	withdrawalID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || withdrawalID <= 0 {
+		response.BadRequest(c, "Invalid withdrawal id")
+		return
+	}
+	var req AffiliateWithdrawalRejectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	subject, _ := middleware2.GetAuthSubjectFromContext(c)
+	item, err := h.affiliateService.AdminRejectWithdrawal(c.Request.Context(), withdrawalID, service.AffiliateWithdrawalAdminActionInput{
+		AdminID:      subject.UserID,
+		RejectReason: req.RejectReason,
+		AdminNote:    req.AdminNote,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, item)
+}
+
 func parseAffiliateRecordFilter(c *gin.Context, page, pageSize int) service.AffiliateRecordFilter {
 	filter := service.AffiliateRecordFilter{
 		Search:   c.Query("search"),
@@ -261,6 +354,36 @@ func parseAffiliateRecordFilter(c *gin.Context, page, pageSize int) service.Affi
 	return filter
 }
 
+func parseAffiliateAgentUsageWindow(c *gin.Context) (time.Time, time.Time) {
+	userTZ := c.Query("timezone")
+	startRaw := strings.TrimSpace(c.Query("start_at"))
+	endRaw := strings.TrimSpace(c.Query("end_at"))
+
+	if start := parseAffiliateRecordStartTime(startRaw, userTZ); start != nil {
+		if end := parseAffiliateUsageEndTime(endRaw, userTZ); end != nil && end.After(*start) {
+			return *start, *end
+		}
+		return *start, start.AddDate(0, 0, 7)
+	}
+	if end := parseAffiliateUsageEndTime(endRaw, userTZ); end != nil {
+		return end.AddDate(0, 0, -7), *end
+	}
+
+	now := timezone.NowInUserLocation(userTZ)
+	weekStart := startOfWeekInSameLocation(now)
+	return weekStart.AddDate(0, 0, -7), weekStart
+}
+
+func startOfWeekInSameLocation(t time.Time) time.Time {
+	loc := t.Location()
+	t = t.In(loc)
+	weekday := int(t.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return time.Date(t.Year(), t.Month(), t.Day()-weekday+1, 0, 0, 0, 0, loc)
+}
+
 func parseAffiliateRecordStartTime(raw string, userTZ string) *time.Time {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -271,6 +394,21 @@ func parseAffiliateRecordStartTime(raw string, userTZ string) *time.Time {
 	}
 	if parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ); err == nil {
 		return &parsed
+	}
+	return nil
+}
+
+func parseAffiliateUsageEndTime(raw string, userTZ string) *time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+		return &parsed
+	}
+	if parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ); err == nil {
+		end := parsed.AddDate(0, 0, 1)
+		return &end
 	}
 	return nil
 }

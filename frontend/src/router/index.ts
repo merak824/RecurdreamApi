@@ -603,14 +603,18 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/affiliates/transfers',
-    name: 'AdminAffiliateTransfers',
-    component: () => import('@/views/admin/affiliates/AdminAffiliateTransfersView.vue'),
+    redirect: '/admin/affiliates/withdrawals'
+  },
+  {
+    path: '/admin/affiliates/withdrawals',
+    name: 'AdminAffiliateWithdrawals',
+    component: () => import('@/views/admin/affiliates/AdminAffiliateWithdrawalsView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Affiliate Transfer Records',
-      titleKey: 'nav.affiliateTransferRecords',
-      descriptionKey: 'admin.affiliates.transfersDescription'
+      title: 'Affiliate Withdrawal Records',
+      titleKey: 'nav.affiliateWithdrawalRecords',
+      descriptionKey: 'admin.affiliates.withdrawalsDescription'
     }
   },
 

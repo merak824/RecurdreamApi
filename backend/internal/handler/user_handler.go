@@ -83,6 +83,15 @@ type UpdateProfileRequest struct {
 	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
 }
 
+type CreateAffiliateWithdrawalRequest struct {
+	Amount           float64 `json:"amount" binding:"required"`
+	CollectionQRData string  `json:"collection_qr_data" binding:"required"`
+}
+
+type TransferAffiliateQuotaRequest struct {
+	Amount float64 `json:"amount" binding:"required"`
+}
+
 type userProfileResponse struct {
 	dto.User
 	AvatarURL         string                                 `json:"avatar_url,omitempty"`
@@ -211,7 +220,7 @@ func (h *UserHandler) GetAffiliate(c *gin.Context) {
 	response.Success(c, detail)
 }
 
-// TransferAffiliateQuota transfers all available affiliate quota into current balance.
+// TransferAffiliateQuota transfers selected affiliate quota into current balance.
 // POST /api/v1/user/aff/transfer
 func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
@@ -220,7 +229,15 @@ func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 		return
 	}
 
-	transferred, balance, err := h.affiliateService.TransferAffiliateQuota(c.Request.Context(), subject.UserID)
+	var req TransferAffiliateQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	transferred, balance, err := h.affiliateService.TransferAffiliateQuota(c.Request.Context(), subject.UserID, service.AffiliateTransferInput{
+		Amount: req.Amount,
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -230,6 +247,33 @@ func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 		"transferred_quota": transferred,
 		"balance":           balance,
 	})
+}
+
+// CreateAffiliateWithdrawal creates an agent affiliate withdrawal request.
+// POST /api/v1/user/aff/withdrawals
+func (h *UserHandler) CreateAffiliateWithdrawal(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	var req CreateAffiliateWithdrawalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	withdrawal, err := h.affiliateService.CreateWithdrawal(c.Request.Context(), subject.UserID, service.AffiliateWithdrawalInput{
+		Amount:           req.Amount,
+		CollectionQRData: req.CollectionQRData,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, withdrawal)
 }
 
 type StartIdentityBindingRequest struct {

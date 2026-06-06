@@ -39,7 +39,7 @@ func querySingleInt(t *testing.T, ctx context.Context, client *dbent.Client, que
 	return value
 }
 
-func TestAffiliateRepository_TransferQuotaToBalance_UsesClaimedQuotaBeforeClear(t *testing.T) {
+func TestAffiliateRepository_TransferQuotaToBalance_TransfersSelectedQuota(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)
 	txCtx := dbent.NewTxContext(ctx, tx)
@@ -62,18 +62,18 @@ INSERT INTO user_affiliates (user_id, aff_code, aff_quota, aff_history_quota, cr
 VALUES ($1, $2, $3, $3, NOW(), NOW())`, u.ID, affCode, 12.34)
 	require.NoError(t, err)
 
-	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID)
+	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, service.AffiliateRebateModeUser, 10)
 	require.NoError(t, err)
-	require.InDelta(t, 12.34, transferred, 1e-9)
-	require.InDelta(t, 17.84, balance, 1e-9)
+	require.InDelta(t, 10.0, transferred, 1e-9)
+	require.InDelta(t, 15.5, balance, 1e-9)
 
 	affQuota := querySingleFloat(t, txCtx, client,
 		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID)
-	require.InDelta(t, 0.0, affQuota, 1e-9)
+	require.InDelta(t, 2.34, affQuota, 1e-9)
 
 	persistedBalance := querySingleFloat(t, txCtx, client,
 		"SELECT balance::double precision FROM users WHERE id = $1", u.ID)
-	require.InDelta(t, 17.84, persistedBalance, 1e-9)
+	require.InDelta(t, 15.5, persistedBalance, 1e-9)
 
 	ledgerCount := querySingleInt(t, txCtx, client,
 		"SELECT COUNT(*) FROM user_affiliate_ledger WHERE user_id = $1 AND action = 'transfer'", u.ID)
@@ -93,9 +93,9 @@ LIMIT 1`, u.ID)
 	require.True(t, rows.Next(), "expected transfer ledger")
 	var amount, balanceAfter, quotaAfter, frozenAfter, historyAfter float64
 	require.NoError(t, rows.Scan(&amount, &balanceAfter, &quotaAfter, &frozenAfter, &historyAfter))
-	require.InDelta(t, 12.34, amount, 1e-9)
-	require.InDelta(t, 17.84, balanceAfter, 1e-9)
-	require.InDelta(t, 0.0, quotaAfter, 1e-9)
+	require.InDelta(t, 10.0, amount, 1e-9)
+	require.InDelta(t, 15.5, balanceAfter, 1e-9)
+	require.InDelta(t, 2.34, quotaAfter, 1e-9)
 	require.InDelta(t, 0.0, frozenAfter, 1e-9)
 	require.InDelta(t, 12.34, historyAfter, 1e-9)
 }
@@ -141,11 +141,11 @@ func TestAffiliateRepository_AccrueQuota_ReusesOuterTransaction(t *testing.T) {
 	_, err = repo.EnsureUserAffiliate(txCtx, invitee.ID)
 	require.NoError(t, err)
 
-	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
+	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID, service.AffiliateRebateModeUser)
 	require.NoError(t, err)
 	require.True(t, bound, "invitee must bind to inviter")
 
-	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, 0, nil)
+	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, 0, nil, service.AffiliateRebateModeUser)
 	require.NoError(t, err)
 	require.True(t, applied, "AccrueQuota must report applied=true")
 
@@ -193,7 +193,7 @@ INSERT INTO user_affiliates (user_id, aff_code, aff_quota, aff_history_quota, cr
 VALUES ($1, $2, 0, 0, NOW(), NOW())`, u.ID, affCode)
 	require.NoError(t, err)
 
-	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID)
+	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, service.AffiliateRebateModeUser, 5)
 	require.ErrorIs(t, err, service.ErrAffiliateQuotaEmpty)
 	require.InDelta(t, 0.0, transferred, 1e-9)
 	require.InDelta(t, 0.0, balance, 1e-9)

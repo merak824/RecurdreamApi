@@ -15,6 +15,9 @@ import type {
   NotifyEmailEntry,
   UserAuthProvider,
   UserAffiliateDetail,
+  AffiliateWithdrawal,
+  AffiliateTransferRequest,
+  AffiliateWithdrawalRequest,
   AffiliateTransferResponse,
   PlatformQuotasResponse,
 } from '@/types'
@@ -181,8 +184,17 @@ export async function getAffiliateDetail(): Promise<UserAffiliateDetail> {
   return data
 }
 
-export async function transferAffiliateQuota(): Promise<AffiliateTransferResponse> {
-  const { data } = await apiClient.post<AffiliateTransferResponse>('/user/aff/transfer')
+export async function transferAffiliateQuota(
+  payload: AffiliateTransferRequest
+): Promise<AffiliateTransferResponse> {
+  const { data } = await apiClient.post<AffiliateTransferResponse>('/user/aff/transfer', payload)
+  return data
+}
+
+export async function createAffiliateWithdrawal(
+  payload: AffiliateWithdrawalRequest
+): Promise<AffiliateWithdrawal> {
+  const { data } = await apiClient.post<AffiliateWithdrawal>('/user/aff/withdrawals', payload)
   return data
 }
 
@@ -209,6 +221,7 @@ export const userAPI = {
   startOAuthBinding,
   getAffiliateDetail,
   transferAffiliateQuota,
+  createAffiliateWithdrawal,
   getMyPlatformQuotas,
 }
 

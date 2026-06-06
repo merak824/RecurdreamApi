@@ -84,7 +84,7 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'admin' | 'user' | 'agent' // User role for authorization
   balance: number // User balance for API usage
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
@@ -135,15 +135,57 @@ export interface AffiliateInvitee {
 
 export interface UserAffiliateDetail {
   user_id: number
+  role: 'admin' | 'user' | 'agent' | string
+  current_mode: 'user' | 'agent'
   aff_code: string
   inviter_id?: number | null
+  invite_rebate_mode?: 'user' | 'agent' | string
   aff_count: number
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
+  agent_aff_quota: number
+  agent_aff_frozen_quota: number
+  agent_aff_history_quota: number
+  current_aff_quota: number
+  current_aff_frozen_quota: number
+  current_aff_history_quota: number
+  agent_withdraw_pending: number
+  agent_withdraw_paid: number
   /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
   effective_rebate_rate_percent: number
   invitees: AffiliateInvitee[]
+  withdrawals: AffiliateWithdrawal[]
+}
+
+export interface AffiliateWithdrawal {
+  id: number
+  user_id: number
+  user_email?: string
+  username?: string
+  amount: number
+  status: 'pending' | 'paid' | 'rejected' | string
+  collection_qr_data?: string
+  collection_qr_mime?: string
+  collection_qr_size?: number
+  payment_proof_data?: string
+  payment_proof_mime?: string
+  payment_proof_size?: number
+  reject_reason?: string
+  admin_note?: string
+  processed_by?: number | null
+  processed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AffiliateWithdrawalRequest {
+  amount: number
+  collection_qr_data: string
+}
+
+export interface AffiliateTransferRequest {
+  amount: number
 }
 
 export interface AffiliateTransferResponse {
@@ -1513,7 +1555,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'admin' | 'user' | 'agent'
   balance?: number
   concurrency?: number
   status?: 'active' | 'disabled'
