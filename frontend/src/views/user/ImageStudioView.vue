@@ -80,21 +80,13 @@
             </div>
             <div class="card-body space-y-4">
               <label class="block">
-                <span class="input-label">图片模型</span>
-                <input v-model.trim="model" class="input font-mono" placeholder="gpt-image-2" />
+                <span class="input-label">图片模型({{ fetchedModelCount }})</span>
+                <select v-model="model" class="input font-mono">
+                  <option v-for="option in modelOptions" :key="option" :value="option">
+                    {{ option }}
+                  </option>
+                </select>
               </label>
-              <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
-                <button
-                  v-for="preset in modelOptions"
-                  :key="preset"
-                  type="button"
-                  class="rounded-full border px-3 py-1 text-xs transition-colors"
-                  :class="model === preset ? 'border-primary-400 bg-primary-500/10 text-primary-600 dark:text-primary-300' : 'border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-500 dark:border-dark-600 dark:text-dark-300'"
-                  @click="model = preset"
-                >
-                  {{ preset }}
-                </button>
-              </div>
               <p v-if="modelsHint" class="text-xs text-gray-500 dark:text-dark-400">{{ modelsHint }}</p>
             </div>
           </section>
@@ -368,7 +360,8 @@ const imageCapableKeys = computed(() => activeKeys.value.filter(isUsableImageKey
 const selectableKeys = computed(() => imageCapableKeys.value.length > 0 ? imageCapableKeys.value : activeKeys.value)
 const selectedKey = computed(() => selectableKeys.value.find((key) => key.key === selectedKeyValue.value) || null)
 const referenceFiles = computed(() => referencePreviews.value.map((preview) => preview.file))
-const modelOptions = computed(() => [...new Set([...modelPresets, ...remoteModels.value])])
+const fetchedModelCount = computed(() => remoteModels.value.length)
+const modelOptions = computed(() => remoteModels.value.length > 0 ? remoteModels.value : modelPresets)
 const generationElapsedText = computed(() => formatElapsedTime(generationElapsedSeconds.value))
 
 const validationMessage = computed(() => {
@@ -422,6 +415,8 @@ async function loadModels() {
       const preferred = models.find((item) => /gpt-image|image|dall-e/i.test(item))
       if (preferred && !models.includes(model.value)) {
         model.value = preferred
+      } else if (!models.includes(model.value)) {
+        model.value = models[0]
       }
       appStore.showSuccess('模型列表已更新')
     } else {
