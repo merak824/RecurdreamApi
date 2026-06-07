@@ -82,6 +82,25 @@ func TestSettingHandler_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t 
 	require.True(t, resp.Data.ForceEmailOnThirdPartySignup)
 }
 
+func TestProvideSettingHandler_SyncsVersionForInjectedPublicSettings(t *testing.T) {
+	repo := &settingHandlerPublicRepoStub{values: map[string]string{}}
+	settingService := service.NewSettingService(repo, &config.Config{})
+
+	ProvideSettingHandler(settingService, BuildInfo{Version: "0.1.134", BuildType: "release"}, nil)
+
+	payload, err := settingService.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	var got struct {
+		Version string `json:"version"`
+	}
+	require.NoError(t, json.Unmarshal(data, &got))
+	require.Equal(t, "0.1.134", got.Version)
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{

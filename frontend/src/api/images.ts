@@ -1,7 +1,18 @@
 import type { ApiKey } from '@/types'
 
-export type ImageStudioSize = '1024x1024' | '1024x1536' | '1536x1024' | 'auto'
-export type ImageStudioQuality = 'auto' | 'low' | 'medium' | 'high'
+export type ImageStudioSize =
+  | 'auto'
+  | '1024x1024'
+  | '1024x1536'
+  | '1536x1024'
+  | '1792x1024'
+  | '1024x1792'
+  | '2048x2048'
+  | '2560x1440'
+  | '1440x2560'
+  | '3840x2160'
+  | '2160x3840'
+export type ImageStudioQuality = 'auto' | 'low' | 'medium' | 'high' | 'standard' | 'hd' | 'ultra'
 export type ImageStudioBackground = 'auto' | 'transparent' | 'opaque'
 export type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp'
 
@@ -44,6 +55,21 @@ interface OpenAIImageResponse {
   }
 }
 
+interface OpenAIModelItem {
+  id?: string
+  name?: string
+}
+
+interface OpenAIModelsResponse {
+  data?: OpenAIModelItem[]
+  models?: Array<string | OpenAIModelItem>
+  error?: {
+    message?: string
+    type?: string
+    code?: string
+  }
+}
+
 function normalizeGatewayBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '')
   if (!trimmed) return '/v1'
@@ -66,6 +92,22 @@ function extensionForOutputFormat(format: ImageStudioOutputFormat): string {
 async function parseImageResponse(response: Response): Promise<OpenAIImageResponse> {
   const text = await response.text()
   let parsed: OpenAIImageResponse
+  try {
+    parsed = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(text || `请求失败：HTTP ${response.status}`)
+  }
+
+  if (!response.ok) {
+    const message = parsed.error?.message || `请求失败：HTTP ${response.status}`
+    throw new Error(message)
+  }
+  return parsed
+}
+
+async function parseModelsResponse(response: Response): Promise<OpenAIModelsResponse> {
+  const text = await response.text()
+  let parsed: OpenAIModelsResponse
   try {
     parsed = text ? JSON.parse(text) : {}
   } catch {
@@ -162,6 +204,33 @@ export async function generateImage(request: ImageStudioGenerateRequest): Promis
     throw new Error('接口没有返回图片结果')
   }
   return results
+}
+
+export async function listImageModels(apiKey: string, baseUrl: string): Promise<string[]> {
+  const endpoint = `${normalizeGatewayBaseUrl(baseUrl)}/models`
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  })
+
+  const payload = await parseModelsResponse(response)
+  const rawModels = payload.data?.length ? payload.data : payload.models || []
+  const models = rawModels
+    .map((item) => {
+      if (typeof item === 'string') return item
+      return item.id || item.name || ''
+    })
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return [...new Set(models)].sort((a, b) => {
+    const aImage = /image|dall-e|gpt-image/i.test(a)
+    const bImage = /image|dall-e|gpt-image/i.test(b)
+    if (aImage !== bImage) return aImage ? -1 : 1
+    return a.localeCompare(b)
+  })
 }
 
 export function isUsableImageKey(key: ApiKey): boolean {

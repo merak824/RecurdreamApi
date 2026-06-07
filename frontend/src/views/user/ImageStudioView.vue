@@ -1,15 +1,15 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-[1760px] space-y-6">
+    <div class="mx-auto max-w-[1680px] space-y-5">
       <section class="card overflow-hidden">
-        <div class="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-col gap-5 p-5 md:flex-row md:items-center md:justify-between">
           <div class="flex items-start gap-4">
-            <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary-500/10 text-primary-500">
-              <Icon name="sparkles" size="lg" />
+            <div class="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-primary-500/10 text-primary-500 ring-1 ring-primary-500/20">
+              <Icon name="image" size="xl" :stroke-width="1.8" />
             </div>
-            <div>
-              <h1 class="text-xl font-semibold text-gray-900 dark:text-white">图片工作台</h1>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">
+            <div class="min-w-0">
+              <h1 class="text-2xl font-semibold tracking-normal text-gray-900 dark:text-white">图片工作台</h1>
+              <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-dark-300">
                 直接选择已有 API Key，调用站内图片接口进行生图或改图。
               </p>
               <div class="mt-2 inline-flex max-w-full items-center rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-900 dark:text-dark-300">
@@ -17,15 +17,15 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-secondary" :disabled="keysLoading" @click="loadKeys">
+          <button class="btn btn-secondary self-start md:self-auto" :disabled="keysLoading" @click="loadKeys">
             <Icon name="refresh" size="md" :class="keysLoading ? 'animate-spin' : ''" />
             刷新
           </button>
         </div>
       </section>
 
-      <div class="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <aside class="space-y-6">
+      <div class="grid gap-5 xl:grid-cols-[400px_minmax(0,1fr)]">
+        <aside class="space-y-5">
           <section class="card">
             <div class="card-header">
               <h2 class="text-base font-semibold text-gray-900 dark:text-white">选择密钥</h2>
@@ -68,17 +68,24 @@
           </section>
 
           <section class="card">
-            <div class="card-header">
-              <h2 class="text-base font-semibold text-gray-900 dark:text-white">模型</h2>
+            <div class="card-header flex items-center justify-between gap-3">
+              <div>
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">模型</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-300">可手动填写，也可以从当前 Key 拉取模型列表。</p>
+              </div>
+              <button class="btn btn-secondary btn-sm whitespace-nowrap" type="button" :disabled="modelsLoading || !selectedKeyValue" @click="loadModels">
+                <Icon name="refresh" size="sm" :class="modelsLoading ? 'animate-spin' : ''" />
+                获取模型
+              </button>
             </div>
             <div class="card-body space-y-4">
               <label class="block">
                 <span class="input-label">图片模型</span>
                 <input v-model.trim="model" class="input font-mono" placeholder="gpt-image-2" />
               </label>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto pr-1">
                 <button
-                  v-for="preset in modelPresets"
+                  v-for="preset in modelOptions"
                   :key="preset"
                   type="button"
                   class="rounded-full border px-3 py-1 text-xs transition-colors"
@@ -88,6 +95,7 @@
                   {{ preset }}
                 </button>
               </div>
+              <p v-if="modelsHint" class="text-xs text-gray-500 dark:text-dark-400">{{ modelsHint }}</p>
             </div>
           </section>
 
@@ -121,7 +129,7 @@
           </section>
         </aside>
 
-        <main class="space-y-6">
+        <main class="space-y-5">
           <section class="card">
             <div class="card-header flex items-center justify-between gap-3">
               <div>
@@ -139,19 +147,19 @@
                 <span class="input-label">提示词</span>
                 <textarea
                   v-model.trim="prompt"
-                  class="input min-h-36 resize-y leading-6"
+                  class="input min-h-44 resize-y leading-6"
                   placeholder="例如：高级商业摄影风格的橙色宇航员猫咪贴纸，干净背景，细节丰富，柔和光影。"
                 ></textarea>
               </label>
 
+              <div class="rounded-xl border border-gray-100 bg-gray-50/70 p-4 dark:border-dark-700 dark:bg-dark-900/60">
               <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
                 <label class="block">
                   <span class="input-label">尺寸</span>
                   <select v-model="size" class="input">
-                    <option value="1024x1024">1K 方图 - 1024 x 1024</option>
-                    <option value="1024x1536">竖图 - 1024 x 1536</option>
-                    <option value="1536x1024">横图 - 1536 x 1024</option>
-                    <option value="auto">自动</option>
+                    <option v-for="option in sizeOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
                   </select>
                 </label>
                 <label class="block">
@@ -166,10 +174,9 @@
                 <label class="block">
                   <span class="input-label">质量</span>
                   <select v-model="quality" class="input">
-                    <option value="auto">自动</option>
-                    <option value="low">低</option>
-                    <option value="medium">中</option>
-                    <option value="high">高</option>
+                    <option v-for="option in qualityOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
                   </select>
                 </label>
                 <label class="block">
@@ -182,7 +189,7 @@
                 </label>
               </div>
 
-              <div class="grid gap-4 md:grid-cols-2">
+              <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <label class="block">
                   <span class="input-label">背景</span>
                   <select v-model="background" class="input">
@@ -200,15 +207,25 @@
                   </select>
                 </label>
               </div>
+              </div>
 
-              <div class="flex flex-wrap items-center gap-3">
-                <button class="btn btn-primary" :disabled="generating || !canGenerate" @click="submit">
-                  <Icon name="sparkles" size="md" :class="generating ? 'animate-pulse' : ''" />
-                  {{ generating ? '生成中...' : '开始生图' }}
+              <div class="flex flex-col gap-3 border-t border-gray-100 pt-5 dark:border-dark-700 sm:flex-row sm:items-center">
+                <button class="btn btn-primary min-w-36 justify-center" :disabled="generating || !canGenerate" @click="submit">
+                  <span
+                    v-if="generating"
+                    class="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"
+                    aria-hidden="true"
+                  ></span>
+                  <Icon v-else name="sparkles" size="md" />
+                  {{ generating ? `生成中 · ${generationElapsedText}` : '开始生图' }}
                 </button>
                 <button class="btn btn-secondary" :disabled="generating || results.length === 0" @click="clearResults">
                   清空结果
                 </button>
+                <div v-if="generating" class="inline-flex items-center gap-2 rounded-full bg-primary-500/10 px-3 py-1 text-sm text-primary-600 dark:text-primary-300">
+                  <span class="h-3 w-3 rounded-full border-2 border-primary-500/30 border-t-primary-500 animate-spin" aria-hidden="true"></span>
+                  已等待 {{ generationElapsedText }}
+                </div>
                 <p v-if="validationMessage" class="text-sm text-amber-600 dark:text-amber-300">{{ validationMessage }}</p>
               </div>
             </div>
@@ -221,8 +238,13 @@
             </div>
             <div class="card-body">
               <div v-if="generating" class="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-700 dark:bg-dark-900/70 dark:text-dark-300">
-                <Icon name="sparkles" size="xl" class="animate-pulse text-primary-500" />
-                <p class="mt-4 text-sm">正在等待图片结果...</p>
+                <div class="flex h-16 w-16 items-center justify-center rounded-full bg-primary-500/10">
+                  <span class="h-10 w-10 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" aria-hidden="true"></span>
+                </div>
+                <p class="mt-4 text-sm font-medium text-gray-700 dark:text-dark-100">正在等待图片结果...</p>
+                <p class="mt-2 rounded-full bg-white px-3 py-1 text-sm text-primary-600 shadow-sm dark:bg-dark-800 dark:text-primary-300">
+                  已等待 {{ generationElapsedText }}
+                </p>
               </div>
               <div v-else-if="results.length === 0" class="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-700 dark:bg-dark-900/70 dark:text-dark-300">
                 <Icon name="inbox" size="xl" class="text-gray-400" />
@@ -268,6 +290,7 @@ import keysAPI from '@/api/keys'
 import {
   generateImage,
   isUsableImageKey,
+  listImageModels,
   type ImageStudioBackground,
   type ImageStudioOutputFormat,
   type ImageStudioQuality,
@@ -289,6 +312,9 @@ const appStore = useAppStore()
 
 const keys = ref<ApiKey[]>([])
 const keysLoading = ref(false)
+const modelsLoading = ref(false)
+const remoteModels = ref<string[]>([])
+const modelsHint = ref('')
 const selectedKeyValue = ref('')
 const model = ref('gpt-image-2')
 const prompt = ref('')
@@ -299,10 +325,35 @@ const background = ref<ImageStudioBackground>('auto')
 const outputFormat = ref<ImageStudioOutputFormat>('png')
 const style = ref('')
 const generating = ref(false)
+const generationStartedAt = ref<number | null>(null)
+const generationElapsedSeconds = ref(0)
+let generationTimer: number | null = null
 const results = ref<ImageStudioResult[]>([])
 const referencePreviews = ref<ReferencePreview[]>([])
 
 const modelPresets = ['gpt-image-2', 'gpt-image-1']
+const sizeOptions: Array<{ value: ImageStudioSize, label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: '1024x1024', label: '1K 方图 · 1024 x 1024' },
+  { value: '1536x1024', label: '2K 横图 · 1536 x 1024' },
+  { value: '1024x1536', label: '2K 竖图 · 1024 x 1536' },
+  { value: '1792x1024', label: '宽屏横图 · 1792 x 1024' },
+  { value: '1024x1792', label: '长幅竖图 · 1024 x 1792' },
+  { value: '2048x2048', label: '2K 方图 · 2048 x 2048' },
+  { value: '2560x1440', label: '2.5K 横图 · 2560 x 1440' },
+  { value: '1440x2560', label: '2.5K 竖图 · 1440 x 2560' },
+  { value: '3840x2160', label: '4K 横图 · 3840 x 2160' },
+  { value: '2160x3840', label: '4K 竖图 · 2160 x 3840' },
+]
+const qualityOptions: Array<{ value: ImageStudioQuality, label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: 'low', label: '低' },
+  { value: 'medium', label: '中' },
+  { value: 'high', label: '高' },
+  { value: 'standard', label: '标准' },
+  { value: 'hd', label: 'HD' },
+  { value: 'ultra', label: '超清' },
+]
 
 const gatewayBaseUrl = computed(() => {
   const configured = appStore.apiBaseUrl || appStore.cachedPublicSettings?.api_base_url || ''
@@ -317,6 +368,8 @@ const imageCapableKeys = computed(() => activeKeys.value.filter(isUsableImageKey
 const selectableKeys = computed(() => imageCapableKeys.value.length > 0 ? imageCapableKeys.value : activeKeys.value)
 const selectedKey = computed(() => selectableKeys.value.find((key) => key.key === selectedKeyValue.value) || null)
 const referenceFiles = computed(() => referencePreviews.value.map((preview) => preview.file))
+const modelOptions = computed(() => [...new Set([...modelPresets, ...remoteModels.value])])
+const generationElapsedText = computed(() => formatElapsedTime(generationElapsedSeconds.value))
 
 const validationMessage = computed(() => {
   if (!selectedKeyValue.value) return '请先选择 API Key'
@@ -350,6 +403,36 @@ async function loadKeys() {
     appStore.showError(extractApiErrorMessage(err, '加载 API Key 失败'))
   } finally {
     keysLoading.value = false
+  }
+}
+
+async function loadModels() {
+  if (!selectedKeyValue.value) {
+    appStore.showWarning('请先选择 API Key')
+    return
+  }
+
+  modelsLoading.value = true
+  modelsHint.value = ''
+  try {
+    const models = await listImageModels(selectedKeyValue.value, gatewayBaseUrl.value)
+    remoteModels.value = models
+    if (models.length > 0) {
+      modelsHint.value = `已获取 ${models.length} 个模型`
+      const preferred = models.find((item) => /gpt-image|image|dall-e/i.test(item))
+      if (preferred && !models.includes(model.value)) {
+        model.value = preferred
+      }
+      appStore.showSuccess('模型列表已更新')
+    } else {
+      modelsHint.value = '接口没有返回可用模型，仍可手动填写模型名'
+      appStore.showWarning('没有获取到模型列表')
+    }
+  } catch (err: unknown) {
+    modelsHint.value = '获取失败，可继续手动填写模型名'
+    appStore.showError(extractApiErrorMessage(err, '获取模型失败'))
+  } finally {
+    modelsLoading.value = false
   }
 }
 
@@ -389,6 +472,30 @@ function removeReference(id: string) {
   referencePreviews.value = referencePreviews.value.filter((preview) => preview.id !== id)
 }
 
+function formatElapsedTime(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes <= 0) return `${seconds} 秒`
+  return `${minutes} 分 ${String(seconds).padStart(2, '0')} 秒`
+}
+
+function stopGenerationTimer() {
+  if (generationTimer) {
+    window.clearInterval(generationTimer)
+    generationTimer = null
+  }
+}
+
+function startGenerationTimer() {
+  stopGenerationTimer()
+  generationStartedAt.value = Date.now()
+  generationElapsedSeconds.value = 0
+  generationTimer = window.setInterval(() => {
+    if (!generationStartedAt.value) return
+    generationElapsedSeconds.value = Math.floor((Date.now() - generationStartedAt.value) / 1000)
+  }, 1000)
+}
+
 async function submit() {
   if (!canGenerate.value) {
     appStore.showWarning(validationMessage.value)
@@ -396,6 +503,7 @@ async function submit() {
   }
 
   generating.value = true
+  startGenerationTimer()
   try {
     const generated = await generateImage({
       apiKey: selectedKeyValue.value,
@@ -416,6 +524,7 @@ async function submit() {
     appStore.showError(extractApiErrorMessage(err, '图片生成失败'))
   } finally {
     generating.value = false
+    stopGenerationTimer()
   }
 }
 
@@ -471,7 +580,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  stopGenerationTimer()
   referencePreviews.value.forEach((preview) => URL.revokeObjectURL(preview.url))
 })
 </script>
-
