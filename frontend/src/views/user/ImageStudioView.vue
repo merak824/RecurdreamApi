@@ -33,12 +33,15 @@
             <div class="card-body space-y-4">
               <label class="block">
                 <span class="input-label">API Key</span>
-                <select v-model="selectedKeyValue" class="input">
-                  <option value="" disabled>请选择 API Key</option>
-                  <option v-for="key in selectableKeys" :key="key.id" :value="key.key">
-                    {{ key.name }} - {{ maskKey(key.key) }}
-                  </option>
-                </select>
+                <Select
+                  :model-value="selectedKeyValue"
+                  :options="keySelectOptions"
+                  placeholder="请选择 API Key"
+                  empty-text="暂无可用 API Key"
+                  :searchable="false"
+                  :disabled="keysLoading"
+                  @update:model-value="selectedKeyValue = String($event || '')"
+                />
               </label>
 
               <div v-if="selectedKey" class="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-900/70">
@@ -71,7 +74,7 @@
             <div class="card-header flex items-center justify-between gap-3">
               <div>
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">模型</h2>
-                <p class="mt-1 text-xs text-gray-500 dark:text-dark-300">可手动填写，也可以从当前 Key 拉取模型列表。</p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-dark-300">先点击获取模型，再从当前 Key 的模型列表中选择。</p>
               </div>
               <button class="btn btn-secondary btn-sm whitespace-nowrap" type="button" :disabled="modelsLoading || !selectedKeyValue" @click="loadModels">
                 <Icon name="refresh" size="sm" :class="modelsLoading ? 'animate-spin' : ''" />
@@ -152,55 +155,60 @@
               <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
                 <label class="block">
                   <span class="input-label">尺寸</span>
-                  <select v-model="size" class="input">
-                    <option v-for="option in sizeOptions" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
+                  <Select
+                    :model-value="size"
+                    :options="sizeOptions"
+                    :searchable="false"
+                    @update:model-value="size = $event as ImageStudioSize"
+                  />
                 </label>
                 <label class="block">
                   <span class="input-label">张数</span>
-                  <select v-model.number="count" class="input">
-                    <option :value="1">1</option>
-                    <option :value="2">2</option>
-                    <option :value="3">3</option>
-                    <option :value="4">4</option>
-                  </select>
+                  <Select
+                    :model-value="count"
+                    :options="countOptions"
+                    :searchable="false"
+                    @update:model-value="count = Number($event || 1)"
+                  />
                 </label>
                 <label class="block">
                   <span class="input-label">质量</span>
-                  <select v-model="quality" class="input">
-                    <option v-for="option in qualityOptions" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
+                  <Select
+                    :model-value="quality"
+                    :options="qualityOptions"
+                    :searchable="false"
+                    @update:model-value="quality = $event as ImageStudioQuality"
+                  />
                 </label>
                 <label class="block">
                   <span class="input-label">输出格式</span>
-                  <select v-model="outputFormat" class="input">
-                    <option value="png">PNG</option>
-                    <option value="jpeg">JPEG</option>
-                    <option value="webp">WEBP</option>
-                  </select>
+                  <Select
+                    :model-value="outputFormat"
+                    :options="outputFormatOptions"
+                    :searchable="false"
+                    @update:model-value="outputFormat = $event as ImageStudioOutputFormat"
+                  />
                 </label>
               </div>
 
               <div class="mt-4 grid gap-4 md:grid-cols-2">
                 <label class="block">
                   <span class="input-label">背景</span>
-                  <select v-model="background" class="input">
-                    <option value="auto">自动</option>
-                    <option value="transparent">透明</option>
-                    <option value="opaque">不透明</option>
-                  </select>
+                  <Select
+                    :model-value="background"
+                    :options="backgroundOptions"
+                    :searchable="false"
+                    @update:model-value="background = $event as ImageStudioBackground"
+                  />
                 </label>
                 <label class="block">
                   <span class="input-label">风格</span>
-                  <select v-model="style" class="input">
-                    <option value="">默认</option>
-                    <option value="vivid">鲜明</option>
-                    <option value="natural">自然</option>
-                  </select>
+                  <Select
+                    :model-value="style"
+                    :options="styleOptions"
+                    :searchable="false"
+                    @update:model-value="style = String($event ?? '')"
+                  />
                 </label>
               </div>
               </div>
@@ -350,6 +358,27 @@ const qualityOptions: Array<{ value: ImageStudioQuality, label: string }> = [
   { value: 'hd', label: 'HD' },
   { value: 'ultra', label: '超清' },
 ]
+const countOptions = [
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 3, label: '3' },
+  { value: 4, label: '4' },
+]
+const outputFormatOptions: Array<{ value: ImageStudioOutputFormat, label: string }> = [
+  { value: 'png', label: 'PNG' },
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WEBP' },
+]
+const backgroundOptions: Array<{ value: ImageStudioBackground, label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: 'transparent', label: '透明' },
+  { value: 'opaque', label: '不透明' },
+]
+const styleOptions = [
+  { value: '', label: '默认' },
+  { value: 'vivid', label: '鲜明' },
+  { value: 'natural', label: '自然' },
+]
 
 const gatewayBaseUrl = computed(() => {
   const configured = appStore.apiBaseUrl || appStore.cachedPublicSettings?.api_base_url || ''
@@ -364,6 +393,10 @@ const imageCapableKeys = computed(() => activeKeys.value.filter(isUsableImageKey
 const selectableKeys = computed(() => imageCapableKeys.value.length > 0 ? imageCapableKeys.value : activeKeys.value)
 const selectedKey = computed(() => selectableKeys.value.find((key) => key.key === selectedKeyValue.value) || null)
 const referenceFiles = computed(() => referencePreviews.value.map((preview) => preview.file))
+const keySelectOptions = computed(() => selectableKeys.value.map((key) => ({
+  value: key.key,
+  label: `${key.name} - ${maskKey(key.key)}`,
+})))
 const fetchedModelCount = computed(() => remoteModels.value.length)
 const modelOptions = computed(() => remoteModels.value)
 const modelSelectOptions = computed(() => modelOptions.value.map((item) => ({ value: item, label: item })))
