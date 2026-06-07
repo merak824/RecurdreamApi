@@ -81,11 +81,15 @@
             <div class="card-body space-y-4">
               <label class="block">
                 <span class="input-label">图片模型({{ fetchedModelCount }})</span>
-                <select v-model="model" class="input font-mono">
-                  <option v-for="option in modelOptions" :key="option" :value="option">
-                    {{ option }}
-                  </option>
-                </select>
+                <Select
+                  v-model="model"
+                  :options="modelSelectOptions"
+                  placeholder="请先获取模型"
+                  search-placeholder="搜索模型..."
+                  empty-text="暂无模型，请先点击获取模型"
+                  :searchable="true"
+                  :disabled="modelsLoading"
+                />
               </label>
               <p v-if="modelsHint" class="text-xs text-gray-500 dark:text-dark-400">{{ modelsHint }}</p>
             </div>
@@ -277,6 +281,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import keysAPI from '@/api/keys'
 import {
@@ -308,7 +313,7 @@ const modelsLoading = ref(false)
 const remoteModels = ref<string[]>([])
 const modelsHint = ref('')
 const selectedKeyValue = ref('')
-const model = ref('gpt-image-2')
+const model = ref('')
 const prompt = ref('')
 const size = ref<ImageStudioSize>('1024x1024')
 const count = ref(1)
@@ -323,7 +328,6 @@ let generationTimer: number | null = null
 const results = ref<ImageStudioResult[]>([])
 const referencePreviews = ref<ReferencePreview[]>([])
 
-const modelPresets = ['gpt-image-2', 'gpt-image-1']
 const sizeOptions: Array<{ value: ImageStudioSize, label: string }> = [
   { value: 'auto', label: '自动' },
   { value: '1024x1024', label: '1K 方图 · 1024 x 1024' },
@@ -361,12 +365,13 @@ const selectableKeys = computed(() => imageCapableKeys.value.length > 0 ? imageC
 const selectedKey = computed(() => selectableKeys.value.find((key) => key.key === selectedKeyValue.value) || null)
 const referenceFiles = computed(() => referencePreviews.value.map((preview) => preview.file))
 const fetchedModelCount = computed(() => remoteModels.value.length)
-const modelOptions = computed(() => remoteModels.value.length > 0 ? remoteModels.value : modelPresets)
+const modelOptions = computed(() => remoteModels.value)
+const modelSelectOptions = computed(() => modelOptions.value.map((item) => ({ value: item, label: item })))
 const generationElapsedText = computed(() => formatElapsedTime(generationElapsedSeconds.value))
 
 const validationMessage = computed(() => {
   if (!selectedKeyValue.value) return '请先选择 API Key'
-  if (!model.value.trim()) return '请填写图片模型'
+  if (!model.value.trim()) return '请先获取并选择图片模型'
   if (!prompt.value.trim()) return '请填写提示词'
   if (selectedKey.value && !isUsableImageKey(selectedKey.value)) return '当前 Key 所属分组未确认开启生图'
   return ''
@@ -378,6 +383,12 @@ watch(selectableKeys, (items) => {
   if (!selectedKeyValue.value && items.length > 0) {
     selectedKeyValue.value = items[0].key
   }
+})
+
+watch(selectedKeyValue, () => {
+  remoteModels.value = []
+  model.value = ''
+  modelsHint.value = ''
 })
 
 async function loadKeys() {
@@ -406,6 +417,8 @@ async function loadModels() {
   }
 
   modelsLoading.value = true
+  remoteModels.value = []
+  model.value = ''
   modelsHint.value = ''
   try {
     const models = await listImageModels(selectedKeyValue.value, gatewayBaseUrl.value)
@@ -413,18 +426,15 @@ async function loadModels() {
     if (models.length > 0) {
       modelsHint.value = `已获取 ${models.length} 个模型`
       const preferred = models.find((item) => /gpt-image|image|dall-e/i.test(item))
-      if (preferred && !models.includes(model.value)) {
-        model.value = preferred
-      } else if (!models.includes(model.value)) {
-        model.value = models[0]
-      }
+      model.value = preferred || models[0]
       appStore.showSuccess('模型列表已更新')
     } else {
-      modelsHint.value = '接口没有返回可用模型，仍可手动填写模型名'
+      model.value = ''
+      modelsHint.value = '接口没有返回可用模型'
       appStore.showWarning('没有获取到模型列表')
     }
   } catch (err: unknown) {
-    modelsHint.value = '获取失败，可继续手动填写模型名'
+    modelsHint.value = '获取失败，请检查当前 Key 或稍后重试'
     appStore.showError(extractApiErrorMessage(err, '获取模型失败'))
   } finally {
     modelsLoading.value = false
@@ -437,7 +447,7 @@ function maskKey(value: string): string {
   return `${value.slice(0, 7)}...${value.slice(-5)}`
 }
 
-function handleFileChange(event: Event) {
+async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files || [])
   input.value = ''
@@ -452,19 +462,26 @@ function handleFileChange(event: Event) {
     appStore.showWarning('最多上传 8 张参考图，非图片文件会被忽略')
   }
 
-  const next = accepted.map((file) => ({
+  const next = await Promise.all(accepted.map(async (file) => ({
     id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
     file,
-    url: URL.createObjectURL(file),
+    url: await fileToDataUrl(file),
     name: file.name,
-  }))
+  })))
   referencePreviews.value = [...referencePreviews.value, ...next]
 }
 
 function removeReference(id: string) {
-  const current = referencePreviews.value.find((preview) => preview.id === id)
-  if (current) URL.revokeObjectURL(current.url)
   referencePreviews.value = referencePreviews.value.filter((preview) => preview.id !== id)
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('读取图片失败'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function formatElapsedTime(totalSeconds: number): string {
@@ -576,6 +593,5 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopGenerationTimer()
-  referencePreviews.value.forEach((preview) => URL.revokeObjectURL(preview.url))
 })
 </script>
