@@ -104,11 +104,16 @@
             </div>
             <div class="card-body">
               <label
-                class="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center transition-colors hover:border-primary-400 hover:bg-primary-50/50 dark:border-dark-600 dark:bg-dark-900/70 dark:hover:border-primary-500 dark:hover:bg-primary-950/20"
+                class="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-6 text-center transition-colors"
+                :class="referenceDropActive ? 'border-primary-400 bg-primary-50/70 dark:border-primary-400 dark:bg-primary-950/30' : 'border-gray-300 bg-gray-50 hover:border-primary-400 hover:bg-primary-50/50 dark:border-dark-600 dark:bg-dark-900/70 dark:hover:border-primary-500 dark:hover:bg-primary-950/20'"
+                @dragenter.prevent="handleReferenceDragEnter"
+                @dragover.prevent="handleReferenceDragOver"
+                @dragleave.prevent="handleReferenceDragLeave"
+                @drop.prevent="handleReferenceDrop"
               >
                 <Icon name="upload" size="lg" class="text-gray-400" />
-                <span class="mt-3 text-sm font-medium text-gray-700 dark:text-dark-200">上传参考图</span>
-                <span class="mt-1 text-xs text-gray-500 dark:text-dark-400">PNG/JPG/WEBP，最多 8 张</span>
+                <span class="mt-3 text-sm font-medium text-gray-700 dark:text-dark-200">拖拽或点击上传参考图</span>
+                <span class="mt-1 text-xs text-gray-500 dark:text-dark-400">PNG/JPG/WEBP，最多 8 张，也可拖入右侧生成结果</span>
                 <input class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple @change="handleFileChange" />
               </label>
 
@@ -226,19 +231,22 @@
                 <button class="btn btn-secondary" :disabled="generating || results.length === 0" @click="clearResults">
                   清空结果
                 </button>
-                <div v-if="generating" class="inline-flex items-center gap-2 rounded-full bg-primary-500/10 px-3 py-1 text-sm text-primary-600 dark:text-primary-300">
-                  <span class="h-3 w-3 rounded-full border-2 border-primary-500/30 border-t-primary-500 animate-spin" aria-hidden="true"></span>
-                  已等待 {{ generationElapsedText }}
-                </div>
                 <p v-if="validationMessage" class="text-sm text-amber-600 dark:text-amber-300">{{ validationMessage }}</p>
               </div>
             </div>
           </section>
 
           <section class="card">
-            <div class="card-header">
-              <h2 class="text-base font-semibold text-gray-900 dark:text-white">结果预览</h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">优先使用 base64 结果直接展示，无需额外图片代理。</p>
+            <div class="card-header flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div class="flex flex-wrap items-center gap-3">
+                  <h2 class="text-base font-semibold text-gray-900 dark:text-white">结果预览</h2>
+                  <span v-if="results.length > 0 && lastGenerationElapsedSeconds !== null" class="rounded-full bg-primary-500/10 px-3 py-1 text-xs font-medium text-primary-600 dark:text-primary-300">
+                    共用时 {{ lastGenerationElapsedSeconds }}s
+                  </span>
+                </div>
+                <p class="mt-1 text-sm text-gray-500 dark:text-dark-300">优先使用 base64 结果直接展示，无需额外图片代理。</p>
+              </div>
             </div>
             <div class="card-body">
               <div v-if="generating" class="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-700 dark:bg-dark-900/70 dark:text-dark-300">
@@ -246,17 +254,21 @@
                   <span class="h-10 w-10 rounded-full border-4 border-primary-500/20 border-t-primary-500 animate-spin" aria-hidden="true"></span>
                 </div>
                 <p class="mt-4 text-sm font-medium text-gray-700 dark:text-dark-100">正在等待图片结果...</p>
-                <p class="mt-2 rounded-full bg-white px-3 py-1 text-sm text-primary-600 shadow-sm dark:bg-dark-800 dark:text-primary-300">
-                  已等待 {{ generationElapsedText }}
-                </p>
               </div>
               <div v-else-if="results.length === 0" class="flex min-h-80 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-500 dark:border-dark-700 dark:bg-dark-900/70 dark:text-dark-300">
                 <Icon name="inbox" size="xl" class="text-gray-400" />
                 <p class="mt-4 text-sm">还没有图片结果</p>
               </div>
               <div v-else class="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                <article v-for="result in results" :key="result.id" class="overflow-hidden rounded-xl border border-gray-100 bg-white dark:border-dark-700 dark:bg-dark-900">
-                  <img :src="result.url" alt="生成结果" class="aspect-square w-full bg-gray-100 object-contain dark:bg-dark-950" />
+                <article
+                  v-for="result in results"
+                  :key="result.id"
+                  class="overflow-hidden rounded-xl border border-gray-100 bg-white dark:border-dark-700 dark:bg-dark-900"
+                  draggable="true"
+                  @dragstart="handleResultDragStart($event, result)"
+                  @dragend="handleResultDragEnd"
+                >
+                  <img :src="result.url" alt="生成结果" class="aspect-square w-full bg-gray-100 object-contain dark:bg-dark-950" draggable="false" />
                   <div class="space-y-3 p-3">
                     <p v-if="result.revisedPrompt" class="line-clamp-2 text-xs text-gray-500 dark:text-dark-300">
                       {{ result.revisedPrompt }}
@@ -273,6 +285,10 @@
                       <button class="btn btn-ghost btn-sm" type="button" @click="openResult(result)">
                         <Icon name="externalLink" size="sm" />
                         打开
+                      </button>
+                      <button class="btn btn-primary btn-sm" type="button" @click="continueWithResult(result)">
+                        <Icon name="sparkles" size="sm" />
+                        继续优化
                       </button>
                     </div>
                   </div>
@@ -335,6 +351,10 @@ const generationElapsedSeconds = ref(0)
 let generationTimer: number | null = null
 const results = ref<ImageStudioResult[]>([])
 const referencePreviews = ref<ReferencePreview[]>([])
+const referenceDropActive = ref(false)
+const lastGenerationElapsedSeconds = ref<number | null>(null)
+let referenceDragDepth = 0
+const openedResultUrls: string[] = []
 
 const sizeOptions: Array<{ value: ImageStudioSize, label: string }> = [
   { value: 'auto', label: '自动' },
@@ -480,10 +500,7 @@ function maskKey(value: string): string {
   return `${value.slice(0, 7)}...${value.slice(-5)}`
 }
 
-async function handleFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files || [])
-  input.value = ''
+async function addReferenceFiles(files: File[]) {
   if (files.length === 0) return
 
   const remaining = Math.max(0, 8 - referencePreviews.value.length)
@@ -494,6 +511,7 @@ async function handleFileChange(event: Event) {
   if (accepted.length < files.length) {
     appStore.showWarning('最多上传 8 张参考图，非图片文件会被忽略')
   }
+  if (accepted.length === 0) return
 
   const next = await Promise.all(accepted.map(async (file) => ({
     id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
@@ -504,8 +522,62 @@ async function handleFileChange(event: Event) {
   referencePreviews.value = [...referencePreviews.value, ...next]
 }
 
+async function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  await addReferenceFiles(files)
+}
+
 function removeReference(id: string) {
   referencePreviews.value = referencePreviews.value.filter((preview) => preview.id !== id)
+}
+
+function handleReferenceDragEnter() {
+  referenceDragDepth += 1
+  referenceDropActive.value = true
+}
+
+function handleReferenceDragOver(event: DragEvent) {
+  event.dataTransfer!.dropEffect = 'copy'
+  referenceDropActive.value = true
+}
+
+function handleReferenceDragLeave() {
+  referenceDragDepth = Math.max(0, referenceDragDepth - 1)
+  if (referenceDragDepth === 0) {
+    referenceDropActive.value = false
+  }
+}
+
+async function handleReferenceDrop(event: DragEvent) {
+  referenceDragDepth = 0
+  referenceDropActive.value = false
+
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (files.length > 0) {
+    await addReferenceFiles(files)
+    return
+  }
+
+  const resultId = event.dataTransfer?.getData('application/x-image-studio-result') || ''
+  const result = results.value.find((item) => item.id === resultId)
+  if (result) {
+    await continueWithResult(result)
+  }
+}
+
+function handleResultDragStart(event: DragEvent, result: ImageStudioResult) {
+  event.dataTransfer?.setData('application/x-image-studio-result', result.id)
+  event.dataTransfer?.setData('text/plain', result.fileName)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+}
+
+function handleResultDragEnd() {
+  referenceDropActive.value = false
+  referenceDragDepth = 0
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -548,6 +620,7 @@ async function submit() {
   }
 
   generating.value = true
+  lastGenerationElapsedSeconds.value = null
   startGenerationTimer()
   try {
     const generated = await generateImage({
@@ -563,6 +636,10 @@ async function submit() {
       style: style.value,
       images: referenceFiles.value,
     })
+    generationElapsedSeconds.value = generationStartedAt.value
+      ? Math.max(1, Math.ceil((Date.now() - generationStartedAt.value) / 1000))
+      : generationElapsedSeconds.value
+    lastGenerationElapsedSeconds.value = generationElapsedSeconds.value
     results.value = generated
     appStore.showSuccess('图片生成成功')
   } catch (err: unknown) {
@@ -578,20 +655,53 @@ function clearResults() {
 }
 
 async function resultToBlob(result: ImageStudioResult): Promise<Blob> {
+  if (result.url.startsWith('data:')) {
+    return dataUrlToBlob(result.url, result.mimeType)
+  }
   const response = await fetch(result.url)
-  return response.blob()
+  const blob = await response.blob()
+  if (blob.type) return blob
+  return blob.slice(0, blob.size, result.mimeType)
+}
+
+function dataUrlToBlob(url: string, fallbackMimeType: string): Blob {
+  const [meta = '', data = ''] = url.split(',', 2)
+  const mimeType = meta.match(/^data:([^;]+)/)?.[1] || fallbackMimeType
+  const binary = atob(data)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return new Blob([bytes], { type: mimeType })
+}
+
+async function resultToFile(result: ImageStudioResult): Promise<File> {
+  const blob = await resultToBlob(result)
+  return new File([blob], result.fileName, {
+    type: blob.type || result.mimeType,
+    lastModified: Date.now(),
+  })
 }
 
 async function downloadResult(result: ImageStudioResult) {
-  const blob = await resultToBlob(result)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = result.fileName
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  try {
+    const blob = await resultToBlob(result)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = result.fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 30000)
+  } catch {
+    const a = document.createElement('a')
+    a.href = result.url
+    a.download = result.fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
 }
 
 async function copyResult(result: ImageStudioResult) {
@@ -613,8 +723,35 @@ async function copyResult(result: ImageStudioResult) {
   }
 }
 
-function openResult(result: ImageStudioResult) {
-  window.open(result.url, '_blank', 'noopener,noreferrer')
+async function openResult(result: ImageStudioResult) {
+  const viewer = window.open('', '_blank')
+  if (!viewer) {
+    appStore.showError('打开失败，请允许浏览器弹窗或下载后查看')
+    return
+  }
+  viewer.opener = null
+  viewer.document.title = result.fileName
+  viewer.document.body.style.margin = '0'
+  viewer.document.body.style.background = '#0f172a'
+  viewer.document.body.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;color:#cbd5e1;font-family:sans-serif;">正在打开图片...</div>'
+  try {
+    const blob = await resultToBlob(result)
+    const url = URL.createObjectURL(blob)
+    openedResultUrls.push(url)
+    viewer.location.href = url
+  } catch {
+    viewer.location.href = result.url
+  }
+}
+
+async function continueWithResult(result: ImageStudioResult) {
+  try {
+    const file = await resultToFile(result)
+    await addReferenceFiles([file])
+    appStore.showSuccess('已加入参考图，可继续优化')
+  } catch {
+    appStore.showError('加入参考图失败，请下载后重新上传')
+  }
 }
 
 onMounted(async () => {
@@ -626,5 +763,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopGenerationTimer()
+  openedResultUrls.forEach((url) => URL.revokeObjectURL(url))
 })
 </script>
