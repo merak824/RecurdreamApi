@@ -1,14 +1,54 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 Sub2API 二次开发，重点增强了多账号调度、分组计费、OpenAI / Claude / Gemini 兼容接入，以及站内图片生成工作台能力。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.144`，并保留 Recurdream 的本地定制。
 
-## 更新日志
+## 当前版本
 
-这里记录递归梦境API的主要更新节点，方便在 GitHub 主页直接查看更新内容和时间。
+- 当前版本：`v0.1.144`
+- 本仓库主分支：`main`
+- 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
+- 上游最新同步版本：[v0.1.144](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.144)
+- Recurdream 定制发布 Tag：`v0.1.144`
 
-### 2026-06-07 递归梦境API图片工作台更新
+## Release List
 
-#### 新增图片工作台
+这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.144 - 2026-07-06
+
+- 同步上游 Sub2API `v0.1.144`。
+- 修复高并发下用量日志静默丢失导致的对账缺口问题。
+- 新增 Anthropic Fable 专属 `7d_oi` 窗口的模型级限流支持。
+- 新增 Codex 图像工具策略，支持账号级四态控制。
+- Recurdream 定制：侧边栏「使用手册」改为飞书文档外部导航。
+- Recurdream 定制：「图片工作台」改为外部导航，暂跳转到 `https://image.recurdream.com`。
+- Recurdream 定制：保留服务器备份脚本与本地拉取备份脚本。
+
+### v0.1.143 - 2026-07-02
+
+- 同步上游 Sub2API `v0.1.143`。
+- 订阅分组新增高峰时段倍率能力。
+- OpenAI WebSocket 新增 `http_bridge` ingress 模式及账号级 WS 选择器。
+- 支持恢复已撤销的订阅。
+- 用量记录新增 IP 地理位置查询与展示。
+- 管理端分组列表支持自定义列显示设置。
+
+### v0.1.142 - 2026-07-01
+
+- 同步上游 Sub2API `v0.1.142`。
+- 新增 OpenAI Spark 链接型影子账号。
+- 适配 Claude Sonnet 5。
+- 增强 Grok 媒体模型路由与图像编辑上传转换。
+- 修复账号列表分页、订阅撤销、Codex OAuth 推理内容等问题。
+
+### v0.1.137 - 2026-06-16
+
+- 本地服务器原基线版本。
+- 新增 OpenAI 账号重置次数查询/触发重置。
+- 新增 `cyber_policy` 硬阻断全链路透传。
+- 补充 Claude OAuth、国产 LLM 定价、渠道监控抖动等能力。
+
+### 2026-06-07 - 递归梦境API图片工作台更新
 
 - 新增用户侧「图片工作台」页面。
 - 新增访问路径：`/image-studio`。
@@ -20,11 +60,23 @@
 - 支持模型、尺寸、张数、质量、背景、输出格式、风格参数。
 - 支持图片结果预览、下载、复制和打开。
 
-#### 更新项目说明
+## Tags
 
-- GitHub 首页 README 已改为「递归梦境API」中文项目介绍。
-- 去掉原 Sub2API 项目的 Demo、赞助商和官方域名说明。
-- 修正错误站名，移除“极算云”。
+本仓库维护以下发布 Tag，用于对应主分支的可部署状态：
+
+| Tag | 说明 |
+| --- | --- |
+| `v0.1.144` | 当前最新版本，Sub2API `v0.1.144` + Recurdream 定制 |
+| `v0.1.143` | 同步 Sub2API `v0.1.143` 的过渡版本 |
+| `v0.1.142` | 同步 Sub2API `v0.1.142` 的过渡版本 |
+| `v0.1.137` | 升级前的 Recurdream 基线版本 |
+
+## Recurdream 定制
+
+- 「使用手册」：侧边栏外部导航，打开飞书文档。
+- 「图片工作台」：侧边栏外部导航，暂跳转到 `https://image.recurdream.com`。
+- 备份脚本：保留服务器每日/每周备份与本地拉取备份脚本。
+- 热部署：保留 Docker Compose blue/green 热部署流程。
 
 ## 项目定位
 
@@ -37,7 +89,7 @@
 - 给不同用户或套餐分配不同模型和倍率
 - 统计用户用量、账号成本和渠道状态
 - 提供 OpenAI-compatible、Claude-compatible、Gemini-compatible 接口
-- 为 GPT 图片模型提供专用生图分组和图片工作台
+- 为图片模型提供专用生图分组和外部图片工作台入口
 
 ## 主要功能
 
@@ -46,49 +98,9 @@
 - 智能调度：支持账号池调度、失败切换、粘性会话和模型路由。
 - 用量计费：记录请求、Token、图片生成、成本和倍率。
 - 分组权限：按分组控制模型、倍率、RPM、订阅、图片生成权限。
-- 图片生成：支持 `/v1/images/generations` 和 `/v1/images/edits`，并提供站内图片工作台。
+- 图片生成：支持 `/v1/images/generations` 和 `/v1/images/edits`。
 - 后台管理：提供用户、账号、分组、渠道、订单、使用记录、风控等管理页面。
 - 热部署：支持 Docker Compose blue/green 热部署，降低线上更新中断风险。
-
-## 新增：图片工作台
-
-本仓库已加入用户侧图片工作台：
-
-- 路由：`/image-studio`
-- 菜单：用户侧边栏「图片工作台」
-- 支持选择当前用户已有 API Key
-- 自动优先展示 OpenAI 且已开启生图权限的 Key
-- 支持文生图：调用 `/v1/images/generations`
-- 支持参考图改图：上传参考图后调用 `/v1/images/edits`
-- 支持参数：模型、尺寸、张数、质量、背景、输出格式、风格
-- 支持结果预览、下载、复制和打开图片
-
-推荐配套配置：
-
-```text
-分组平台：OpenAI
-允许生图：开启
-图片模型：gpt-image-2
-接口地址：https://你的域名/v1/images/generations
-```
-
-站内图片工作台会自动使用：
-
-```text
-https://你的域名/v1
-```
-
-并根据是否上传参考图自动选择 `/images/generations` 或 `/images/edits`。
-
-## 技术栈
-
-| 模块 | 技术 |
-| --- | --- |
-| 后端 | Go, Gin, Ent |
-| 前端 | Vue 3, Vite, TypeScript, TailwindCSS |
-| 数据库 | PostgreSQL |
-| 缓存 | Redis |
-| 部署 | Docker, Docker Compose, Nginx |
 
 ## 快速部署
 
@@ -147,7 +159,8 @@ GET  /v1beta/models
 3. 给用户创建 API Key，并绑定对应分组。
 4. 用户使用 API Key 调用兼容接口。
 5. 如需生图，确保分组开启「允许生图」。
-6. 用户可进入「图片工作台」直接使用自己的 Key 生图。
+6. 用户可从侧边栏进入「图片工作台」外部站点。
+7. 用户可从侧边栏进入「使用手册」飞书文档。
 
 ## 说明
 
