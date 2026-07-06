@@ -30,3 +30,21 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar custom external navigation', () => {
+  it('adds external links for the manual and image studio navigation items', () => {
+    expect(componentSource).toContain("const feishuDocsUrl = 'https://recurdream.feishu.cn/wiki/HoSLwRZI0ilf4hkhs27crlUVnNe'")
+    expect(componentSource).toContain("const imageStudioUrl = 'https://image.recurdream.com'")
+    expect(componentSource).toContain("{ path: '/docs/feishu', label: '使用手册', icon: DocumentIcon, externalUrl: feishuDocsUrl }")
+    expect(componentSource).toContain("{ path: '/image-studio', label: '图片工作台', icon: ImageIcon, externalUrl: imageStudioUrl }")
+  })
+
+  it('opens external navigation items in a new tab', () => {
+    expect(componentSource).toContain('<a')
+    expect(componentSource).toContain('v-if="item.externalUrl"')
+    expect(componentSource).toContain(':href="item.externalUrl"')
+    expect(componentSource).toContain('target="_blank"')
+    expect(componentSource).toContain('rel="noopener noreferrer"')
+    expect(componentSource).not.toContain("window.open(externalItem.externalUrl, '_blank', 'noopener,noreferrer')")
+  })
+})
