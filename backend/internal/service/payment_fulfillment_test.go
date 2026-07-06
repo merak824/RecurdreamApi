@@ -46,6 +46,7 @@ type paymentFulfillmentAffiliateAccrueCall struct {
 	amount        float64
 	freezeHours   int
 	sourceOrderID *int64
+	rebateMode    string
 }
 
 type paymentFulfillmentAffiliateRepoStub struct {
@@ -71,11 +72,15 @@ func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateByCode(context.Context
 	panic("unexpected GetAffiliateByCode call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) BindInviter(context.Context, int64, int64) (bool, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) GetUserRole(context.Context, int64) (string, error) {
+	panic("unexpected GetUserRole call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) BindInviter(context.Context, int64, int64, string) (bool, error) {
 	panic("unexpected BindInviter call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64) (bool, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64, rebateMode string) (bool, error) {
 	var sourceCopy *int64
 	if sourceOrderID != nil {
 		v := *sourceOrderID
@@ -87,24 +92,37 @@ func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inv
 		amount:        amount,
 		freezeHours:   freezeHours,
 		sourceOrderID: sourceCopy,
+		rebateMode:    rebateMode,
 	})
 	return true, nil
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64, string) (float64, error) {
 	return 0, nil
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) ThawFrozenQuota(context.Context, int64, string) (float64, error) {
 	panic("unexpected ThawFrozenQuota call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64, string, float64) (float64, float64, error) {
 	panic("unexpected TransferQuotaToBalance call")
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
 	panic("unexpected ListInvitees call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) CreateWithdrawal(context.Context, int64, float64, AffiliateImageData) (*AffiliateWithdrawal, error) {
+	panic("unexpected CreateWithdrawal call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ListWithdrawalsByUser(context.Context, int64, int) ([]AffiliateWithdrawal, error) {
+	panic("unexpected ListWithdrawalsByUser call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetWithdrawalStats(context.Context, int64) (float64, float64, error) {
+	panic("unexpected GetWithdrawalStats call")
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
@@ -139,8 +157,24 @@ func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateTransferRecords(conte
 	panic("unexpected ListAffiliateTransferRecords call")
 }
 
+func (r *paymentFulfillmentAffiliateRepoStub) ListAffiliateWithdrawalRecords(context.Context, AffiliateRecordFilter) ([]AffiliateWithdrawalRecord, int64, error) {
+	panic("unexpected ListAffiliateWithdrawalRecords call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) MarkWithdrawalPaid(context.Context, int64, AffiliateWithdrawalAdminActionInput, AffiliateImageData) (*AffiliateWithdrawal, error) {
+	panic("unexpected MarkWithdrawalPaid call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) RejectWithdrawal(context.Context, int64, AffiliateWithdrawalAdminActionInput) (*AffiliateWithdrawal, error) {
+	panic("unexpected RejectWithdrawal call")
+}
+
 func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
 	panic("unexpected GetAffiliateUserOverview call")
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) GetAffiliateAgentUsage(context.Context, int64, time.Time, time.Time) (*AffiliateAgentUsageSummary, error) {
+	panic("unexpected GetAffiliateAgentUsage call")
 }
 
 type paymentFulfillmentSettingRepoStub struct {
@@ -662,6 +696,7 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 	require.Equal(t, 24.0, affiliateRepo.accrueCalls[0].amount)
 	require.NotNil(t, affiliateRepo.accrueCalls[0].sourceOrderID)
 	require.Equal(t, order.ID, *affiliateRepo.accrueCalls[0].sourceOrderID)
+	require.Equal(t, AffiliateRebateModeUser, affiliateRepo.accrueCalls[0].rebateMode)
 	require.Equal(t, 1, subRepo.createCalls)
 
 	applied, err := client.PaymentAuditLog.Query().
