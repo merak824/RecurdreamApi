@@ -1158,7 +1158,11 @@
                     <Select
                       :modelValue="rule.action"
                       @update:modelValue="
-                        rule.action = $event as 'pass' | 'filter' | 'block'
+                        rule.action = $event as
+                          | 'pass'
+                          | 'filter'
+                          | 'block'
+                          | 'force_priority'
                       "
                       :options="openaiFastPolicyActionOptions"
                     />
@@ -1183,6 +1187,72 @@
                       :options="openaiFastPolicyScopeOptions"
                     />
                   </div>
+                </div>
+
+                <!-- User Scope -->
+                <div class="mt-3">
+                  <label
+                    class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                  >
+                    {{ t("admin.settings.openaiFastPolicy.userIds") }}
+                  </label>
+                  <p class="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                    {{ t("admin.settings.openaiFastPolicy.userIdsHint") }}
+                  </p>
+                  <div
+                    v-for="(_, userIDIndex) in rule.user_ids || []"
+                    :key="userIDIndex"
+                    class="mb-1.5 flex items-center gap-2"
+                  >
+                    <input
+                      v-model.number="rule.user_ids![userIDIndex]"
+                      type="number"
+                      min="1"
+                      step="1"
+                      class="input input-sm flex-1"
+                      :placeholder="t('admin.settings.openaiFastPolicy.userIdPlaceholder')"
+                    />
+                    <button
+                      type="button"
+                      @click="removeOpenAIFastPolicyUserID(rule, userIDIndex)"
+                      class="shrink-0 rounded p-1 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                      :title="t('admin.settings.openaiFastPolicy.removeUserId')"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    @click="addOpenAIFastPolicyUserID(rule)"
+                    class="mb-2 inline-flex items-center gap-1 text-xs text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    <svg
+                      class="h-3.5 w-3.5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    {{ t("admin.settings.openaiFastPolicy.addUserId") }}
+                  </button>
                 </div>
 
                 <!-- Error Message (only when action=block) -->
@@ -1297,6 +1367,7 @@
                         | 'pass'
                         | 'filter'
                         | 'block'
+                        | 'force_priority'
                     "
                     :options="openaiFastPolicyActionOptions"
                   />
@@ -4014,6 +4085,81 @@
                 </div>
                 <Toggle v-model="form.openai_advanced_scheduler_enabled" />
               </div>
+
+              <div
+                v-if="form.openai_advanced_scheduler_enabled"
+                class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700"
+              >
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiExperimentalScheduler.stickyWeightedTitle") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      t("admin.settings.openaiExperimentalScheduler.stickyWeightedDescription")
+                    }}
+                  </p>
+                </div>
+                <Toggle v-model="form.openai_advanced_scheduler_sticky_weighted_enabled" />
+              </div>
+
+              <div
+                v-if="form.openai_advanced_scheduler_enabled"
+                class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700"
+              >
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiExperimentalScheduler.subscriptionPriorityTitle") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      t("admin.settings.openaiExperimentalScheduler.subscriptionPriorityDescription")
+                    }}
+                  </p>
+                </div>
+                <Toggle v-model="form.openai_advanced_scheduler_subscription_priority_enabled" />
+              </div>
+
+              <div
+                v-if="form.openai_advanced_scheduler_enabled"
+                class="border-t border-gray-100 pt-5 dark:border-dark-700"
+              >
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiExperimentalScheduler.weightsTitle") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      t("admin.settings.openaiExperimentalScheduler.weightsDescription")
+                    }}
+                  </p>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <label
+                    v-for="field in openAIAdvancedSchedulerWeightFields"
+                    :key="field.key"
+                    class="block"
+                  >
+                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {{ field.label }}
+                    </span>
+                    <input
+                      v-model="form[field.key]"
+                      class="input mt-1"
+                      inputmode="decimal"
+                      :placeholder="field.placeholder"
+                      type="text"
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -5913,7 +6059,7 @@
                 </p>
               </div>
 
-              <!-- 专属代理管理 -->
+              <!-- 专属用户管理 -->
               <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
                 <div class="mb-3 flex items-center justify-between">
                   <div>
@@ -5964,7 +6110,6 @@
                         </th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.email') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.role') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
@@ -5972,12 +6117,12 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
                       <tr v-if="affiliateState.loading">
-                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('common.loading') }}
                         </td>
                       </tr>
                       <tr v-else-if="affiliateState.entries.length === 0">
-                        <td colspan="7" class="px-3 py-6 text-center text-sm text-gray-500">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
                           {{ t('admin.settings.features.affiliate.customUsers.empty') }}
                         </td>
                       </tr>
@@ -5991,14 +6136,8 @@
                         </td>
                         <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ entry.email }}</td>
                         <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{{ entry.username }}</td>
-                        <td class="px-3 py-2 text-sm">
-                          <span :class="['badge', isAffiliateAgent(entry) ? 'badge-blue' : 'badge-gray']">
-                            {{ isAffiliateAgent(entry) ? t('admin.settings.features.affiliate.customUsers.agentBadge') : t('admin.settings.features.affiliate.customUsers.userBadge') }}
-                          </span>
-                        </td>
                         <td class="px-3 py-2 text-sm font-mono">
-                          <span v-if="entry.aff_code">{{ entry.aff_code }}</span>
-                          <span v-else class="text-gray-400">-</span>
+                          {{ entry.aff_code }}
                           <span
                             v-if="entry.aff_code_custom"
                             class="ml-1 inline-block rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
@@ -6009,15 +6148,7 @@
                           <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
                         </td>
                         <td class="px-3 py-2 text-sm">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <button
-                              v-if="isAffiliateAgent(entry)"
-                              type="button"
-                              class="text-blue-600 hover:underline dark:text-blue-400"
-                              @click="openAffiliateUsageModal(entry)"
-                            >
-                              {{ t('admin.settings.features.affiliate.customUsers.viewUsage') }}
-                            </button>
+                          <div class="flex items-center gap-2">
                             <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
                             </button>
@@ -6233,148 +6364,6 @@
           </div>
         </div>
 
-        <!-- Affiliate agent usage modal -->
-        <div
-          v-if="affiliateUsageModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="closeAffiliateUsageModal"
-        >
-          <div class="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-dark-900">
-            <div class="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-dark-700">
-              <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.settings.features.affiliate.usageModal.title') }}
-                </h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {{ affiliateUsageModal.entry?.email || '-' }}
-                  <span v-if="affiliateUsageModal.data">
-                    · {{ formatAffiliateUsageRange(affiliateUsageModal.data) }}
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-800 dark:hover:text-gray-200"
-                :title="t('common.close')"
-                @click="closeAffiliateUsageModal"
-              >
-                ×
-              </button>
-            </div>
-
-            <div class="overflow-y-auto p-6">
-              <div v-if="affiliateUsageModal.loading" class="flex items-center justify-center py-16 text-sm text-gray-500">
-                {{ t('common.loading') }}
-              </div>
-              <div v-else-if="affiliateUsageModal.data" class="space-y-6">
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.weekUsage') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
-                      {{ formatAffiliateTokens(affiliateUsageModal.data.total_tokens) }}
-                    </p>
-                  </div>
-                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.avgDailyUsage') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
-                      {{ formatAffiliateTokens(affiliateUsageModal.data.average_daily_tokens) }}
-                    </p>
-                  </div>
-                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.invitees') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
-                      {{ affiliateUsageModal.data.active_invitee_count }} / {{ affiliateUsageModal.data.invitee_count }}
-                    </p>
-                  </div>
-                  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.features.affiliate.usageModal.suggestedRate') }}</p>
-                    <p class="mt-2 text-xl font-semibold text-primary-600 dark:text-primary-400">
-                      {{ affiliateUsageModal.data.suggested_rebate_rate_percent > 0 ? `${affiliateUsageModal.data.suggested_rebate_rate_percent}%` : t('admin.settings.features.affiliate.usageModal.noSuggestion') }}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/60 dark:bg-blue-900/20 dark:text-blue-300">
-                  {{ t('admin.settings.features.affiliate.usageModal.ruleHint') }}
-                </div>
-
-                <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
-                    <div class="border-b border-gray-200 px-4 py-3 dark:border-dark-700">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
-                        {{ t('admin.settings.features.affiliate.usageModal.dailyTitle') }}
-                      </h4>
-                    </div>
-                    <div class="overflow-x-auto">
-                      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
-                        <thead class="bg-gray-50 dark:bg-dark-800">
-                          <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.date') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.totalUsage') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.requests') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.cost') }}</th>
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
-                          <tr v-if="affiliateUsageModal.data.daily.length === 0">
-                            <td colspan="4" class="px-3 py-6 text-center text-gray-500">
-                              {{ t('admin.settings.features.affiliate.usageModal.emptyDaily') }}
-                            </td>
-                          </tr>
-                          <tr v-for="item in affiliateUsageModal.data.daily" :key="item.date">
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{{ item.date }}</td>
-                            <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ formatAffiliateTokens(item.total_tokens) }}</td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ item.request_count }}</td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateCost(item.actual_cost) }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
-                    <div class="border-b border-gray-200 px-4 py-3 dark:border-dark-700">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
-                        {{ t('admin.settings.features.affiliate.usageModal.inviteesTitle') }}
-                      </h4>
-                    </div>
-                    <div class="overflow-x-auto">
-                      <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-dark-700">
-                        <thead class="bg-gray-50 dark:bg-dark-800">
-                          <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.user') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.totalUsage') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.avgDailyUsage') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.requests') }}</th>
-                            <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.usageModal.table.cost') }}</th>
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
-                          <tr v-if="affiliateUsageModal.data.invitees.length === 0">
-                            <td colspan="5" class="px-3 py-6 text-center text-gray-500">
-                              {{ t('admin.settings.features.affiliate.usageModal.emptyInvitees') }}
-                            </td>
-                          </tr>
-                          <tr v-for="item in affiliateUsageModal.data.invitees" :key="item.user_id">
-                            <td class="px-3 py-2">
-                              <div class="font-medium text-gray-900 dark:text-white">{{ item.email || `#${item.user_id}` }}</div>
-                              <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.username || `ID ${item.user_id}` }}</div>
-                            </td>
-                            <td class="px-3 py-2 font-medium text-gray-900 dark:text-white">{{ formatAffiliateTokens(item.total_tokens) }}</td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateTokens(item.average_daily_tokens) }}</td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ item.request_count }}</td>
-                            <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ formatAffiliateCost(item.actual_cost) }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         </div><!-- /Tab: Features -->
 
         <!-- Tab: Email -->
@@ -6559,6 +6548,34 @@
                             1
                           ).toFixed(2),
                         })
+                      }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.subscriptionUsdToCnyRate")
+                    }}</label>
+                    <input
+                      :value="form.payment_subscription_usd_to_cny_rate || ''"
+                      @input="
+                        form.payment_subscription_usd_to_cny_rate =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          ) || 0
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="input"
+                      :placeholder="
+                        t(
+                          'admin.settings.payment.subscriptionUsdToCnyRateDisabled',
+                        )
+                      "
+                    />
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      {{
+                        t("admin.settings.payment.subscriptionUsdToCnyRateHint")
                       }}
                     </p>
                   </div>
@@ -7415,14 +7432,8 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import { useClipboard } from "@/composables/useClipboard";
-import {
-  affiliatesAPI,
-  type AffiliateAdminEntry,
-  type AffiliateAgentUsageSummary,
-  type SimpleUser as AffiliateSimpleUser,
-} from "@/api/admin/affiliates";
+import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
-import { formatCompactNumber, formatCurrency, formatDateOnly } from "@/utils/format";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
@@ -8066,6 +8077,18 @@ type SettingsForm = Omit<
   google_oauth_client_secret: string;
   force_email_on_third_party_signup: boolean;
   openai_advanced_scheduler_enabled: boolean;
+  openai_advanced_scheduler_sticky_weighted_enabled: boolean;
+  openai_advanced_scheduler_subscription_priority_enabled: boolean;
+  openai_advanced_scheduler_lb_top_k: string;
+  openai_advanced_scheduler_weight_priority: string;
+  openai_advanced_scheduler_weight_load: string;
+  openai_advanced_scheduler_weight_queue: string;
+  openai_advanced_scheduler_weight_error_rate: string;
+  openai_advanced_scheduler_weight_ttft: string;
+  openai_advanced_scheduler_weight_reset: string;
+  openai_advanced_scheduler_weight_quota_headroom: string;
+  openai_advanced_scheduler_weight_previous_response: string;
+  openai_advanced_scheduler_weight_session_sticky: string;
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
 };
@@ -8113,6 +8136,7 @@ const form = reactive<SettingsForm>({
   payment_order_timeout_minutes: 30,
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
+  payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
   payment_help_image_url: "",
@@ -8257,6 +8281,18 @@ const form = reactive<SettingsForm>({
   // 分组隔离
   allow_ungrouped_key_scheduling: false,
   openai_advanced_scheduler_enabled: false,
+  openai_advanced_scheduler_sticky_weighted_enabled: false,
+  openai_advanced_scheduler_subscription_priority_enabled: false,
+  openai_advanced_scheduler_lb_top_k: "",
+  openai_advanced_scheduler_weight_priority: "",
+  openai_advanced_scheduler_weight_load: "",
+  openai_advanced_scheduler_weight_queue: "",
+  openai_advanced_scheduler_weight_error_rate: "",
+  openai_advanced_scheduler_weight_ttft: "",
+  openai_advanced_scheduler_weight_reset: "",
+  openai_advanced_scheduler_weight_quota_headroom: "",
+  openai_advanced_scheduler_weight_previous_response: "",
+  openai_advanced_scheduler_weight_session_sticky: "",
   // Gateway forwarding behavior
   enable_fingerprint_unification: true,
   enable_metadata_passthrough: false,
@@ -8292,6 +8328,103 @@ const form = reactive<SettingsForm>({
   affiliate_enabled: false,
   // Allow user view error requests
   allow_user_view_error_requests: false,
+});
+
+type OpenAIAdvancedSchedulerOverrideKey =
+  | "openai_advanced_scheduler_lb_top_k"
+  | "openai_advanced_scheduler_weight_priority"
+  | "openai_advanced_scheduler_weight_load"
+  | "openai_advanced_scheduler_weight_queue"
+  | "openai_advanced_scheduler_weight_error_rate"
+  | "openai_advanced_scheduler_weight_ttft"
+  | "openai_advanced_scheduler_weight_reset"
+  | "openai_advanced_scheduler_weight_quota_headroom"
+  | "openai_advanced_scheduler_weight_previous_response"
+  | "openai_advanced_scheduler_weight_session_sticky";
+
+type OpenAIAdvancedSchedulerEffectiveKey =
+  | "openai_advanced_scheduler_effective_lb_top_k"
+  | "openai_advanced_scheduler_effective_weight_priority"
+  | "openai_advanced_scheduler_effective_weight_load"
+  | "openai_advanced_scheduler_effective_weight_queue"
+  | "openai_advanced_scheduler_effective_weight_error_rate"
+  | "openai_advanced_scheduler_effective_weight_ttft"
+  | "openai_advanced_scheduler_effective_weight_reset"
+  | "openai_advanced_scheduler_effective_weight_quota_headroom"
+  | "openai_advanced_scheduler_effective_weight_previous_response"
+  | "openai_advanced_scheduler_effective_weight_session_sticky";
+
+const openAIAdvancedSchedulerWeightFields = computed<
+  Array<{
+    key: OpenAIAdvancedSchedulerOverrideKey;
+    label: string;
+    placeholder: string;
+  }>
+>(() => {
+  const placeholder = (
+    effectiveKey: OpenAIAdvancedSchedulerEffectiveKey,
+    fallbackValue: string,
+  ) => {
+    const effectiveValue = String(
+      (form as Record<string, unknown>)[effectiveKey] ?? "",
+    ).trim();
+    return t("admin.settings.openaiExperimentalScheduler.defaultPlaceholder", {
+      value: effectiveValue || fallbackValue,
+    });
+  };
+
+  return [
+    {
+      key: "openai_advanced_scheduler_lb_top_k",
+      label: t("admin.settings.openaiExperimentalScheduler.topKLabel"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_lb_top_k", "7"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_priority",
+      label: t("admin.settings.openaiExperimentalScheduler.priorityWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_priority", "1"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_load",
+      label: t("admin.settings.openaiExperimentalScheduler.loadWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_load", "1"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_queue",
+      label: t("admin.settings.openaiExperimentalScheduler.queueWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_queue", "0.7"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_error_rate",
+      label: t("admin.settings.openaiExperimentalScheduler.errorRateWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_error_rate", "0.8"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_ttft",
+      label: t("admin.settings.openaiExperimentalScheduler.ttftWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_ttft", "0.5"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_reset",
+      label: t("admin.settings.openaiExperimentalScheduler.resetWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_reset", "0"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_quota_headroom",
+      label: t("admin.settings.openaiExperimentalScheduler.quotaHeadroomWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_quota_headroom", "0"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_previous_response",
+      label: t("admin.settings.openaiExperimentalScheduler.previousResponseWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_previous_response", "5"),
+    },
+    {
+      key: "openai_advanced_scheduler_weight_session_sticky",
+      label: t("admin.settings.openaiExperimentalScheduler.sessionStickyWeight"),
+      placeholder: placeholder("openai_advanced_scheduler_effective_weight_session_sticky", "3"),
+    },
+  ];
 });
 
 const authSourceDefaults = reactive<AuthSourceDefaultsState>(
@@ -9077,6 +9210,7 @@ async function loadSettings() {
       openaiFastPolicyForm.rules =
         settings.openai_fast_policy_settings.rules.map((rule) => ({
           ...rule,
+          user_ids: rule.user_ids ? [...rule.user_ids] : [],
           model_whitelist: rule.model_whitelist
             ? [...rule.model_whitelist]
             : [],
@@ -9505,6 +9639,8 @@ async function saveSettings() {
       payment_balance_disabled: form.payment_balance_disabled,
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
+      payment_subscription_usd_to_cny_rate:
+        Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,
       payment_enabled_types: form.payment_enabled_types,
       payment_load_balance_strategy: form.payment_load_balance_strategy,
@@ -9522,6 +9658,30 @@ async function saveSettings() {
         form.payment_cancel_rate_limit_window_mode,
       payment_alipay_force_qrcode: form.payment_alipay_force_qrcode,
       openai_advanced_scheduler_enabled: form.openai_advanced_scheduler_enabled,
+      openai_advanced_scheduler_sticky_weighted_enabled:
+        form.openai_advanced_scheduler_sticky_weighted_enabled,
+      openai_advanced_scheduler_subscription_priority_enabled:
+        form.openai_advanced_scheduler_subscription_priority_enabled,
+      openai_advanced_scheduler_lb_top_k:
+        form.openai_advanced_scheduler_lb_top_k.trim(),
+      openai_advanced_scheduler_weight_priority:
+        form.openai_advanced_scheduler_weight_priority.trim(),
+      openai_advanced_scheduler_weight_load:
+        form.openai_advanced_scheduler_weight_load.trim(),
+      openai_advanced_scheduler_weight_queue:
+        form.openai_advanced_scheduler_weight_queue.trim(),
+      openai_advanced_scheduler_weight_error_rate:
+        form.openai_advanced_scheduler_weight_error_rate.trim(),
+      openai_advanced_scheduler_weight_ttft:
+        form.openai_advanced_scheduler_weight_ttft.trim(),
+      openai_advanced_scheduler_weight_reset:
+        form.openai_advanced_scheduler_weight_reset.trim(),
+      openai_advanced_scheduler_weight_quota_headroom:
+        form.openai_advanced_scheduler_weight_quota_headroom.trim(),
+      openai_advanced_scheduler_weight_previous_response:
+        form.openai_advanced_scheduler_weight_previous_response.trim(),
+      openai_advanced_scheduler_weight_session_sticky:
+        form.openai_advanced_scheduler_weight_session_sticky.trim(),
       // 余额、订阅到期与账号限额通知
       balance_low_notify_enabled: form.balance_low_notify_enabled,
       balance_low_notify_threshold:
@@ -9558,6 +9718,10 @@ async function saveSettings() {
             service_tier: rule.service_tier,
             action: rule.action,
             scope: rule.scope,
+            user_ids:
+              rule.user_ids && rule.user_ids.length > 0
+                ? [...rule.user_ids]
+                : undefined,
             error_message:
               rule.action === "block" ? rule.error_message : undefined,
             model_whitelist: hasWhitelist ? whitelist : undefined,
@@ -9634,6 +9798,7 @@ async function saveSettings() {
       openaiFastPolicyForm.rules =
         updated.openai_fast_policy_settings.rules.map((rule) => ({
           ...rule,
+          user_ids: rule.user_ids ? [...rule.user_ids] : [],
           model_whitelist: rule.model_whitelist
             ? [...rule.model_whitelist]
             : [],
@@ -10027,6 +10192,10 @@ const openaiFastPolicyTierOptions = computed(() => [
 const openaiFastPolicyActionOptions = computed(() => [
   { value: "pass", label: t("admin.settings.openaiFastPolicy.actionPass") },
   { value: "filter", label: t("admin.settings.openaiFastPolicy.actionFilter") },
+  {
+    value: "force_priority",
+    label: t("admin.settings.openaiFastPolicy.actionForcePriority"),
+  },
   { value: "block", label: t("admin.settings.openaiFastPolicy.actionBlock") },
 ]);
 
@@ -10045,6 +10214,7 @@ function addOpenAIFastPolicyRule() {
     service_tier: "priority",
     action: "filter",
     scope: "all",
+    user_ids: [],
     error_message: "",
     model_whitelist: [],
     fallback_action: "pass",
@@ -10054,6 +10224,18 @@ function addOpenAIFastPolicyRule() {
 
 function removeOpenAIFastPolicyRule(index: number) {
   openaiFastPolicyForm.rules.splice(index, 1);
+}
+
+function addOpenAIFastPolicyUserID(rule: OpenAIFastPolicyRule) {
+  if (!rule.user_ids) rule.user_ids = [];
+  rule.user_ids.push(0);
+}
+
+function removeOpenAIFastPolicyUserID(
+  rule: OpenAIFastPolicyRule,
+  idx: number,
+) {
+  rule.user_ids?.splice(idx, 1);
 }
 
 function addOpenAIFastPolicyModelPattern(rule: OpenAIFastPolicyRule) {
@@ -10541,18 +10723,6 @@ const affiliateBatchModal = reactive<{
   rate: "",
 });
 
-const affiliateUsageModal = reactive<{
-  open: boolean;
-  loading: boolean;
-  entry: AffiliateAdminEntry | null;
-  data: AffiliateAgentUsageSummary | null;
-}>({
-  open: false,
-  loading: false,
-  entry: null,
-  data: null,
-});
-
 // affiliateConfirmDialog drives the project-standard <ConfirmDialog>. We can't
 // `await` the user's response from the dialog component, so the confirm action
 // runs from the @confirm callback once the user clicks the dialog's confirm
@@ -10671,48 +10841,6 @@ function toggleAffiliateSelect(userId: number) {
   const idx = affiliateState.selected.indexOf(userId);
   if (idx >= 0) affiliateState.selected.splice(idx, 1);
   else affiliateState.selected.push(userId);
-}
-
-function isAffiliateAgent(entry: AffiliateAdminEntry | null | undefined): boolean {
-  return String(entry?.role ?? "").toLowerCase() === "agent";
-}
-
-async function openAffiliateUsageModal(entry: AffiliateAdminEntry) {
-  affiliateUsageModal.open = true;
-  affiliateUsageModal.loading = true;
-  affiliateUsageModal.entry = entry;
-  affiliateUsageModal.data = null;
-  try {
-    affiliateUsageModal.data = await affiliatesAPI.getAgentUsage(entry.user_id);
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, t("common.error")));
-    affiliateUsageModal.open = false;
-  } finally {
-    affiliateUsageModal.loading = false;
-  }
-}
-
-function closeAffiliateUsageModal() {
-  affiliateUsageModal.open = false;
-  affiliateUsageModal.loading = false;
-  affiliateUsageModal.entry = null;
-  affiliateUsageModal.data = null;
-}
-
-function formatAffiliateTokens(value: number | null | undefined): string {
-  return `${formatCompactNumber(Math.round(Number(value ?? 0)), { allowBillions: true })} tokens`;
-}
-
-function formatAffiliateCost(value: number | null | undefined): string {
-  return formatCurrency(Number(value ?? 0), "USD");
-}
-
-function formatAffiliateUsageRange(data: AffiliateAgentUsageSummary): string {
-  const end = new Date(data.week_end);
-  if (!Number.isNaN(end.getTime())) {
-    end.setDate(end.getDate() - 1);
-  }
-  return `${formatDateOnly(data.week_start)} - ${formatDateOnly(end)}`;
 }
 
 // openAffiliateModal opens the add/edit modal, prefilling fields from the
@@ -10910,24 +11038,10 @@ watch(
 
 /* ============ 系统设置 Tab 导航 ============ */
 .settings-tabs-shell {
-  @apply sticky z-20 -mx-1 rounded-2xl border p-1.5 backdrop-blur-xl;
+  @apply sticky z-20 -mx-1 rounded-2xl border border-white/80 bg-white/90 p-1.5 backdrop-blur-xl;
   top: 4.75rem;
-  border-color: rgb(71 85 105 / 0.72);
-  background:
-    linear-gradient(135deg, rgb(15 23 42 / 0.96), rgb(17 24 39 / 0.9)),
-    rgb(15 23 42);
   box-shadow:
-    0 16px 36px rgb(0 0 0 / 0.28),
-    0 1px 0 rgb(255 255 255 / 0.07) inset;
-}
-
-:global(html:not(.dark)) .settings-tabs-shell {
-  border-color: rgb(203 213 225 / 0.95);
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.96), rgb(241 245 249 / 0.92)),
-    rgb(255 255 255);
-  box-shadow:
-    0 12px 28px rgb(15 23 42 / 0.08),
+    0 12px 28px rgb(15 23 42 / 0.07),
     0 1px 0 rgb(255 255 255 / 0.9) inset;
 }
 
@@ -10942,11 +11056,11 @@ watch(
 }
 
 .settings-tabs {
-  @apply flex min-w-max items-center gap-1.5;
+  @apply flex min-w-max items-center gap-1;
 }
 
 .settings-tab {
-  @apply relative isolate flex h-10 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-semibold text-slate-200 outline-none transition-colors duration-200 ease-out;
+  @apply relative isolate flex h-10 min-w-[6.75rem] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-transparent px-3 text-sm font-medium text-gray-600 outline-none transition-colors duration-200 ease-out dark:text-gray-300;
 }
 
 @media (min-width: 768px) {
@@ -10966,7 +11080,7 @@ watch(
 .settings-tab::before {
   @apply absolute inset-0 -z-10 rounded-xl opacity-0 transition-opacity duration-200;
   content: "";
-  background: rgb(30 41 59 / 0.78);
+  background: linear-gradient(135deg, rgb(248 250 252 / 0.95), rgb(241 245 249 / 0.8));
 }
 
 .settings-tab:hover::before,
@@ -10974,39 +11088,14 @@ watch(
   opacity: 1;
 }
 
-:global(html:not(.dark)) .settings-tab {
-  @apply text-slate-600;
-}
-
-:global(html:not(.dark)) .settings-tab::before {
-  background: rgb(226 232 240 / 0.78);
-}
-
 .settings-tab:focus-visible {
-  @apply ring-2 ring-primary-400/70 ring-offset-2 ring-offset-slate-950;
-}
-
-:global(html:not(.dark)) .settings-tab:focus-visible {
-  @apply ring-primary-500/50 ring-offset-white;
+  @apply ring-2 ring-primary-500/40 ring-offset-2 ring-offset-white dark:ring-offset-dark-900;
 }
 
 .settings-tab-active {
-  @apply border-primary-300/50 text-white shadow-sm;
-  background:
-    linear-gradient(135deg, rgb(20 184 166 / 0.28), rgb(14 165 233 / 0.16)),
-    rgb(30 41 59 / 0.96);
+  @apply border-primary-200/80 bg-white text-primary-700 shadow-sm dark:border-primary-400/30 dark:bg-dark-700/95 dark:text-primary-200;
   box-shadow:
-    0 12px 24px rgb(0 0 0 / 0.2),
-    0 1px 0 rgb(255 255 255 / 0.11) inset;
-}
-
-:global(html:not(.dark)) .settings-tab-active {
-  @apply border-primary-200/90 text-primary-800;
-  background:
-    linear-gradient(135deg, rgb(240 253 250 / 0.98), rgb(224 242 254 / 0.9)),
-    rgb(255 255 255);
-  box-shadow:
-    0 8px 18px rgb(15 23 42 / 0.1),
+    0 8px 18px rgb(15 23 42 / 0.08),
     0 1px 0 rgb(255 255 255 / 0.92) inset;
 }
 
@@ -11026,30 +11115,16 @@ watch(
 }
 
 .settings-tab-icon {
-  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-300 transition-colors duration-200;
-}
-
-:global(html:not(.dark)) .settings-tab-icon {
-  @apply text-slate-500;
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors duration-200 dark:text-gray-400;
 }
 
 .settings-tab:hover .settings-tab-icon,
 .settings-tab:focus-visible .settings-tab-icon {
-  @apply text-white;
-}
-
-:global(html:not(.dark)) .settings-tab:hover .settings-tab-icon,
-:global(html:not(.dark)) .settings-tab:focus-visible .settings-tab-icon {
-  @apply text-slate-700;
+  @apply text-gray-700 dark:text-gray-200;
 }
 
 .settings-tab-active .settings-tab-icon {
-  @apply text-primary-200;
-  background-color: rgb(94 234 212 / 0.14);
-}
-
-:global(html:not(.dark)) .settings-tab-active .settings-tab-icon {
-  @apply bg-primary-50 text-primary-600;
+  @apply bg-primary-50 text-primary-600 dark:bg-primary-400/10 dark:text-primary-300;
 }
 
 .settings-tab-label {

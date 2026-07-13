@@ -1,18 +1,29 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.144`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.151`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.144`
+- 当前版本：`v0.1.151`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.144](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.144)
-- Recurdream 定制发布 Tag：`v0.1.144`
+- 上游最新同步版本：[v0.1.151](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.151)
+- Recurdream 定制发布 Tag：`v0.1.151`
 
 ## Release List
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.151 - 2026-07-10
+
+- 同步上游 Sub2API `v0.1.151`。
+- OpenAI Fast/Flex 策略新增用户级规则，用户专属规则优先于全局规则。
+- 修复 Codex 上游 originator 与 User-Agent 错配导致请求 404 的问题。
+- 修复 GPT-5.6 计费与用量统计、Grok Responses reasoning effort 参数保留、Codex `image_gen` 命名空间剥离等问题。
+- 修复 setup-token 账号未纳入后台自动刷新导致令牌到期后返回 401 的问题。
+- Recurdream 定制：侧边栏「使用手册」继续作为飞书文档外部导航。
+- Recurdream 定制：侧边栏「图片工作台」继续作为外部导航，跳转到 `https://image.recurdream.com`。
+- Recurdream 定制：保留服务器备份脚本与本地拉取备份脚本。
 
 ### v0.1.144 - 2026-07-06
 
@@ -60,13 +71,14 @@
 - 支持模型、尺寸、张数、质量、背景、输出格式、风格参数。
 - 支持图片结果预览、下载、复制和打开。
 
-## Tags
+## TAGS
 
 本仓库维护以下发布 Tag，用于对应主分支的可部署状态：
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.144` | 当前最新版本，Sub2API `v0.1.144` + Recurdream 定制 |
+| `v0.1.151` | 当前最新版本，Sub2API `v0.1.151` + Recurdream 定制 |
+| `v0.1.144` | 同步 Sub2API `v0.1.144` 的过渡版本 |
 | `v0.1.143` | 同步 Sub2API `v0.1.143` 的过渡版本 |
 | `v0.1.142` | 同步 Sub2API `v0.1.142` 的过渡版本 |
 | `v0.1.137` | 升级前的 Recurdream 基线版本 |
@@ -74,7 +86,7 @@
 ## Recurdream 定制
 
 - 「使用手册」：侧边栏外部导航，打开飞书文档。
-- 「图片工作台」：侧边栏外部导航，暂跳转到 `https://image.recurdream.com`。
+- 「图片工作台」：侧边栏外部导航，跳转到 `https://image.recurdream.com`。
 - 备份脚本：保留服务器每日/每周备份与本地拉取备份脚本。
 - 热部署：保留 Docker Compose blue/green 热部署流程。
 
@@ -85,7 +97,7 @@
 适合这些场景：
 
 - 搭建自己的 AI API 中转站
-- 管理多个 OpenAI、Claude、Gemini、Antigravity 账号
+- 管理多个 OpenAI、Claude、Gemini、Antigravity、Grok 账号
 - 给不同用户或套餐分配不同模型和倍率
 - 统计用户用量、账号成本和渠道状态
 - 提供 OpenAI-compatible、Claude-compatible、Gemini-compatible 接口
@@ -93,12 +105,12 @@
 
 ## 主要功能
 
-- 多平台账号管理：支持 OpenAI、Anthropic、Gemini、Antigravity 等平台账号。
+- 多平台账号管理：支持 OpenAI、Anthropic、Gemini、Antigravity、Grok 等平台账号。
 - API Key 分发：为用户创建、分组、限额、禁用或过期管理 API Key。
 - 智能调度：支持账号池调度、失败切换、粘性会话和模型路由。
-- 用量计费：记录请求、Token、图片生成、成本和倍率。
+- 用量计费：记录请求、Token、图片生成、视频生成、成本和倍率。
 - 分组权限：按分组控制模型、倍率、RPM、订阅、图片生成权限。
-- 图片生成：支持 `/v1/images/generations` 和 `/v1/images/edits`。
+- 图片/批量图片能力：保留上游批量图片基础能力，同时侧边栏使用 Recurdream 外部图片工作台入口。
 - 后台管理：提供用户、账号、分组、渠道、订单、使用记录、风控等管理页面。
 - 热部署：支持 Docker Compose blue/green 热部署，降低线上更新中断风险。
 
@@ -128,29 +140,12 @@ bash hot-deploy.sh --build
 
 ## 常用接口
 
-OpenAI 兼容接口：
-
-```text
-POST /v1/responses
-POST /v1/chat/completions
-POST /v1/images/generations
-POST /v1/images/edits
-GET  /v1/models
-```
-
-Claude 兼容接口：
-
-```text
-POST /v1/messages
-POST /v1/messages/count_tokens
-```
-
-Gemini 兼容接口：
-
-```text
-POST /v1beta/models/{model}:generateContent
-GET  /v1beta/models
-```
+- OpenAI Chat Completions：`/v1/chat/completions`
+- OpenAI Responses：`/v1/responses`
+- Claude Messages：`/v1/messages`
+- Gemini：`/v1beta/models/...`
+- 图片生成：`/v1/images/generations`
+- 图片编辑：`/v1/images/edits`
 
 ## 使用说明
 
@@ -159,8 +154,8 @@ GET  /v1beta/models
 3. 给用户创建 API Key，并绑定对应分组。
 4. 用户使用 API Key 调用兼容接口。
 5. 如需生图，确保分组开启「允许生图」。
-6. 用户可从侧边栏进入「图片工作台」外部站点。
-7. 用户可从侧边栏进入「使用手册」飞书文档。
+6. 如需查看帮助文档，从侧边栏点击「使用手册」跳转飞书文档。
+7. 如需进入图片工作台，从侧边栏点击「图片工作台」跳转外部站点。
 
 ## 说明
 

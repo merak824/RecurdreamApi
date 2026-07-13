@@ -206,7 +206,7 @@ describe('AccountUsageCell', () => {
 
     await flushPromises()
 
-    expect(getUsage).toHaveBeenCalledWith(2000, undefined)
+    expect(getUsage).toHaveBeenCalledWith(2000)
     expect(wrapper.text()).toContain('5h|15|300')
     expect(wrapper.text()).toContain('7d|77|300')
   })
@@ -267,7 +267,7 @@ describe('AccountUsageCell', () => {
 
     await flushPromises()
 
-    expect(getUsage).toHaveBeenCalledWith(2001, undefined)
+    expect(getUsage).toHaveBeenCalledWith(2001)
     // 单一数据源：始终使用 /usage API 返回值，忽略 codex 快照
     expect(wrapper.text()).toContain('5h|18|900')
     expect(wrapper.text()).toContain('7d|36|900')
@@ -338,7 +338,7 @@ describe('AccountUsageCell', () => {
 
     // 手动刷新再拉一次
     expect(getUsage).toHaveBeenCalledTimes(2)
-    expect(getUsage).toHaveBeenCalledWith(2010, undefined)
+    expect(getUsage).toHaveBeenCalledWith(2010)
     // 单一数据源：始终使用 /usage API 值
     expect(wrapper.text()).toContain('5h|18|900')
   })
@@ -393,7 +393,7 @@ describe('AccountUsageCell', () => {
 
 	await flushPromises()
 
-	expect(getUsage).toHaveBeenCalledWith(2002, undefined)
+	expect(getUsage).toHaveBeenCalledWith(2002)
 	expect(wrapper.text()).toContain('5h|0|27700')
 	expect(wrapper.text()).toContain('7d|0|27700')
   })
@@ -525,7 +525,7 @@ describe('AccountUsageCell', () => {
 
 	await flushPromises()
 
-  expect(getUsage).toHaveBeenCalledWith(2004, undefined)
+  expect(getUsage).toHaveBeenCalledWith(2004)
   expect(wrapper.text()).toContain('5h|100|106540000')
   expect(wrapper.text()).toContain('7d|100|106540000')
   })
@@ -564,6 +564,58 @@ describe('AccountUsageCell', () => {
 		const badges = wrapper.findAll('span[title]')
 		expect(badges.some(node => node.attributes('title') === 'usage.accountBilled')).toBe(true)
 		expect(badges.some(node => node.attributes('title') === 'usage.userBilled')).toBe(true)
+  })
+
+  it('Grok OAuth 会展示本地 user billed 用量并保留超限百分比', async () => {
+    getUsage.mockResolvedValue({
+      grok_local_usage: {
+        requests: 4,
+        tokens: 1200,
+        cost: 0.12,
+        standard_cost: 0.12,
+        user_cost: 0.34
+      },
+      grok_request_quota: {
+        limit: 10,
+        remaining: -2,
+        reset_at: '2026-07-09T16:00:00Z'
+      },
+      grok_quota_snapshot_state: 'observed'
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({
+          id: 3861,
+          platform: 'grok',
+          type: 'oauth',
+          extra: {}
+        })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'color'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ resetsAt }}</div>'
+          },
+          AccountQuotaInfo: true,
+          GrokQuotaProbeCell: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getUsage).toHaveBeenCalledWith(3861)
+    expect(wrapper.text()).toContain('4 req')
+    expect(wrapper.text()).toContain('1.2K')
+    expect(wrapper.text()).toContain('A $0.12')
+    expect(wrapper.text()).toContain('U $0.34')
+    expect(wrapper.text()).toContain('admin.accounts.usageWindow.grokRequests|120|2026-07-09T16:00:00Z')
+
+    const badges = wrapper.findAll('span[title]')
+    expect(badges.some(node => node.attributes('title') === 'usage.accountBilled')).toBe(true)
+    expect(badges.some(node => node.attributes('title') === 'usage.userBilled')).toBe(true)
   })
 
   it('Key 账号在 today stats loading 时显示骨架屏', async () => {
