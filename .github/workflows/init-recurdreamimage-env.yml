@@ -1,0 +1,79 @@
+name: One-time initialize RecurdreamImage env
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  initialize:
+    name: Create production env file
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+      DEPLOY_PATH: /data/recurdreamimage
+
+    steps:
+      - name: Validate SSH configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          for name in SERVER_HOST SERVER_USER SERVER_SSH_KEY DEPLOY_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is missing or empty"
+              exit 1
+            fi
+          done
+
+          case "$SERVER_PORT" in
+            ''|*[!0-9]*)
+              echo "::error::SERVER_PORT must be numeric"
+              exit 1
+              ;;
+          esac
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${SERVER_SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SERVER_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SERVER_PORT" "$SERVER_HOST" >> ~/.ssh/known_hosts
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Initialize production env file
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key "${SERVER_USER}@${SERVER_HOST}" \
+            DEPLOY_PATH="$DEPLOY_PATH" \
+            'bash -s' <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          mkdir -p "$DEPLOY_PATH"
+          if [ -f "$DEPLOY_PATH/.env" ]; then
+            echo "$DEPLOY_PATH/.env already exists; preserving it."
+            exit 0
+          fi
+
+          umask 077
+          printf '%s\n' 'NODE_ENV=production' > "$DEPLOY_PATH/.env"
+          chmod 600 "$DEPLOY_PATH/.env"
+          test -s "$DEPLOY_PATH/.env"
+          echo "Created $DEPLOY_PATH/.env with mode 600."
+          REMOTE_SCRIPT
