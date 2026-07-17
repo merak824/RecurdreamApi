@@ -1,18 +1,27 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.158`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.160`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.158`
+- 当前版本：`v0.1.160`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.158](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.158)
-- Recurdream 定制发布 Tag：`v0.1.158`
+- 上游最新同步版本：[v0.1.160](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.160)
+- Recurdream 定制发布 Tag：`v0.1.160`
 
 ## Release List
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.160 - 2026-07-17
+
+- 同步上游 Sub2API `v0.1.160`。
+- 新增独立的提示词安全审计引擎和管理端审计控制台，默认关闭。
+- 修复 Grok 媒体参考图归一化、媒体资格隔离和调度器缓存资格标记问题。
+- 修复被动携带 `image_gen` namespace 的请求误触发 Responses capability 检查的问题。
+- 为保存 S3 备份配置补充 step-up TOTP 二次验证门控。
+- Recurdream 定制：继续保留外部使用手册、图片工作台、返利/提现、备份和 blue/green 热部署流程。
 
 ### v0.1.158 - 2026-07-17
 
@@ -84,7 +93,8 @@
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.158` | 当前最新版本，Sub2API `v0.1.158` + Recurdream 定制 |
+| `v0.1.160` | 当前最新版本，Sub2API `v0.1.160` + Recurdream 定制 |
+| `v0.1.158` | 同步 Sub2API `v0.1.158` 的上一发布版本 |
 | `v0.1.156` | 同步 Sub2API `v0.1.156` 的上一发布版本 |
 | `v0.1.151` | 同步 Sub2API `v0.1.151` 的过渡版本 |
 | `v0.1.144` | 同步 Sub2API `v0.1.144` 的过渡版本 |
