@@ -1,18 +1,37 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.151`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.158`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.151`
+- 当前版本：`v0.1.158`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.151](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.151)
-- Recurdream 定制发布 Tag：`v0.1.151`
+- 上游最新同步版本：[v0.1.158](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.158)
+- Recurdream 定制发布 Tag：`v0.1.158`
 
 ## Release List
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.158 - 2026-07-17
+
+- 同步上游 Sub2API `v0.1.158`。
+- 新增管理端用户并发和 RPM 限额批量修改，以及分组一键复制。
+- 完善 Grok 官方 API、区域端点和自定义上游的配置、转发和故障回退。
+- 优化 Codex 图片桥接、WebSocket 生图状态和模型能力发现。
+- Recurdream 定制：继续保留「使用手册」飞书外部导航和「图片工作台」外部导航。
+- Recurdream 定制：继续保留返利、代理、提现、备份脚本和 Docker Compose blue/green 热部署流程。
+
+### v0.1.156 - 2026-07-15
+
+- 同步上游 Sub2API `v0.1.156`。
+- 新增 Codex Agent Identity 认证及原生 Responses 命名空间兼容，增强工具调用与流式协议处理。
+- 完善 Grok OAuth 探测、配额统计、媒体路由及 API Key 账号支持。
+- 优化调度器缓存重建、请求失败切换、SSE 输出与前端数据列表缓存。
+- Recurdream 定制：侧边栏「使用手册」继续作为飞书文档外部导航。
+- Recurdream 定制：侧边栏「图片工作台」继续作为外部导航，跳转到 `https://image.recurdream.com`。
+- Recurdream 定制：保留代理/返利/提现接口、服务器备份脚本与 Docker Compose blue/green 热部署流程。
 
 ### v0.1.151 - 2026-07-10
 
@@ -59,25 +78,15 @@
 - 新增 `cyber_policy` 硬阻断全链路透传。
 - 补充 Claude OAuth、国产 LLM 定价、渠道监控抖动等能力。
 
-### 2026-06-07 - 递归梦境API图片工作台更新
-
-- 新增用户侧「图片工作台」页面。
-- 新增访问路径：`/image-studio`。
-- 左侧菜单新增「图片工作台」入口。
-- 支持选择当前用户已有的 API Key。
-- 优先展示 OpenAI 分组且已开启生图权限的 Key。
-- 支持文生图，调用 `/v1/images/generations`。
-- 支持上传参考图改图，调用 `/v1/images/edits`。
-- 支持模型、尺寸、张数、质量、背景、输出格式、风格参数。
-- 支持图片结果预览、下载、复制和打开。
-
 ## TAGS
 
 本仓库维护以下发布 Tag，用于对应主分支的可部署状态：
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.151` | 当前最新版本，Sub2API `v0.1.151` + Recurdream 定制 |
+| `v0.1.158` | 当前最新版本，Sub2API `v0.1.158` + Recurdream 定制 |
+| `v0.1.156` | 同步 Sub2API `v0.1.156` 的上一发布版本 |
+| `v0.1.151` | 同步 Sub2API `v0.1.151` 的过渡版本 |
 | `v0.1.144` | 同步 Sub2API `v0.1.144` 的过渡版本 |
 | `v0.1.143` | 同步 Sub2API `v0.1.143` 的过渡版本 |
 | `v0.1.142` | 同步 Sub2API `v0.1.142` 的过渡版本 |
@@ -87,6 +96,7 @@
 
 - 「使用手册」：侧边栏外部导航，打开飞书文档。
 - 「图片工作台」：侧边栏外部导航，跳转到 `https://image.recurdream.com`。
+- 代理/返利/提现：保留运营账号和提现处理所需的服务端与前端类型定制。
 - 备份脚本：保留服务器每日/每周备份与本地拉取备份脚本。
 - 热部署：保留 Docker Compose blue/green 热部署流程。
 
