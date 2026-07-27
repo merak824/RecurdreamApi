@@ -54,6 +54,20 @@ type channelMonitorUserListItem struct {
 	Timeline             []channelMonitorUserTimelinePoint    `json:"timeline"`
 }
 
+// channelMonitorPublicListItem is the intentionally reduced status-page view.
+// Keep internal identifiers, group names, endpoints, keys and error details out
+// of the unauthenticated response.
+type channelMonitorPublicListItem struct {
+	Name                 string                            `json:"name"`
+	Provider             string                            `json:"provider"`
+	PrimaryModel         string                            `json:"primary_model"`
+	PrimaryStatus        string                            `json:"primary_status"`
+	PrimaryLatencyMs     *int                              `json:"primary_latency_ms"`
+	PrimaryPingLatencyMs *int                              `json:"primary_ping_latency_ms"`
+	Availability7d       float64                           `json:"availability_7d"`
+	Timeline             []channelMonitorUserTimelinePoint `json:"timeline"`
+}
+
 // channelMonitorUserTimelinePoint 主模型最近一次检测的 timeline 点。
 // 仅用于用户视图 list 响应，admin 视图不使用。
 type channelMonitorUserTimelinePoint struct {
@@ -90,15 +104,6 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 			LatencyMs: e.LatencyMs,
 		})
 	}
-	timeline := make([]channelMonitorUserTimelinePoint, 0, len(v.Timeline))
-	for _, p := range v.Timeline {
-		timeline = append(timeline, channelMonitorUserTimelinePoint{
-			Status:        p.Status,
-			LatencyMs:     p.LatencyMs,
-			PingLatencyMs: p.PingLatencyMs,
-			CheckedAt:     p.CheckedAt.UTC().Format(time.RFC3339),
-		})
-	}
 	return channelMonitorUserListItem{
 		ID:                   v.ID,
 		Name:                 v.Name,
@@ -110,8 +115,34 @@ func userMonitorViewToItem(v *service.UserMonitorView) channelMonitorUserListIte
 		PrimaryPingLatencyMs: v.PrimaryPingLatencyMs,
 		Availability7d:       v.Availability7d,
 		ExtraModels:          extras,
-		Timeline:             timeline,
+		Timeline:             userMonitorTimelineToResponse(v.Timeline),
 	}
+}
+
+func userMonitorViewToPublicItem(v *service.UserMonitorView) channelMonitorPublicListItem {
+	return channelMonitorPublicListItem{
+		Name:                 v.Name,
+		Provider:             v.Provider,
+		PrimaryModel:         v.PrimaryModel,
+		PrimaryStatus:        v.PrimaryStatus,
+		PrimaryLatencyMs:     v.PrimaryLatencyMs,
+		PrimaryPingLatencyMs: v.PrimaryPingLatencyMs,
+		Availability7d:       v.Availability7d,
+		Timeline:             userMonitorTimelineToResponse(v.Timeline),
+	}
+}
+
+func userMonitorTimelineToResponse(points []service.UserMonitorTimelinePoint) []channelMonitorUserTimelinePoint {
+	timeline := make([]channelMonitorUserTimelinePoint, 0, len(points))
+	for _, p := range points {
+		timeline = append(timeline, channelMonitorUserTimelinePoint{
+			Status:        p.Status,
+			LatencyMs:     p.LatencyMs,
+			PingLatencyMs: p.PingLatencyMs,
+			CheckedAt:     p.CheckedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	return timeline
 }
 
 func userMonitorDetailToResponse(d *service.UserMonitorDetail) *channelMonitorUserDetailResponse {
@@ -152,6 +183,27 @@ func (h *ChannelMonitorUserHandler) List(c *gin.Context) {
 	items := make([]channelMonitorUserListItem, 0, len(views))
 	for _, v := range views {
 		items = append(items, userMonitorViewToItem(v))
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+// ListPublic GET /api/v1/public/channel-monitors
+// Returns the same live health source as the authenticated page with a smaller,
+// cacheable payload suitable for the public homepage.
+func (h *ChannelMonitorUserHandler) ListPublic(c *gin.Context) {
+	c.Header("Cache-Control", "public, max-age=10, stale-while-revalidate=50")
+	if !h.featureEnabled(c) {
+		response.Success(c, gin.H{"items": []channelMonitorPublicListItem{}})
+		return
+	}
+	views, err := h.monitorService.ListUserView(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	items := make([]channelMonitorPublicListItem, 0, len(views))
+	for _, v := range views {
+		items = append(items, userMonitorViewToPublicItem(v))
 	}
 	response.Success(c, gin.H{"items": items})
 }

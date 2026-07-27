@@ -201,6 +201,7 @@ export default {
 
   // Auth
   auth: {
+    backHome: 'Back to Home',
     welcomeBack: 'Welcome Back',
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',
@@ -218,6 +219,8 @@ export default {
     emailPlaceholder: 'Enter your email',
     passwordLabel: 'Password',
     passwordPlaceholder: 'Enter your password',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
     createPasswordPlaceholder: 'Create a strong password',
     passwordHint: 'At least 6 characters',
     emailRequired: 'Email is required',

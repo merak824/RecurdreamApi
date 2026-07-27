@@ -1,17 +1,17 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
+    <div class="login-form space-y-6">
       <!-- Title -->
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="login-title text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="login-subtitle mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form class="login-fields space-y-5" :aria-busy="isLoading" novalidate @submit.prevent="handleLogin">
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -28,12 +28,20 @@
               required
               autofocus
               autocomplete="email"
+              inputmode="email"
+              autocapitalize="none"
+              spellcheck="false"
               :disabled="authActionDisabled"
-              class="input pl-11"
+              :aria-invalid="Boolean(errors.email)"
+              :aria-describedby="errors.email ? 'email-error' : undefined"
+              class="input login-input pl-11"
               :class="{ 'input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
+          <p v-if="errors.email" id="email-error" class="login-field-error" role="alert">
+            {{ errors.email }}
+          </p>
         </div>
 
         <!-- Password Input -->
@@ -52,7 +60,9 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
+              :aria-invalid="Boolean(errors.password)"
+              :aria-describedby="errors.password ? 'password-error' : undefined"
+              class="input login-input pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
               :placeholder="t('auth.passwordPlaceholder')"
             />
@@ -60,18 +70,23 @@
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              :title="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              class="login-password-toggle absolute inset-y-0 right-0 flex items-center justify-center text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
             </button>
           </div>
+          <p v-if="errors.password" id="password-error" class="login-field-error" role="alert">
+            {{ errors.password }}
+          </p>
           <div class="mt-1 flex items-center justify-between">
             <span></span>
             <router-link
               v-if="passwordResetEnabled && !backendModeEnabled"
               to="/forgot-password"
-              class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              class="login-link text-sm font-medium text-primary-600 transition-colors"
             >
               {{ t('auth.forgotPassword') }}
             </router-link>
@@ -93,11 +108,12 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="login-submit btn btn-primary w-full"
         >
           <svg
             v-if="isLoading"
             class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            aria-hidden="true"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -132,7 +148,7 @@
         />
 
         <div v-if="showOAuthLogin" class="space-y-3 pt-1">
-          <div class="flex items-center gap-3">
+          <div class="login-divider flex items-center gap-3">
             <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
             <span class="text-xs text-gray-500 dark:text-dark-400">
               {{ t('auth.oauthOrContinue') }}
@@ -174,11 +190,11 @@
 
     <!-- Footer -->
     <template v-if="!backendModeEnabled" #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p class="login-footer text-gray-500 dark:text-dark-400">
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="login-link font-medium text-primary-600 transition-colors"
         >
           {{ t('auth.signUp') }}
         </router-link>
@@ -553,6 +569,67 @@ function handle2FACancel(): void {
 </script>
 
 <style scoped>
+.login-title {
+  color: var(--auth-text, #0f172a);
+  font-size: 24px;
+  font-weight: 720;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.login-subtitle {
+  color: var(--auth-text-muted, #64748b);
+  line-height: 1.55;
+}
+
+.login-fields {
+  text-align: left;
+}
+
+.login-input {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+.login-password-toggle {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.login-field-error {
+  margin: 6px 0 0;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.login-link {
+  color: #2563eb !important;
+  text-underline-offset: 4px;
+}
+
+.login-link:hover {
+  color: #1d4ed8 !important;
+  text-decoration: underline;
+}
+
+.login-submit {
+  min-height: 50px;
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.login-divider span {
+  white-space: nowrap;
+}
+
+.login-footer {
+  color: var(--auth-text-muted, #64748b);
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;
@@ -562,5 +639,15 @@ function handle2FACancel(): void {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+@media (max-width: 520px) {
+  .login-form {
+    --login-form-gap: 20px;
+  }
+
+  .login-title {
+    font-size: 22px;
+  }
 }
 </style>

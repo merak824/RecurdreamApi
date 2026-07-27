@@ -12,6 +12,7 @@ import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
+import { resolveScrollBehavior } from './scrollBehavior'
 import { resolveRouteDocumentTitle } from './title'
 
 /**
@@ -709,13 +710,9 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(_to, _from, savedPosition) {
-    // Scroll to saved position when using browser back/forward
-    if (savedPosition) {
-      return savedPosition
-    }
-    // Scroll to top for new routes
-    return { top: 0 }
+  scrollBehavior(to, _from, savedPosition) {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    return resolveScrollBehavior(to.hash, savedPosition, reducedMotion)
   }
 })
 

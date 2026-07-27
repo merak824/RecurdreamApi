@@ -39,6 +39,21 @@ export interface UserMonitorListResponse {
   items: UserMonitorView[]
 }
 
+export interface PublicMonitorView {
+  name: string
+  provider: Provider
+  primary_model: string
+  primary_status: MonitorStatus | ''
+  primary_latency_ms: number | null
+  primary_ping_latency_ms: number | null
+  availability_7d: number
+  timeline: MonitorTimelinePoint[]
+}
+
+export interface PublicMonitorListResponse {
+  items: PublicMonitorView[]
+}
+
 export interface UserMonitorModelDetail {
   model: string
   latest_status: MonitorStatus
@@ -68,6 +83,16 @@ export async function list(options?: { signal?: AbortSignal }): Promise<UserMoni
 }
 
 /**
+ * List the redacted live monitor data used by the unauthenticated homepage.
+ */
+export async function listPublic(options?: { signal?: AbortSignal }): Promise<PublicMonitorListResponse> {
+  const { data } = await apiClient.get<PublicMonitorListResponse>('/public/channel-monitors', {
+    signal: options?.signal,
+  })
+  return data
+}
+
+/**
  * Get detailed status (multi-window availability + latency) for a single monitor.
  */
 export async function status(id: number): Promise<UserMonitorDetail> {
@@ -77,6 +102,7 @@ export async function status(id: number): Promise<UserMonitorDetail> {
 
 export const channelMonitorUserAPI = {
   list,
+  listPublic,
   status,
 }
 
