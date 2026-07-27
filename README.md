@@ -1,18 +1,27 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.160`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.165`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.160`
+- 当前版本：`v0.1.165`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.160](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.160)
-- Recurdream 定制发布 Tag：`v0.1.160`
+- 上游最新同步版本：[v0.1.165](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.165)
+- Recurdream 定制基线：`v0.1.165`
 
 ## Release List
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.165 - 2026-07-25
+
+- 同步上游 Sub2API `v0.1.165`。
+- 新增 ChatGPT Live 实时会话网关及并发、用量记录支持。
+- 完整适配 Anthropic `claude-opus-5` 的模型、定价、上下文和限流配置。
+- 优化 Ollama Cloud 用量刷新、公告预览和移动端推广页布局。
+- 修复邮箱别名注册绕过、Gemini 图像输出、Grok/OpenAI 池模式重试等问题。
+- Recurdream 定制：继续保留品牌页面、渠道状态、外部工具导航、提示词审计和部署流程。
 
 ### v0.1.160 - 2026-07-17
 
@@ -93,7 +102,8 @@
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.160` | 当前最新版本，Sub2API `v0.1.160` + Recurdream 定制 |
+| `v0.1.165` | 当前最新基线，Sub2API `v0.1.165` + Recurdream 定制 |
+| `v0.1.160` | 同步 Sub2API `v0.1.160` 的上一发布版本 |
 | `v0.1.158` | 同步 Sub2API `v0.1.158` 的上一发布版本 |
 | `v0.1.156` | 同步 Sub2API `v0.1.156` 的上一发布版本 |
 | `v0.1.151` | 同步 Sub2API `v0.1.151` 的过渡版本 |
