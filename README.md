@@ -10,16 +10,16 @@
 - 上游最新同步版本：[v0.1.169](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.169)
 - Recurdream 定制基线：`v0.1.169`
 
-## Release List
+## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
 
 ### v0.1.169 - 2026-07-31
 
-- Synced upstream Sub2API `v0.1.169`.
-- Applied upstream URL path validation and proxy stream circuit-breaker security fixes.
-- Added passkey support, model plaza improvements, panel rate limiting, and related billing and gateway fixes.
-- Preserved the existing Recurdream customizations.
+- 同步上游 Sub2API `v0.1.169`。
+- 应用上游 URL 路径校验和代理流熔断安全修复。
+- 新增 Passkey 支持，改进模型广场和面板限流，并修复相关计费与网关问题。
+- 保留现有 Recurdream 定制。
 
 ### v0.1.165 - 2026-07-25
 
@@ -103,7 +103,7 @@
 - 新增 `cyber_policy` 硬阻断全链路透传。
 - 补充 Claude OAuth、国产 LLM 定价、渠道监控抖动等能力。
 
-## TAGS
+## 版本标签
 
 本仓库维护以下发布 Tag，用于对应主分支的可部署状态：
 
