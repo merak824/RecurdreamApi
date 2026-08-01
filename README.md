@@ -1,18 +1,25 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.165`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.169`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.165`
+- 当前版本：`v0.1.169`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.165](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.165)
-- Recurdream 定制基线：`v0.1.165`
+- 上游最新同步版本：[v0.1.169](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.169)
+- Recurdream 定制基线：`v0.1.169`
 
 ## Release List
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.169 - 2026-07-31
+
+- Synced upstream Sub2API `v0.1.169`.
+- Applied upstream URL path validation and proxy stream circuit-breaker security fixes.
+- Added passkey support, model plaza improvements, panel rate limiting, and related billing and gateway fixes.
+- Preserved the existing Recurdream customizations.
 
 ### v0.1.165 - 2026-07-25
 
@@ -102,7 +109,8 @@
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.165` | 当前最新基线，Sub2API `v0.1.165` + Recurdream 定制 |
+| `v0.1.169` | 当前最新基线，Sub2API `v0.1.169` + Recurdream 定制 |
+| `v0.1.165` | 上一版基线，Sub2API `v0.1.165` + Recurdream 定制 |
 | `v0.1.160` | 同步 Sub2API `v0.1.160` 的上一发布版本 |
 | `v0.1.158` | 同步 Sub2API `v0.1.158` 的上一发布版本 |
 | `v0.1.156` | 同步 Sub2API `v0.1.156` 的上一发布版本 |
