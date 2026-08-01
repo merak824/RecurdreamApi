@@ -545,6 +545,12 @@ type UsageLog struct {
 type AdminUsageLog struct {
 	UsageLog
 
+	// TTFT diagnostics are intentionally admin-only; regular user usage DTOs
+	// must not expose upstream timing or routing decisions.
+	UpstreamFirstTokenMs *int                       `json:"upstream_first_token_ms,omitempty"`
+	ClientDisconnected   bool                       `json:"client_disconnected"`
+	OpenAITTFTContext    *service.OpenAITTFTContext `json:"openai_ttft_context,omitempty"`
+
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).
 	UpstreamModel *string `json:"upstream_model,omitempty"`

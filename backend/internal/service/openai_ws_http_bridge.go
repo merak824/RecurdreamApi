@@ -311,6 +311,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			ResponseHeaders:       cloneHeader(resp.Header),
 			Duration:              time.Since(turnStart),
 			FirstTokenMs:          firstTokenMs,
+			UpstreamFirstTokenMs:  firstTokenMs,
+			TTFTTransport:         OpenAITTFTTransportResponsesWS,
+			FirstSemanticEvent:    "responses_ws.semantic_output",
 		}
 		if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 			result.wsReplayInput = replayInput
@@ -367,7 +370,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		}
 		if isOpenAIWSTokenEvent(eventType) {
 			tokenEventCount++
-			if firstTokenMs == nil {
+			if firstTokenMs == nil && isOpenAIWSSemanticOutput(upstreamMessage, eventType) {
 				ms := int(time.Since(turnStart).Milliseconds())
 				firstTokenMs = &ms
 			}

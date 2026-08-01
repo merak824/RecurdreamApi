@@ -29,4 +29,18 @@ describe('AppLayout branded background', () => {
     expect(globalStyles).toContain('background: rgba(17, 24, 39, 0.86);')
     expect(globalStyles).toContain('backdrop-filter: blur(20px);')
   })
+
+  it('reserves the viewport scrollbar gutter while dialogs lock page scrolling', () => {
+    const htmlBlock = globalStyles.match(/html\s*\{([\s\S]*?)\}/)?.[1]
+
+    expect(htmlBlock).toContain('scrollbar-gutter: stable;')
+    expect(globalStyles).toMatch(/body\.modal-open\s*\{[^}]*overflow:\s*hidden;/)
+  })
+
+  it('reserves the viewport scrollbar gutter while dialogs lock page scrolling', () => {
+    const htmlBlock = globalStyles.match(/html\s*\{([\s\S]*?)\}/)?.[1]
+
+    expect(htmlBlock).toContain('scrollbar-gutter: stable;')
+    expect(globalStyles).toMatch(/body\.modal-open\s*\{[^}]*overflow:\s*hidden;/)
+  })
 })

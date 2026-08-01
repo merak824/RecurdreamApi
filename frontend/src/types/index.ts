@@ -1641,7 +1641,22 @@ export interface UsageLogAccountSummary {
 }
 
 export interface AdminUsageLog extends UsageLog {
-  upstream_model?: string | null
+	upstream_first_token_ms?: number | null
+	client_disconnected?: boolean
+	openai_ttft_context?: {
+		version?: number
+		transport?: string
+		user_first_token_ms?: number | null
+		upstream_first_token_ms?: number | null
+		sample_count?: number
+		sample_p50_ms?: number | null
+		sample_p90_ms?: number | null
+		first_semantic_event?: string
+		exploration?: boolean
+		switch_count?: number
+		client_disconnected?: boolean
+	}
+	upstream_model?: string | null
   model_mapping_chain?: string | null
 
   // 账号计费倍率（仅管理员可见）

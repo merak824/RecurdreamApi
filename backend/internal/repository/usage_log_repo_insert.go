@@ -81,6 +81,9 @@ var usageLogInsertArgTypes = [...]string{
 	"numeric",     // account_stats_cost
 	"text",        // session_id
 	"timestamptz", // created_at
+	"integer",     // upstream_first_token_ms
+	"boolean",     // client_disconnected
+	"jsonb",       // openai_ttft_context
 }
 
 const (
@@ -276,14 +279,17 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9,
 			$10, $11, $12, $13,
 			$14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -731,12 +737,15 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		) AS (VALUES `)
 
-	// Each batch row prepends the synthetic input_index before the 57
+	// Each batch row prepends the synthetic input_index before the 60
 	// usage-log column values.
-	args := make([]any, 0, len(keys)*58)
+	args := make([]any, 0, len(keys)*61)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -821,7 +830,10 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				billing_mode,
 				account_stats_cost,
 				session_id,
-				created_at
+				created_at,
+				upstream_first_token_ms,
+				client_disconnected,
+				openai_ttft_context
 			)
 			SELECT
 				user_id,
@@ -880,7 +892,10 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				billing_mode,
 				account_stats_cost,
 				session_id,
-				created_at
+				created_at,
+				upstream_first_token_ms,
+				client_disconnected,
+				openai_ttft_context
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
 			RETURNING request_id, api_key_id, id, created_at
@@ -979,10 +994,13 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*57)
+	args := make([]any, 0, len(preparedList)*60)
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
@@ -1064,7 +1082,10 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		)
 		SELECT
 			user_id,
@@ -1123,7 +1144,10 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		FROM input
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`)
@@ -1197,7 +1221,7 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			$10, $11, $12, $13,
 			$14, $15, $16, $17,
 			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57
+			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1239,6 +1263,9 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 	billingTier := nullString(log.BillingTier)
 	billingMode := nullString(log.BillingMode)
 	sessionID := nullString(log.SessionID)
+	upstreamFirstTokenMs := nullInt(log.UpstreamFirstTokenMs)
+	openAITTFTContext, _ := log.OpenAITTFTContext.MarshalJSONValue()
+	openAITTFTContextArg := nullString(&openAITTFTContext)
 	requestedModel := strings.TrimSpace(log.RequestedModel)
 	if requestedModel == "" {
 		requestedModel = strings.TrimSpace(log.Model)
@@ -1313,6 +1340,9 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.AccountStatsCost, // account_stats_cost
 			sessionID,            // session_id
 			createdAt,
+			upstreamFirstTokenMs,
+			log.ClientDisconnected,
+			openAITTFTContextArg,
 		},
 	}
 }

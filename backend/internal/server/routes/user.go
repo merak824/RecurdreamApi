@@ -120,6 +120,16 @@ func RegisterUserRoutes(
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
 		}
 
+		redPackets := authenticated.Group("/red-packets")
+		{
+			redPackets.GET("/current", h.RedPacket.Current)
+			redPackets.GET("/eligibility", h.RedPacket.Eligibility)
+			redPackets.GET("/recent", h.RedPacket.Recent)
+			redPackets.GET("/rewards", h.RedPacket.Rewards)
+			redPackets.GET("/:id", h.RedPacket.Detail)
+			redPackets.POST("/:id/participate", h.RedPacket.Participate)
+		}
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

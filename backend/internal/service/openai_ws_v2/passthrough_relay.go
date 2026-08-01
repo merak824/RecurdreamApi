@@ -660,7 +660,7 @@ func observeUpstreamMessage(
 	}
 	now := nowFn()
 
-	if state.firstTokenMs == nil && isTokenEvent(eventType) {
+	if state.firstTokenMs == nil && isSemanticOutputEvent(message, eventType) {
 		ms := int(now.Sub(startAt).Milliseconds())
 		if ms >= 0 {
 			state.firstTokenMs = &ms
@@ -680,7 +680,7 @@ func observeUpstreamMessage(
 	}
 	if responseID != "" {
 		turnTiming := openAIWSRelayGetOrInitTurnTiming(state, responseID, now)
-		if turnTiming != nil && turnTiming.firstTokenMs == nil && isTokenEvent(eventType) {
+		if turnTiming != nil && turnTiming.firstTokenMs == nil && isSemanticOutputEvent(message, eventType) {
 			ms := int(now.Sub(turnTiming.startAt).Milliseconds())
 			if ms >= 0 {
 				turnTiming.firstTokenMs = &ms
@@ -964,6 +964,42 @@ func isTokenEvent(eventType string) bool {
 		return true
 	}
 	return eventType == "response.completed" || eventType == "response.done"
+}
+
+func isSemanticOutputEvent(message []byte, eventType string) bool {
+	if len(message) == 0 {
+		return false
+	}
+	switch strings.TrimSpace(eventType) {
+	case "response.output_text.delta", "response.output_text.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "text").String()) != ""
+	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "arguments").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != ""
+	case "response.reasoning_summary_text.delta", "response.reasoning_summary_text.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "text").String()) != ""
+	case "response.content_part.added", "response.content_part.done", "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "part.text").String()) != ""
+	case "response.output_item.added", "response.output_item.done":
+		item := gjson.GetBytes(message, "item")
+		if !item.Exists() {
+			return false
+		}
+		switch strings.TrimSpace(item.Get("type").String()) {
+		case "message":
+			for _, part := range item.Get("content").Array() {
+				if strings.TrimSpace(part.Get("text").String()) != "" {
+					return true
+				}
+			}
+		case "reasoning":
+			return strings.TrimSpace(item.Get("encrypted_content").String()) != "" || len(item.Get("summary").Array()) > 0
+		case "function_call", "tool_search_call":
+			return strings.TrimSpace(item.Get("arguments").String()) != ""
+		case "custom_tool_call":
+			return strings.TrimSpace(item.Get("input").String()) != ""
+		}
+	}
+	return false
 }
 
 func minDuration(a, b time.Duration) time.Duration {

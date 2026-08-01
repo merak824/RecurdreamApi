@@ -23,11 +23,14 @@ import (
 
 // openaiStreamingResult streaming response result
 type openaiStreamingResult struct {
-	usage            *OpenAIUsage
-	firstTokenMs     *int
-	responseID       string
-	imageCount       int
-	imageOutputSizes []string
+	usage                *OpenAIUsage
+	firstTokenMs         *int
+	upstreamFirstTokenMs *int
+	firstSemanticEvent   string
+	clientDisconnected   bool
+	responseID           string
+	imageCount           int
+	imageOutputSizes     []string
 }
 
 type openaiNonStreamingResult struct {
@@ -218,6 +221,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	var streamEarlyErr error
 	eventInProgress := false
 	eventStartsClientOutput := false
+	eventHasSemanticOutput := false
 	eventShouldFlush := false
 	handlePendingWriteError := func(err error) {
 		if firstOutputStage != nil && firstTokenMs == nil && !firstOutputStage.closed {
@@ -253,13 +257,15 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				}
 			}
 		}
-		if completedSemanticEvent && firstTokenMs == nil {
+		if completedSemanticEvent && eventHasSemanticOutput && firstTokenMs == nil {
 			firstOutputScanGuard.Store(false)
+			markOpenAIUpstreamSemanticOutput(c, "responses.semantic_output")
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
 			stopFirstOutputTimer()
 		}
 		eventStartsClientOutput = false
+		eventHasSemanticOutput = false
 		eventShouldFlush = false
 	}
 	sendErrorEvent := func(reason string) {
@@ -289,12 +295,16 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	streamImageOutputs := make([]json.RawMessage, 0, 1)
 	streamSeenImages := make(map[string]struct{})
 	resultWithUsage := func() *openaiStreamingResult {
+		upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 		return &openaiStreamingResult{
-			usage:            usage,
-			firstTokenMs:     firstTokenMs,
-			responseID:       responseID,
-			imageCount:       imageCounter.Count(),
-			imageOutputSizes: imageCounter.Sizes(),
+			usage:                usage,
+			firstTokenMs:         firstTokenMs,
+			upstreamFirstTokenMs: upstreamFirstTokenMs,
+			firstSemanticEvent:   firstSemanticEvent,
+			clientDisconnected:   clientDisconnected,
+			responseID:           responseID,
+			imageCount:           imageCounter.Count(),
+			imageOutputSizes:     imageCounter.Sizes(),
 		}
 	}
 	flushPending := func(disconnectMessage string) {
@@ -510,6 +520,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				data = string(sanitizedData)
 				line = "data: " + data
 			}
+			eventHasSemanticOutput = openAIStreamDataHasSemanticOutput(data, eventType)
 			// Replace model in response if needed.
 			// Fast path: most events do not contain model field values.
 			if needModelReplace && mappedModel != "" && strings.Contains(line, mappedModel) {
@@ -538,7 +549,8 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			}
 
 			// Record first token time
-			if !guardFirstOutput && firstTokenMs == nil && startsClientOutput {
+			if !guardFirstOutput && firstTokenMs == nil && startsClientOutput && eventHasSemanticOutput {
+				markOpenAIUpstreamSemanticOutput(c, "responses.sse_output")
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 				stopFirstOutputTimer()
@@ -1486,12 +1498,66 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	return updated, true
 }
 
+// responsesStreamEventHasSemanticOutput reports whether an event carries the
+// first user-visible output. Event type alone is insufficient: output_item.added
+// commonly contains only role/metadata, and terminal events may contain usage.
+func responsesStreamEventHasSemanticOutput(event apicompat.ResponsesStreamEvent) bool {
+	switch strings.TrimSpace(event.Type) {
+	case "response.output_text.delta":
+		return strings.TrimSpace(event.Delta) != "" || strings.TrimSpace(event.Text) != ""
+	case "response.function_call_arguments.delta":
+		return strings.TrimSpace(event.Arguments) != ""
+	case "response.reasoning_summary_text.delta":
+		return strings.TrimSpace(event.Delta) != "" || strings.TrimSpace(event.Text) != ""
+	case "response.content_part.added", "response.reasoning_summary_part.added":
+		return event.Part != nil && strings.TrimSpace(event.Part.Text) != ""
+	case "response.output_item.added":
+		if event.Item == nil {
+			return false
+		}
+		switch strings.TrimSpace(event.Item.Type) {
+		case "message":
+			for _, part := range event.Item.Content {
+				if strings.TrimSpace(part.Text) != "" {
+					return true
+				}
+			}
+		case "reasoning":
+			return strings.TrimSpace(event.Item.EncryptedContent) != "" || len(event.Item.Summary) > 0
+		case "function_call", "tool_search_call":
+			return strings.TrimSpace(event.Item.Arguments) != ""
+		case "custom_tool_call":
+			return strings.TrimSpace(event.Item.Input) != ""
+		}
+	}
+	return false
+}
+
+func openAIStreamDataHasSemanticOutput(data, eventType string) bool {
+	if strings.TrimSpace(data) == "" || strings.TrimSpace(data) == "[DONE]" {
+		return false
+	}
+	var event apicompat.ResponsesStreamEvent
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return false
+	}
+	if strings.TrimSpace(event.Type) == "" {
+		event.Type = strings.TrimSpace(eventType)
+	}
+	return responsesStreamEventHasSemanticOutput(event)
+}
+
+// responsesStreamEventMayContributeToOutput is retained for callers that only
+// need a cheap type-level prefilter. Callers measuring TTFT must use the
+// payload-aware helper above.
 func responsesStreamEventMayContributeToOutput(eventType string) bool {
 	switch eventType {
 	case "response.output_text.delta",
 		"response.output_item.added",
 		"response.function_call_arguments.delta",
-		"response.reasoning_summary_text.delta":
+		"response.reasoning_summary_text.delta",
+		"response.content_part.added",
+		"response.reasoning_summary_part.added":
 		return true
 	default:
 		return false

@@ -84,6 +84,21 @@ type OpenAIAccountScheduleRequest struct {
 	RequiredImageCapability OpenAIImagesCapability
 	RequireCompact          bool
 	ExcludedIDs             map[int64]struct{}
+	Streaming               bool
+}
+
+type openAIStreamingScheduleContextKey struct{}
+
+func WithOpenAIStreamingSchedule(ctx context.Context, streaming bool) context.Context {
+	return context.WithValue(ctx, openAIStreamingScheduleContextKey{}, streaming)
+}
+
+func openAIStreamingScheduleFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	streaming, _ := ctx.Value(openAIStreamingScheduleContextKey{}).(bool)
+	return streaming
 }
 
 type OpenAIAccountScheduleDecision struct {
@@ -96,6 +111,11 @@ type OpenAIAccountScheduleDecision struct {
 	LoadSkew            float64
 	SelectedAccountID   int64
 	SelectedAccountType string
+	TTFTOptimized       bool
+	TTFTExploration     bool
+	TTFTSampleCount     int
+	TTFTP50Ms           int
+	TTFTP90Ms           int
 }
 
 type OpenAIAccountSchedulerMetricsSnapshot struct {
@@ -440,6 +460,7 @@ func (s *defaultOpenAIAccountScheduler) Select(
 	if selection != nil && selection.Account != nil {
 		decision.SelectedAccountID = selection.Account.ID
 		decision.SelectedAccountType = selection.Account.Type
+		decision.TTFTExploration = selection.OpenAITTFTExploration
 		if req.StickyWeighted {
 			if req.StickyPreviousAccountID > 0 && selection.Account.ID == req.StickyPreviousAccountID {
 				decision.StickyPreviousHit = true
@@ -447,6 +468,14 @@ func (s *defaultOpenAIAccountScheduler) Select(
 			if req.StickyAccountID > 0 && selection.Account.ID == req.StickyAccountID {
 				decision.StickySessionHit = true
 			}
+		}
+		if decision.Layer == openAIAccountScheduleLayerLoadBalance && s.shouldUseOpenAITTFTOptimizer(req) {
+			decision.TTFTOptimized = true
+			transport := openAITTFTTransportForSchedule(req.RequiredTransport)
+			snapshot := s.service.openAITTFTSnapshots(ctx, []OpenAITTFTWindowKey{{AccountID: selection.Account.ID, Transport: transport}}, time.Now().UTC())[OpenAITTFTWindowKey{AccountID: selection.Account.ID, Transport: transport}]
+			decision.TTFTSampleCount = snapshot.Count
+			decision.TTFTP50Ms = snapshot.P50Ms
+			decision.TTFTP90Ms = snapshot.P90Ms
 		}
 	}
 	return selection, decision, nil
@@ -509,6 +538,10 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		)
 		return nil, true, nil
 	}
+	if s.shouldEscapeOpenAITTFTSticky(req, accountID) {
+		slog.Info("sticky_ttft_escape_triggered", "account_id", accountID)
+		return nil, true, nil
+	}
 	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 	if acquireErr == nil && result != nil && result.Acquired {
 		_ = s.service.refreshStickySessionTTL(ctx, req.GroupID, sessionHash, s.service.openAIWSSessionStickyTTL())
@@ -543,6 +576,19 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		}, false, nil
 	}
 	return nil, false, nil
+}
+
+func (s *defaultOpenAIAccountScheduler) shouldEscapeOpenAITTFTSticky(req OpenAIAccountScheduleRequest, accountID int64) bool {
+	if accountID <= 0 || !s.shouldUseOpenAITTFTOptimizer(req) || s.service == nil {
+		return false
+	}
+	transport := openAITTFTTransportForSchedule(req.RequiredTransport)
+	threshold := 5000
+	if s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTStableThresholdMs > 0 {
+		threshold = s.service.cfg.Gateway.OpenAITTFTStableThresholdMs
+	}
+	snapshot := s.service.openAITTFTSnapshots(context.Background(), []OpenAITTFTWindowKey{{AccountID: accountID, Transport: transport}}, time.Now().UTC())[OpenAITTFTWindowKey{AccountID: accountID, Transport: transport}]
+	return snapshot.Count >= openAITTFTWindowSampleCap && snapshot.P90Ms > threshold
 }
 
 func openAIStickyAccountMatchesGroup(account *Account, groupID *int64) bool {
@@ -587,14 +633,15 @@ func (s *defaultOpenAIAccountScheduler) shouldEscapeStickyAccount(accountID int6
 }
 
 type openAIAccountCandidateScore struct {
-	account   *Account
-	loadInfo  *AccountLoadInfo
-	loadKnown bool
-	score     float64
-	priority  int
-	errorRate float64
-	ttft      float64
-	hasTTFT   bool
+	account     *Account
+	loadInfo    *AccountLoadInfo
+	loadKnown   bool
+	score       float64
+	priority    int
+	errorRate   float64
+	ttft        float64
+	hasTTFT     bool
+	exploration bool
 }
 
 type openAIAccountCandidateHeap []openAIAccountCandidateScore
@@ -642,6 +689,133 @@ func isOpenAIAccountCandidateBetter(left openAIAccountCandidateScore, right open
 		return left.loadInfo.WaitingCount < right.loadInfo.WaitingCount
 	}
 	return left.account.ID < right.account.ID
+}
+
+// orderOpenAIAccountCandidatesByTTFT applies the global streaming optimizer's
+// strict ranking layers. It is deliberately separate from the legacy weighted
+// score so enabling the optimizer cannot silently change the existing load
+// balance math for non-streaming or non-rollout requests.
+func orderOpenAIAccountCandidatesByTTFT(
+	candidates []openAIAccountCandidateScore,
+	snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot,
+	transport OpenAITTFTTransport,
+	stableThresholdMs int,
+) []openAIAccountCandidateScore {
+	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
+	if stableThresholdMs <= 0 {
+		stableThresholdMs = 5000
+	}
+	state := func(candidate openAIAccountCandidateScore) (known, stable bool, p90, p50 int) {
+		if candidate.account == nil {
+			return false, false, 0, 0
+		}
+		snapshot, ok := snapshots[OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport}]
+		if !ok || snapshot.Count == 0 || snapshot.P90Ms <= 0 {
+			return false, false, 0, 0
+		}
+		return true, snapshot.Count >= openAITTFTWindowSampleCap && snapshot.P90Ms <= stableThresholdMs, snapshot.P90Ms, snapshot.P50Ms
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		left, right := ordered[i], ordered[j]
+		if left.account == nil || right.account == nil {
+			return left.account != nil
+		}
+		if left.account.Priority != right.account.Priority {
+			return left.account.Priority < right.account.Priority
+		}
+		leftKnown, leftStable, leftP90, leftP50 := state(left)
+		rightKnown, rightStable, rightP90, rightP50 := state(right)
+		if leftStable != rightStable {
+			return leftStable
+		}
+		if leftKnown != rightKnown {
+			return leftKnown
+		}
+		if leftP90 != rightP90 {
+			if leftP90 == 0 {
+				return false
+			}
+			if rightP90 == 0 {
+				return true
+			}
+			return leftP90 < rightP90
+		}
+		if leftP50 != rightP50 {
+			if leftP50 == 0 {
+				return false
+			}
+			if rightP50 == 0 {
+				return true
+			}
+			return leftP50 < rightP50
+		}
+		if left.loadInfo != nil && right.loadInfo != nil {
+			if left.loadInfo.LoadRate != right.loadInfo.LoadRate {
+				return left.loadInfo.LoadRate < right.loadInfo.LoadRate
+			}
+			if left.loadInfo.WaitingCount != right.loadInfo.WaitingCount {
+				return left.loadInfo.WaitingCount < right.loadInfo.WaitingCount
+			}
+		}
+		return left.account.ID < right.account.ID
+	})
+	return ordered
+}
+
+// promoteOpenAITTFTExplorationCandidate selects a small, explicitly bounded
+// sample of immature accounts so their first-token window can become mature.
+// It never crosses the manual priority boundary and is disabled for sticky or
+// non-streaming requests. The returned candidate is marked for diagnostics and
+// lease accounting by the caller.
+func promoteOpenAITTFTExplorationCandidate(
+	candidates []openAIAccountCandidateScore,
+	snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot,
+	transport OpenAITTFTTransport,
+	req OpenAIAccountScheduleRequest,
+	percent int,
+	seed uint64,
+) ([]openAIAccountCandidateScore, int64, bool) {
+	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
+	if len(ordered) == 0 || percent <= 0 || !req.Streaming ||
+		strings.TrimSpace(req.SessionHash) != "" || strings.TrimSpace(req.PreviousResponseID) != "" {
+		return ordered, 0, false
+	}
+	if percent > 5 {
+		percent = 5
+	}
+	minPriority := 0
+	hasPriority := false
+	eligible := make([]int, 0, len(ordered))
+	for _, candidate := range ordered {
+		if candidate.account == nil {
+			continue
+		}
+		priority := openAIAccountSchedulingPriority(candidate.account)
+		if !hasPriority || priority < minPriority {
+			minPriority = priority
+			hasPriority = true
+		}
+	}
+	if !hasPriority {
+		return ordered, 0, false
+	}
+	for i, candidate := range ordered {
+		if candidate.account == nil || openAIAccountSchedulingPriority(candidate.account) != minPriority {
+			continue
+		}
+		snapshot := snapshots[OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport}]
+		if snapshot.Count < openAITTFTWindowSampleCap {
+			eligible = append(eligible, i)
+		}
+	}
+	if len(eligible) == 0 {
+		return ordered, 0, false
+	}
+	index := eligible[int(seed%uint64(len(eligible)))]
+	chosen := ordered[index]
+	chosen.exploration = true
+	ordered = append([]openAIAccountCandidateScore{chosen}, append(ordered[:index:index], ordered[index+1:]...)...)
+	return ordered, chosen.account.ID, true
 }
 
 func selectTopKOpenAICandidates(candidates []openAIAccountCandidateScore, topK int) []openAIAccountCandidateScore {
@@ -839,6 +1013,37 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 		plan.selectionOrder = s.buildOpenAISelectionOrder(req, plan)
 		return plan
 	}
+	if s.shouldUseOpenAITTFTOptimizer(req) {
+		transport := openAITTFTTransportForSchedule(req.RequiredTransport)
+		keys := make([]OpenAITTFTWindowKey, 0, len(candidates))
+		for _, candidate := range candidates {
+			if candidate.account != nil {
+				keys = append(keys, OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport})
+			}
+		}
+		threshold := 5000
+		if s.service != nil && s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTStableThresholdMs > 0 {
+			threshold = s.service.cfg.Gateway.OpenAITTFTStableThresholdMs
+		}
+		snapshots := s.service.openAITTFTSnapshots(ctx, keys, time.Now().UTC())
+		plan.selectionOrder = orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, transport, threshold)
+		if s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTExplorationPercent > 0 {
+			seed := deriveOpenAISelectionSeed(req) ^ uint64(time.Now().UnixNano())
+			candidateOrder, explorationID, ok := promoteOpenAITTFTExplorationCandidate(
+				plan.selectionOrder,
+				snapshots,
+				transport,
+				req,
+				s.service.cfg.Gateway.OpenAITTFTExplorationPercent,
+				seed,
+			)
+			if ok && s.acquireOpenAITTFTExplorationQuota(ctx, req, candidateOrder, explorationID, transport, s.service.cfg.Gateway.OpenAITTFTExplorationPercent) && s.beginOpenAITTFTExploration(ctx, OpenAITTFTWindowKey{AccountID: explorationID, Transport: transport}) {
+				plan.selectionOrder = candidateOrder
+			}
+		}
+		plan.topK = len(plan.selectionOrder)
+		return plan
+	}
 
 	minPriority, maxPriority := openAIAccountSchedulingPriority(candidates[0].account), openAIAccountSchedulingPriority(candidates[0].account)
 	maxWaiting := 1
@@ -982,6 +1187,113 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 
 	plan.selectionOrder = s.buildOpenAISelectionOrder(req, plan)
 	return plan
+}
+
+func openAITTFTTransportForSchedule(required OpenAIUpstreamTransport) OpenAITTFTTransport {
+	switch required {
+	case OpenAIUpstreamTransportResponsesWebsocketV2, OpenAIUpstreamTransportResponsesWebsocketV2Ingress:
+		return OpenAITTFTTransportResponsesWS
+	default:
+		return OpenAITTFTTransportHTTPSSE
+	}
+}
+
+func (s *defaultOpenAIAccountScheduler) shouldUseOpenAITTFTOptimizer(req OpenAIAccountScheduleRequest) bool {
+	if s == nil || s.service == nil || s.service.cfg == nil || !s.service.cfg.Gateway.OpenAITTFTOptimizerEnabled || !req.Streaming || normalizeOpenAICompatiblePlatform(req.Platform) != PlatformOpenAI {
+		return false
+	}
+	rollout := s.service.cfg.Gateway.OpenAITTFTOptimizerRolloutPercent
+	if rollout <= 0 {
+		return false
+	}
+	if rollout >= 100 {
+		return true
+	}
+	identity := strings.TrimSpace(req.SessionHash)
+	if identity == "" {
+		identity = strings.TrimSpace(req.PreviousResponseID)
+	}
+	if identity == "" {
+		return false
+	}
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(identity))
+	return int(hasher.Sum32()%100) < rollout
+}
+
+func (s *defaultOpenAIAccountScheduler) beginOpenAITTFTExploration(ctx context.Context, key OpenAITTFTWindowKey) bool {
+	if s == nil || s.service == nil || s.service.cache == nil || !s.service.openAITTFTRedisHealthy.Load() || key.AccountID <= 0 || !key.Transport.Valid() {
+		return false
+	}
+	store, ok := s.service.cache.(OpenAITTFTStore)
+	if !ok {
+		return false
+	}
+	token := fmt.Sprintf("%d:%d", key.AccountID, time.Now().UnixNano())
+	leaseCtx := ctx
+	if leaseCtx == nil {
+		leaseCtx = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(leaseCtx, 5*time.Millisecond)
+	defer cancel()
+	acquired, err := store.TryBeginExploration(probeCtx, key, token, 30*time.Second)
+	if err != nil {
+		s.service.openAITTFTRedisHealthy.Store(false)
+		return false
+	}
+	if !acquired {
+		return false
+	}
+	// Release ownership when the request context ends. The Redis TTL remains a
+	// bounded fallback for transports whose context is intentionally detached.
+	if done := leaseCtx.Done(); done != nil {
+		go func() {
+			<-done
+			_ = store.FinishExploration(context.Background(), key, token, 5*time.Minute)
+		}()
+	}
+	return true
+}
+
+func (s *defaultOpenAIAccountScheduler) acquireOpenAITTFTExplorationQuota(
+	ctx context.Context,
+	req OpenAIAccountScheduleRequest,
+	candidates []openAIAccountCandidateScore,
+	accountID int64,
+	transport OpenAITTFTTransport,
+	percent int,
+) bool {
+	if s == nil || s.service == nil || !s.service.openAITTFTRedisHealthy.Load() || accountID <= 0 || !transport.Valid() || percent <= 0 {
+		return false
+	}
+	store, ok := s.service.cache.(OpenAITTFTStore)
+	if !ok {
+		return false
+	}
+	priority := 0
+	for _, candidate := range candidates {
+		if candidate.account != nil && candidate.account.ID == accountID {
+			priority = openAIAccountSchedulingPriority(candidate.account)
+			break
+		}
+	}
+	groupID := int64(0)
+	if req.GroupID != nil {
+		groupID = *req.GroupID
+	}
+	scope := fmt.Sprintf("group:%d:priority:%d:transport:%s", groupID, priority, transport)
+	quotaCtx := ctx
+	if quotaCtx == nil {
+		quotaCtx = context.Background()
+	}
+	quotaCtx, cancel := context.WithTimeout(quotaCtx, 5*time.Millisecond)
+	defer cancel()
+	allowed, err := store.TryAcquireExplorationQuota(quotaCtx, scope, percent, openAITTFTWindowAge)
+	if err != nil {
+		s.service.openAITTFTRedisHealthy.Store(false)
+		return false
+	}
+	return allowed
 }
 
 func (s *defaultOpenAIAccountScheduler) buildOpenAISelectionOrder(
@@ -1171,9 +1483,10 @@ func (s *defaultOpenAIAccountScheduler) tryAcquireOpenAISelectionOrderWithBudget
 			_ = s.service.BindStickySession(ctx, req.GroupID, req.SessionHash, fresh.ID)
 		}
 		return &AccountSelectionResult{
-			Account:     fresh,
-			Acquired:    true,
-			ReleaseFunc: result.ReleaseFunc,
+			Account:               fresh,
+			Acquired:              true,
+			ReleaseFunc:           result.ReleaseFunc,
+			OpenAITTFTExploration: candidate.exploration,
 		}, compactBlocked, nil
 	}
 	return nil, compactBlocked, nil
@@ -1623,7 +1936,8 @@ func (s *defaultOpenAIAccountScheduler) finishLoadBalanceSelectionFallback(
 				continue
 			}
 			return &AccountSelectionResult{
-				Account: fresh,
+				Account:               fresh,
+				OpenAITTFTExploration: candidate.exploration,
 				WaitPlan: &AccountWaitPlan{
 					AccountID:      fresh.ID,
 					MaxConcurrency: fresh.Concurrency,
@@ -1961,7 +2275,7 @@ func (s *OpenAIGatewayService) getOpenAIAccountScheduler(ctx context.Context) Op
 	if s == nil {
 		return nil
 	}
-	if !s.isOpenAIAdvancedSchedulerEnabled(ctx) {
+	if !s.isOpenAIAdvancedSchedulerEnabled(ctx) && !s.isOpenAITTFTOptimizerEnabledForContext(ctx) {
 		return nil
 	}
 	s.openaiSchedulerOnce.Do(func() {
@@ -1973,6 +2287,10 @@ func (s *OpenAIGatewayService) getOpenAIAccountScheduler(ctx context.Context) Op
 		}
 	})
 	return s.openaiScheduler
+}
+
+func (s *OpenAIGatewayService) isOpenAITTFTOptimizerEnabledForContext(ctx context.Context) bool {
+	return s != nil && s.cfg != nil && s.cfg.Gateway.OpenAITTFTOptimizerEnabled && s.cfg.Gateway.OpenAITTFTOptimizerRolloutPercent > 0 && openAIStreamingScheduleFromContext(ctx)
 }
 
 func resetOpenAIAdvancedSchedulerSettingCacheForTest() {
@@ -2187,6 +2505,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 		RequiredImageCapability: requiredImageCapability,
 		RequireCompact:          requireCompact,
 		ExcludedIDs:             excludedIDs,
+		Streaming:               openAIStreamingScheduleFromContext(ctx),
 	})
 }
 
@@ -2240,6 +2559,19 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(accountID int64
 		return
 	}
 	scheduler.ReportResult(accountID, success, firstTokenMs)
+}
+
+// ApplyOpenAITTFTScheduleDecision copies scheduler diagnostics onto the
+// request result before the asynchronous usage task is submitted.
+func (s *OpenAIGatewayService) ApplyOpenAITTFTScheduleDecision(result *OpenAIForwardResult, decision OpenAIAccountScheduleDecision) {
+	if result == nil || !result.Stream {
+		return
+	}
+	result.TTFTOptimized = decision.TTFTOptimized
+	result.TTFTExploration = decision.TTFTExploration
+	result.TTFTSampleCount = decision.TTFTSampleCount
+	result.TTFTP50Ms = decision.TTFTP50Ms
+	result.TTFTP90Ms = decision.TTFTP90Ms
 }
 
 func (s *OpenAIGatewayService) RecordOpenAIAccountSwitch() {

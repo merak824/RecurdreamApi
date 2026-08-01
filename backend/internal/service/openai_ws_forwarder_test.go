@@ -59,6 +59,26 @@ func TestIsOpenAIWSTokenEvent_TerminalEventsExcluded(t *testing.T) {
 	}
 }
 
+func TestIsOpenAIWSSemanticOutputRequiresPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   string
+		payload string
+		want    bool
+	}{
+		{name: "empty text delta", event: "response.output_text.delta", payload: `{"type":"response.output_text.delta","delta":""}`},
+		{name: "text delta", event: "response.output_text.delta", payload: `{"type":"response.output_text.delta","delta":"hello"}`, want: true},
+		{name: "role only item", event: "response.output_item.added", payload: `{"type":"response.output_item.added","item":{"type":"message","role":"assistant","content":[]}}`},
+		{name: "tool arguments", event: "response.function_call_arguments.delta", payload: `{"type":"response.function_call_arguments.delta","delta":"{\"x\":"}`, want: true},
+		{name: "usage terminal", event: "response.completed", payload: `{"type":"response.completed","response":{"usage":{"input_tokens":1}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, isOpenAIWSSemanticOutput([]byte(tt.payload), tt.event))
+		})
+	}
+}
+
 // TestOpenAIWSCyberPolicyMark_ResponseFailed 验证 WS 路径 response.failed cyber_policy 标记逻辑。
 //
 // 全量转发循环（forwardOpenAIWSV2 / sendAndRelay）依赖真实 WebSocket 连接，

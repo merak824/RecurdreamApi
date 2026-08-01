@@ -169,7 +169,7 @@
             <router-link
               v-else
               :to="item.path"
-              class="sidebar-link mb-1"
+              class="sidebar-link relative mb-1"
               :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
               :title="sidebarCollapsed ? item.label : undefined"
               :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
@@ -178,6 +178,14 @@
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
               <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              <span
+                v-if="item.unread"
+                role="status"
+                :aria-label="t('nav.newRedPacketActivity')"
+                class="red-packet-unread-badge absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-red-500 text-white shadow-sm shadow-red-500/25 ring-1 ring-red-400/20 dark:bg-red-500 dark:ring-red-300/20"
+              >
+                <Icon name="gift" size="sm" :stroke-width="2" class="red-packet-unread-badge-icon" aria-hidden="true" />
+              </span>
             </router-link>
           </template>
         </div>
@@ -205,7 +213,7 @@
             <router-link
               v-else
               :to="item.path"
-              class="sidebar-link mb-1"
+              class="sidebar-link relative mb-1"
               :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
               :title="sidebarCollapsed ? item.label : undefined"
               :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
@@ -214,6 +222,14 @@
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
               <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              <span
+                v-if="item.unread"
+                role="status"
+                :aria-label="t('nav.newRedPacketActivity')"
+                class="red-packet-unread-badge absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-red-500 text-white shadow-sm shadow-red-500/25 ring-1 ring-red-400/20 dark:bg-red-500 dark:ring-red-300/20"
+              >
+                <Icon name="gift" size="sm" :stroke-width="2" class="red-packet-unread-badge-icon" aria-hidden="true" />
+              </span>
             </router-link>
           </template>
         </div>
@@ -266,10 +282,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { DEFAULT_SITE_LOGO, resolveSiteLogo } from '@/config/branding'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
+import { useRedPacketReminder } from '@/composables/useRedPacketReminder'
 
 interface NavItem {
   path: string
@@ -278,6 +296,7 @@ interface NavItem {
   iconSvg?: string
   externalUrl?: string
   hideInSimpleMode?: boolean
+  unread?: boolean
   children?: NavItem[]
   /**
    * When true, the parent item only toggles the expand/collapse state and
@@ -316,6 +335,10 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()
+const { hasUnread: hasUnreadRedPacket } = useRedPacketReminder(
+  computed(() => authStore.user?.id),
+  computed(() => route.path)
+)
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
@@ -802,6 +825,13 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/purchase', label: t('nav.buySubscription'), icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    {
+      path: '/red-packets',
+      label: t('nav.redPackets'),
+      icon: GiftIcon,
+      hideInSimpleMode: true,
+      unread: hasUnreadRedPacket.value
+    },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
@@ -878,6 +908,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
+    { path: '/admin/red-packets', label: t('nav.redPacketManagement'), icon: GiftIcon, hideInSimpleMode: true },
     {
       path: '/admin/affiliates',
       label: t('nav.affiliateManagement'),
@@ -1170,6 +1201,37 @@ onBeforeUnmount(() => {
   opacity: 0;
   transform: translateX(-4px);
   pointer-events: none;
+}
+
+.red-packet-unread-badge-icon {
+  transform-origin: 50% 18%;
+  animation: red-packet-gift-wiggle 2.8s ease-in-out infinite;
+}
+
+@keyframes red-packet-gift-wiggle {
+  0%,
+  78%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  84% {
+    transform: rotate(-8deg) scale(1.05);
+  }
+
+  90% {
+    transform: rotate(8deg) scale(1.05);
+  }
+
+  96% {
+    transform: rotate(-3deg) scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .red-packet-unread-badge-icon {
+    animation: none;
+  }
 }
 
 /* Custom SVG icon in sidebar: constrain size without overriding uploaded SVG colors */

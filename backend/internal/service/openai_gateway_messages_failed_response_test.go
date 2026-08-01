@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,45 @@ import (
 func buildResponsesFailedSSEStream(errType, errorMessage string) string {
 	failed := fmt.Sprintf(`{"type":"response.failed","response":{"id":"resp_err","object":"response","status":"failed","error":{"type":"%s","message":"%s"},"output":[],"usage":{"input_tokens":10,"output_tokens":0,"total_tokens":10}}}`, errType, errorMessage)
 	return fmt.Sprintf("data: %s\n\n", failed)
+}
+
+func TestHandleAnthropicStreamingResponseFirstTokenWaitsForSemanticOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	pr, pw := io.Pipe()
+	go func() {
+		defer func() { _ = pw.Close() }()
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"content\":[]}}\n\n"))
+		time.Sleep(25 * time.Millisecond)
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\"}}\n\n"))
+	}()
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	setOpenAIUpstreamTTFTStart(c, time.Now().Add(-10*time.Millisecond))
+	svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig()}
+	result, err := svc.handleAnthropicStreamingResponse(
+		&http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       pr,
+		},
+		c,
+		rawChatCompletionsTestAccount(),
+		"gpt-5.5",
+		"gpt-5.5",
+		"gpt-5.5",
+		time.Now(),
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.FirstTokenMs)
+	require.GreaterOrEqual(t, *result.FirstTokenMs, 20, "metadata events must not count as first token")
+	require.NotNil(t, result.UpstreamFirstTokenMs, "native Messages Responses stream must expose upstream TTFT diagnostics")
+	require.GreaterOrEqual(t, *result.UpstreamFirstTokenMs, 0)
 }
 
 func TestForwardAsAnthropic_BufferedResponseFailed_ReturnsError(t *testing.T) {

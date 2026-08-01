@@ -66,6 +66,8 @@ func RegisterAdminRoutes(
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
 
+		registerRedPacketRoutes(admin, h)
+
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
@@ -119,6 +121,18 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerRedPacketRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	redPackets := admin.Group("/red-packets")
+	{
+		redPackets.GET("", h.Admin.RedPacket.List)
+		redPackets.POST("", h.Admin.RedPacket.Create)
+		redPackets.PUT("/:id", h.Admin.RedPacket.Update)
+		redPackets.POST("/:id/publish", h.Admin.RedPacket.Publish)
+		redPackets.POST("/:id/cancel", h.Admin.RedPacket.Cancel)
+		redPackets.GET("/:id/export", h.Admin.RedPacket.Export)
 	}
 }
 

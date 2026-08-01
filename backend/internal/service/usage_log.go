@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -194,11 +195,52 @@ type UsageLog struct {
 
 	CreatedAt time.Time
 
+	// UpstreamFirstTokenMs is the semantic first-output latency measured from
+	// the upstream request start. It is kept separate from FirstTokenMs, whose
+	// existing client-visible billing/analytics meaning must remain unchanged.
+	UpstreamFirstTokenMs *int
+	ClientDisconnected   bool
+	OpenAITTFTContext    *OpenAITTFTContext
+
 	User         *User
 	APIKey       *APIKey
 	Account      *Account
 	Group        *Group
 	Subscription *UserSubscription
+}
+
+// OpenAITTFTContext is versioned, admin-only diagnostic context for the global
+// OpenAI first-token optimizer. Pointer fields preserve the distinction between
+// an unavailable measurement and a measured zero value.
+type OpenAITTFTContext struct {
+	Version               int    `json:"version"`
+	Transport             string `json:"transport"`
+	UserFirstTokenMs      *int   `json:"user_first_token_ms,omitempty"`
+	UpstreamFirstTokenMs  *int   `json:"upstream_first_token_ms,omitempty"`
+	RoutingMs             *int64 `json:"routing_ms,omitempty"`
+	QueueWaitMs           *int64 `json:"queue_wait_ms,omitempty"`
+	ConnectionAcquireMs   *int64 `json:"connection_acquire_ms,omitempty"`
+	ConnectionReused      *bool  `json:"connection_reused,omitempty"`
+	Exploration           bool   `json:"exploration"`
+	SampleCount           int    `json:"sample_count"`
+	SampleP50Ms           *int   `json:"sample_p50_ms,omitempty"`
+	SampleP90Ms           *int   `json:"sample_p90_ms,omitempty"`
+	FirstSemanticEvent    string `json:"first_semantic_event,omitempty"`
+	FirstOutputTimeoutMs  int64  `json:"first_output_timeout_ms"`
+	SwitchCount           int    `json:"switch_count"`
+	SwitchedFromAccountID *int64 `json:"switched_from_account_id,omitempty"`
+	ClientDisconnected    bool   `json:"client_disconnected"`
+}
+
+func (c *OpenAITTFTContext) MarshalJSONValue() (string, error) {
+	if c == nil {
+		return "", nil
+	}
+	payload, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
 }
 
 func (u *UsageLog) TotalTokens() int {

@@ -526,11 +526,12 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		if isTokenEvent {
 			tokenEventCount++
 		}
+		isSemanticOutput := isOpenAIWSSemanticOutput(message, eventType)
 		isTerminalEvent := isOpenAIWSTerminalEvent(eventType)
 		if isTerminalEvent {
 			terminalEventCount++
 		}
-		if firstTokenMs == nil && isTokenEvent {
+		if firstTokenMs == nil && isSemanticOutput {
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
 		}
@@ -762,6 +763,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		ResponseHeaders:       lease.HandshakeHeaders(),
 		Duration:              time.Since(startTime),
 		FirstTokenMs:          firstTokenMs,
+		UpstreamFirstTokenMs:  firstTokenMs,
+		TTFTTransport:         OpenAITTFTTransportResponsesWS,
+		FirstSemanticEvent:    "responses_ws.semantic_output",
 	}, nil
 }
 

@@ -266,6 +266,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/red-packets',
+    name: 'RedPackets',
+    component: () => import('@/views/user/RedPacketView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Red Packet Activity',
+      titleKey: 'redPacket.title',
+      descriptionKey: 'redPacket.subtitle'
+    }
+  },
+  {
     path: '/available-channels',
     name: 'UserAvailableChannels',
     component: () => import('@/views/user/AvailableChannelsView.vue'),
@@ -571,6 +583,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
       descriptionKey: 'admin.promo.description'
+    }
+  },
+  {
+    path: '/admin/red-packets',
+    name: 'AdminRedPackets',
+    component: () => import('@/views/admin/RedPacketView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Activity Management',
+      titleKey: 'admin.redPacket.title',
+      descriptionKey: 'admin.redPacket.description'
     }
   },
   {

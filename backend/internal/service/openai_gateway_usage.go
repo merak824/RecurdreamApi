@@ -308,6 +308,35 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs
 	usageLog.FirstTokenMs = result.FirstTokenMs
+	usageLog.UpstreamFirstTokenMs = result.UpstreamFirstTokenMs
+	usageLog.ClientDisconnected = result.ClientDisconnect
+	if result.Stream && account.Platform == PlatformOpenAI {
+		transport := result.TTFTTransport
+		if !transport.Valid() {
+			transport = OpenAITTFTTransportHTTPSSE
+			if result.OpenAIWSMode {
+				transport = OpenAITTFTTransportResponsesWS
+			}
+		}
+		usageLog.OpenAITTFTContext = &OpenAITTFTContext{
+			Version:              1,
+			Transport:            string(transport),
+			UserFirstTokenMs:     result.FirstTokenMs,
+			UpstreamFirstTokenMs: result.UpstreamFirstTokenMs,
+			FirstSemanticEvent:   result.FirstSemanticEvent,
+			ClientDisconnected:   result.ClientDisconnect,
+			Exploration:          result.TTFTExploration,
+			SampleCount:          result.TTFTSampleCount,
+		}
+		if result.TTFTP50Ms > 0 {
+			value := result.TTFTP50Ms
+			usageLog.OpenAITTFTContext.SampleP50Ms = &value
+		}
+		if result.TTFTP90Ms > 0 {
+			value := result.TTFTP90Ms
+			usageLog.OpenAITTFTContext.SampleP90Ms = &value
+		}
+	}
 	usageLog.CreatedAt = time.Now()
 	// 设置渠道信息
 	usageLog.ChannelID = optionalInt64Ptr(input.ChannelID)
@@ -356,6 +385,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		s.recordOpenAITTFTSample(usageLog)
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
 		return nil
@@ -388,6 +418,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	s.recordOpenAITTFTSample(usageLog)
 
 	return nil
 }

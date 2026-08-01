@@ -203,22 +203,26 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 		c.Writer.Flush()
 	}
 
-	scan := s.scanCCStream(resp, "openai responses chat fallback", requestID, startTime, func(chunk *apicompat.ChatCompletionsChunk) {
+	scan := s.scanCCStream(c, resp, "openai responses chat fallback", requestID, startTime, func(chunk *apicompat.ChatCompletionsChunk) {
 		writeEvents(apicompat.ChatCompletionsChunkToResponsesEvents(chunk, state))
 	})
+	upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 
 	if scan.Err != nil {
 		return &OpenAIForwardResult{
-			RequestID:       requestID,
-			Usage:           scan.Usage,
-			Model:           originalModel,
-			BillingModel:    billingModel,
-			UpstreamModel:   upstreamModel,
-			ReasoningEffort: reasoningEffort,
-			ServiceTier:     serviceTier,
-			Stream:          true,
-			Duration:        time.Since(startTime),
-			FirstTokenMs:    scan.FirstTokenMs,
+			RequestID:            requestID,
+			Usage:                scan.Usage,
+			Model:                originalModel,
+			BillingModel:         billingModel,
+			UpstreamModel:        upstreamModel,
+			ReasoningEffort:      reasoningEffort,
+			ServiceTier:          serviceTier,
+			Stream:               true,
+			Duration:             time.Since(startTime),
+			FirstTokenMs:         scan.FirstTokenMs,
+			UpstreamFirstTokenMs: upstreamFirstTokenMs,
+			TTFTTransport:        OpenAITTFTTransportHTTPSSE,
+			FirstSemanticEvent:   firstSemanticEvent,
 		}, fmt.Errorf("stream usage incomplete: %w", scan.Err)
 	}
 
@@ -237,16 +241,19 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 	}
 
 	return &OpenAIForwardResult{
-		RequestID:       requestID,
-		Usage:           scan.Usage,
-		Model:           originalModel,
-		BillingModel:    billingModel,
-		UpstreamModel:   upstreamModel,
-		ReasoningEffort: reasoningEffort,
-		ServiceTier:     serviceTier,
-		Stream:          true,
-		Duration:        time.Since(startTime),
-		FirstTokenMs:    scan.FirstTokenMs,
+		RequestID:            requestID,
+		Usage:                scan.Usage,
+		Model:                originalModel,
+		BillingModel:         billingModel,
+		UpstreamModel:        upstreamModel,
+		ReasoningEffort:      reasoningEffort,
+		ServiceTier:          serviceTier,
+		Stream:               true,
+		Duration:             time.Since(startTime),
+		FirstTokenMs:         scan.FirstTokenMs,
+		UpstreamFirstTokenMs: upstreamFirstTokenMs,
+		TTFTTransport:        OpenAITTFTTransportHTTPSSE,
+		FirstSemanticEvent:   firstSemanticEvent,
 	}, nil
 }
 

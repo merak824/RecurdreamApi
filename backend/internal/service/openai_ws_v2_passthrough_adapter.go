@@ -1113,6 +1113,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					ResponseHeaders:       cloneHeader(handshakeHeaders),
 					Duration:              turn.Duration,
 					FirstTokenMs:          turn.FirstTokenMs,
+					UpstreamFirstTokenMs:  turn.FirstTokenMs,
+					TTFTTransport:         OpenAITTFTTransportResponsesWS,
+					FirstSemanticEvent:    "responses_ws.semantic_output",
 				}
 				logOpenAIWSV2Passthrough(
 					"relay_turn_completed account_id=%d turn=%d request_id=%s terminal_event=%s turn_requested_model=%s turn_upstream_model=%s duration_ms=%d first_token_ms=%d input_tokens=%d output_tokens=%d cache_read_tokens=%d",
@@ -1232,6 +1235,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		ResponseHeaders:       cloneHeader(handshakeHeaders),
 		Duration:              relayResult.Duration,
 		FirstTokenMs:          relayResult.FirstTokenMs,
+		UpstreamFirstTokenMs:  relayResult.FirstTokenMs,
+		TTFTTransport:         OpenAITTFTTransportResponsesWS,
+		FirstSemanticEvent:    "responses_ws.semantic_output",
 	}
 
 	turnCount := int(completedTurns.Load())

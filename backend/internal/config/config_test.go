@@ -40,6 +40,33 @@ func TestLoadServerTimingConfig(t *testing.T) {
 	})
 }
 
+func TestLoadDefaultOpenAITTFTOptimizerSettings(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.True(t, cfg.Gateway.OpenAITTFTOptimizerEnabled)
+	require.Zero(t, cfg.Gateway.OpenAITTFTOptimizerRolloutPercent)
+	require.Equal(t, 5000, cfg.Gateway.OpenAITTFTStableThresholdMs)
+	require.Zero(t, cfg.Gateway.OpenAITTFTExplorationPercent)
+}
+
+func TestValidateOpenAITTFTOptimizerRanges(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.Gateway.OpenAITTFTOptimizerRolloutPercent = 101
+	require.ErrorContains(t, cfg.Validate(), "gateway.openai_ttft_optimizer_rollout_percent")
+
+	cfg.Gateway.OpenAITTFTOptimizerRolloutPercent = 100
+	cfg.Gateway.OpenAITTFTExplorationPercent = 6
+	require.ErrorContains(t, cfg.Validate(), "gateway.openai_ttft_exploration_percent")
+
+	cfg.Gateway.OpenAITTFTExplorationPercent = 5
+	cfg.Gateway.OpenAITTFTStableThresholdMs = 999
+	require.ErrorContains(t, cfg.Validate(), "gateway.openai_ttft_stable_threshold_ms")
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")

@@ -100,6 +100,8 @@ func TestForwardResponses_ForceChatCompletionsRoutesStreamingToChatCompletions(t
 	require.Equal(t, 3, result.Usage.OutputTokens)
 	require.True(t, result.Stream)
 	require.NotNil(t, result.FirstTokenMs)
+	require.NotNil(t, result.UpstreamFirstTokenMs, "Responses Chat Completions fallback must expose upstream TTFT diagnostics")
+	require.GreaterOrEqual(t, *result.UpstreamFirstTokenMs, 0)
 }
 
 func TestForwardResponses_DeepSeekReasoningOnlyStreamProducesVisibleText(t *testing.T) {

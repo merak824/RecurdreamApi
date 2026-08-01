@@ -320,6 +320,45 @@ func isOpenAIWSTokenEvent(eventType string) bool {
 	return false
 }
 
+// isOpenAIWSSemanticOutput keeps TTFT measurement payload-aware. The legacy
+// token-event classifier is intentionally broader because it also feeds
+// diagnostics; it must not be used to stamp the first semantic output time.
+func isOpenAIWSSemanticOutput(message []byte, eventType string) bool {
+	if len(message) == 0 {
+		return false
+	}
+	switch strings.TrimSpace(eventType) {
+	case "response.output_text.delta", "response.output_text.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "text").String()) != ""
+	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "arguments").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != ""
+	case "response.reasoning_summary_text.delta", "response.reasoning_summary_text.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != "" || strings.TrimSpace(gjson.GetBytes(message, "text").String()) != ""
+	case "response.content_part.added", "response.content_part.done", "response.reasoning_summary_part.added", "response.reasoning_summary_part.done":
+		return strings.TrimSpace(gjson.GetBytes(message, "part.text").String()) != ""
+	case "response.output_item.added", "response.output_item.done":
+		item := gjson.GetBytes(message, "item")
+		if !item.Exists() {
+			return false
+		}
+		switch strings.TrimSpace(item.Get("type").String()) {
+		case "message":
+			for _, part := range item.Get("content").Array() {
+				if strings.TrimSpace(part.Get("text").String()) != "" {
+					return true
+				}
+			}
+		case "reasoning":
+			return strings.TrimSpace(item.Get("encrypted_content").String()) != "" || len(item.Get("summary").Array()) > 0
+		case "function_call", "tool_search_call":
+			return strings.TrimSpace(item.Get("arguments").String()) != ""
+		case "custom_tool_call":
+			return strings.TrimSpace(item.Get("input").String()) != ""
+		}
+	}
+	return false
+}
+
 func replaceOpenAIWSMessageModel(message []byte, fromModel, toModel string) []byte {
 	if len(message) == 0 {
 		return message

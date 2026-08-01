@@ -175,6 +175,15 @@ func (UsageLog) Fields() []ent.Field {
 			Default(time.Now).
 			Immutable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// OpenAI TTFT diagnostics are admin-only and nullable for historical rows.
+		field.Int("upstream_first_token_ms").
+			Optional().
+			Nillable(),
+		field.Bool("client_disconnected").
+			Default(false),
+		field.JSON("openai_ttft_context", map[string]any{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 	}
 }
 

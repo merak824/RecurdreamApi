@@ -212,6 +212,8 @@
               <span v-else class="text-gray-400 dark:text-gray-500">-</span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
+              <span v-if="row.upstream_first_token_ms != null" class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyUpstreamFirstToken') }}</span>
+              <span v-if="row.upstream_first_token_ms != null" class="font-medium tabular-nums text-cyan-600 dark:text-cyan-400" :title="row.openai_ttft_context?.first_semantic_event || undefined">{{ formatDuration(row.upstream_first_token_ms) }}</span>
             </div>
           </div>
         </template>

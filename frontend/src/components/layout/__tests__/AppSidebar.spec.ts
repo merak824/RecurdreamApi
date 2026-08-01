@@ -8,6 +8,10 @@ const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSi
 const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
+const zhLocalePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../i18n/locales/zh/common.ts')
+const zhLocaleSource = readFileSync(zhLocalePath, 'utf8')
+const enLocalePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../i18n/locales/en/common.ts')
+const enLocaleSource = readFileSync(enLocalePath, 'utf8')
 
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
@@ -69,5 +73,58 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch).not.toBeNull()
     expect(sidebarHeaderBlockMatch?.[0]).not.toContain('@apply overflow-hidden;')
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
+  })
+})
+
+describe('AppSidebar red packet reminder', () => {
+  it('connects browser-local unread state to the user-facing red packet item', () => {
+    expect(componentSource).toContain("import { useRedPacketReminder } from '@/composables/useRedPacketReminder'")
+    expect(componentSource).toContain('unread?: boolean')
+    expect(componentSource).toContain('const { hasUnread: hasUnreadRedPacket } = useRedPacketReminder(')
+    expect(componentSource).toContain('computed(() => authStore.user?.id)')
+    expect(componentSource).toContain('computed(() => route.path)')
+    expect(componentSource).toContain("path: '/red-packets'")
+    expect(componentSource).toContain('unread: hasUnreadRedPacket.value')
+  })
+
+  it('renders an accessible red packet badge only in user-facing navigation branches', () => {
+    const adminMenu = componentSource.match(/<!-- Admin Section -->[\s\S]*?<!-- Personal Section for Admin/)
+    const adminPersonalMenu = componentSource.match(/<!-- Personal Section for Admin[\s\S]*?<!-- Regular User View -->/)
+    const regularUserMenu = componentSource.match(/<!-- Regular User View -->[\s\S]*?<\/nav>/)
+
+    expect(adminMenu?.[0]).not.toContain('red-packet-unread-badge')
+    expect(adminPersonalMenu?.[0]).toContain('red-packet-unread-badge')
+    expect(regularUserMenu?.[0]).toContain('red-packet-unread-badge')
+    expect(componentSource.match(/class="red-packet-unread-badge /g) ?? []).toHaveLength(2)
+    expect(componentSource).toContain("import Icon from '@/components/icons/Icon.vue'")
+    expect(componentSource.match(/<Icon name="gift" size="sm"/g) ?? []).toHaveLength(2)
+    expect(componentSource).not.toContain('red-packet-unread-dot')
+    expect(componentSource).toContain(":aria-label=" + '"t(\'nav.newRedPacketActivity\')"')
+    expect(componentSource).toContain('absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-red-500')
+  })
+
+  it('does not add unread state to the admin activity management item', () => {
+    expect(componentSource).toContain(
+      "{ path: '/admin/red-packets', label: t('nav.redPacketManagement'), icon: GiftIcon, hideInSimpleMode: true }"
+    )
+  })
+
+  it('animates the unread gift icon while respecting reduced motion', () => {
+    expect(componentSource).toContain('red-packet-unread-badge-icon')
+    expect(componentSource).toContain('@keyframes red-packet-gift-wiggle')
+    expect(componentSource).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(componentSource).toContain('animation: none;')
+  })
+
+  it('keeps the admin account management item icon visible', () => {
+    expect(componentSource).toContain(
+      "{ path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon }"
+    )
+    expect(componentSource).toContain('const GlobeIcon = {')
+  })
+
+  it('provides localized accessible text for the unread status', () => {
+    expect(zhLocaleSource).toContain("newRedPacketActivity: '有新的红包活动'")
+    expect(enLocaleSource).toContain("newRedPacketActivity: 'New red packet activity'")
   })
 })

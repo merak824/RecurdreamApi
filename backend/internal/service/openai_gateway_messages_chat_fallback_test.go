@@ -211,6 +211,8 @@ func TestForwardAsAnthropic_ForceChatCompletionsStreamingClosesOpenBlockOnDone(t
 	require.Equal(t, 3, result.Usage.OutputTokens)
 	require.True(t, result.Stream)
 	require.NotNil(t, result.FirstTokenMs)
+	require.NotNil(t, result.UpstreamFirstTokenMs, "messages Chat Completions fallback must expose upstream TTFT diagnostics")
+	require.GreaterOrEqual(t, *result.UpstreamFirstTokenMs, 0)
 }
 
 // Covers multi-chunk tool_call fragments aggregated by index and finalized as

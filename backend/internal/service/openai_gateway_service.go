@@ -250,16 +250,26 @@ type OpenAIForwardResult struct {
 	ResponseHeaders       http.Header
 	Duration              time.Duration
 	FirstTokenMs          *int
-	ClientDisconnect      bool
-	ImageCount            int
-	ImageSize             string
-	ImageInputSize        string
-	ImageOutputSize       string
-	ImageOutputSizes      []string
-	ImageSizeSource       string
-	ImageSizeBreakdown    map[string]int
-	VideoCount            int
-	VideoResolution       string
+	// UpstreamFirstTokenMs is measured from the current upstream attempt start
+	// to the first semantic event. It is never used for billing.
+	UpstreamFirstTokenMs *int
+	TTFTTransport        OpenAITTFTTransport
+	FirstSemanticEvent   string
+	ClientDisconnect     bool
+	TTFTOptimized        bool
+	TTFTExploration      bool
+	TTFTSampleCount      int
+	TTFTP50Ms            int
+	TTFTP90Ms            int
+	ImageCount           int
+	ImageSize            string
+	ImageInputSize       string
+	ImageOutputSize      string
+	ImageOutputSizes     []string
+	ImageSizeSource      string
+	ImageSizeBreakdown   map[string]int
+	VideoCount           int
+	VideoResolution      string
 	// VideoDurationSeconds 是提交时请求的生成时长（xAI 按输出秒数计费），已归一化到 1-15 秒。
 	VideoDurationSeconds int
 	// WebSearchCalls 是 Codex alpha/search 网页搜索调用次数（每次成功请求为 1）。
@@ -268,6 +278,57 @@ type OpenAIForwardResult struct {
 
 	wsReplayInput       []json.RawMessage
 	wsReplayInputExists bool
+}
+
+const openAIUpstreamTTFTObservationContextKey = "openai_upstream_ttft_observation"
+
+type openAIUpstreamTTFTObservation struct {
+	StartedAt          time.Time
+	FirstSemanticAt    time.Time
+	FirstSemanticEvent string
+}
+
+func setOpenAIUpstreamTTFTStart(c *gin.Context, startedAt time.Time) {
+	if c == nil || startedAt.IsZero() {
+		return
+	}
+	c.Set(openAIUpstreamTTFTObservationContextKey, openAIUpstreamTTFTObservation{StartedAt: startedAt})
+}
+
+func markOpenAIUpstreamSemanticOutput(c *gin.Context, event string) {
+	if c == nil {
+		return
+	}
+	value, exists := c.Get(openAIUpstreamTTFTObservationContextKey)
+	if !exists {
+		return
+	}
+	observation, ok := value.(openAIUpstreamTTFTObservation)
+	if !ok || observation.StartedAt.IsZero() || !observation.FirstSemanticAt.IsZero() {
+		return
+	}
+	observation.FirstSemanticAt = time.Now()
+	observation.FirstSemanticEvent = strings.TrimSpace(event)
+	c.Set(openAIUpstreamTTFTObservationContextKey, observation)
+}
+
+func openAIUpstreamTTFTObservationFromContext(c *gin.Context) (*int, string) {
+	if c == nil {
+		return nil, ""
+	}
+	value, exists := c.Get(openAIUpstreamTTFTObservationContextKey)
+	if !exists {
+		return nil, ""
+	}
+	observation, ok := value.(openAIUpstreamTTFTObservation)
+	if !ok || observation.StartedAt.IsZero() || observation.FirstSemanticAt.IsZero() {
+		return nil, ""
+	}
+	ms := int(observation.FirstSemanticAt.Sub(observation.StartedAt).Milliseconds())
+	if ms < 0 {
+		ms = 0
+	}
+	return &ms, observation.FirstSemanticEvent
 }
 
 // SucceededForScheduling reports whether this result is an upstream success
@@ -386,33 +447,38 @@ var ErrNoAvailableCompactAccounts = errors.New("no available accounts support /r
 
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
-	accountRepo           AccountRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	cache                 GatewayCache
-	cfg                   *config.Config
-	codexDetector         CodexClientRestrictionDetector
-	schedulerSnapshot     *SchedulerSnapshotService
-	concurrencyService    *ConcurrencyService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	userGroupRateResolver *userGroupRateResolver
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	openAITokenProvider   *OpenAITokenProvider
-	grokTokenProvider     *GrokTokenProvider
-	toolCorrector         *CodexToolCorrector
-	openaiWSResolver      OpenAIWSProtocolResolver
-	resolver              *ModelPricingResolver
-	channelService        *ChannelService
-	balanceNotifyService  *BalanceNotifyService
-	settingService        *SettingService
-	userPlatformQuotaRepo UserPlatformQuotaRepository
-	liveAttestation       liveattestation.Provider
-	liveAttestationCipher SecretEncryptor
+	accountRepo                AccountRepository
+	usageLogRepo               UsageLogRepository
+	usageBillingRepo           UsageBillingRepository
+	userRepo                   UserRepository
+	userSubRepo                UserSubscriptionRepository
+	cache                      GatewayCache
+	cfg                        *config.Config
+	openAITTFTWindow           *openAITTFTLocalWindow
+	openAITTFTHydrateOnce      sync.Once
+	openAITTFTSampleWriterOnce sync.Once
+	openAITTFTSampleWriter     *openAITTFTSampleWriter
+	openAITTFTRedisHealthy     atomic.Bool
+	codexDetector              CodexClientRestrictionDetector
+	schedulerSnapshot          *SchedulerSnapshotService
+	concurrencyService         *ConcurrencyService
+	billingService             *BillingService
+	rateLimitService           *RateLimitService
+	billingCacheService        *BillingCacheService
+	userGroupRateResolver      *userGroupRateResolver
+	httpUpstream               HTTPUpstream
+	deferredService            *DeferredService
+	openAITokenProvider        *OpenAITokenProvider
+	grokTokenProvider          *GrokTokenProvider
+	toolCorrector              *CodexToolCorrector
+	openaiWSResolver           OpenAIWSProtocolResolver
+	resolver                   *ModelPricingResolver
+	channelService             *ChannelService
+	balanceNotifyService       *BalanceNotifyService
+	settingService             *SettingService
+	userPlatformQuotaRepo      UserPlatformQuotaRepository
+	liveAttestation            liveattestation.Provider
+	liveAttestationCipher      SecretEncryptor
 
 	openaiWSPoolOnce               sync.Once
 	openaiWSStateStoreOnce         sync.Once
@@ -479,6 +545,7 @@ func NewOpenAIGatewayService(
 		userSubRepo:         userSubRepo,
 		cache:               cache,
 		cfg:                 cfg,
+		openAITTFTWindow:    newOpenAITTFTLocalWindow(),
 		codexDetector:       NewOpenAICodexClientRestrictionDetector(cfg),
 		schedulerSnapshot:   schedulerSnapshot,
 		concurrencyService:  concurrencyService,
