@@ -251,6 +251,17 @@ reload_nginx_or_restore() {
     exit 1
 }
 
+dump_container_diagnostics() {
+    local container="$1"
+
+    printf '[ERROR] Container state: '
+    docker inspect -f '{{json .State}}' "$container" 2>&1 || true
+    printf '[ERROR] Container health log: '
+    docker inspect -f '{{json .State.Health.Log}}' "$container" 2>&1 || true
+    printf '[ERROR] Container logs (tail 200):\n'
+    docker logs --tail=200 "$container" 2>&1 || true
+}
+
 wait_for_container_health() {
     local container="$1"
     local deadline
@@ -263,13 +274,13 @@ wait_for_container_health() {
             return 0
         fi
         if [ "$status" = "exited" ] || [ "$status" = "dead" ]; then
-            docker logs --tail=80 "$container" 2>&1 || true
+            dump_container_diagnostics "$container"
             return 1
         fi
         sleep "$HEALTH_INTERVAL"
     done
 
-    docker logs --tail=80 "$container" 2>&1 || true
+    dump_container_diagnostics "$container"
     return 1
 }
 
