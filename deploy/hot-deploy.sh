@@ -260,6 +260,15 @@ dump_container_diagnostics() {
     docker inspect -f '{{json .State.Health.Log}}' "$container" 2>&1 || true
     printf '[ERROR] Container logs (tail 200):\n'
     docker logs --tail=200 "$container" 2>&1 || true
+    if [ -d "data/logs" ]; then
+        printf '[ERROR] Application log files (tail 200 each):\n'
+        find data/logs -type f -name '*.log' -exec sh -c '
+            for log_file do
+                printf "--- %s ---\n" "$log_file"
+                tail -n 200 "$log_file" || true
+            done
+        ' sh {} + 2>&1 || true
+    fi
 }
 
 wait_for_container_health() {

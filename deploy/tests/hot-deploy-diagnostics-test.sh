@@ -17,5 +17,6 @@ assert_contains() {
 assert_contains 'docker inspect -f '\''{{json .State}}'\'' "$container"'
 assert_contains 'docker inspect -f '\''{{json .State.Health.Log}}'\'' "$container"'
 assert_contains 'docker logs --tail=200 "$container"'
+assert_contains 'find data/logs -type f -name '\''*.log'\'''
 
 printf 'hot deploy diagnostics test passed\n'
