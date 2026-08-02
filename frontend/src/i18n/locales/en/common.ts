@@ -163,6 +163,7 @@ export default {
     affiliateInviteRecords: 'Invite Records',
     affiliateRebateRecords: 'Rebate Records',
     affiliateTransferRecords: 'Transfer Records',
+    affiliateWithdrawalRecords: 'Withdrawal Review',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',

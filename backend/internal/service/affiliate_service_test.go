@@ -82,6 +82,72 @@ func TestValidateExclusiveRate_BoundaryAndInvalid(t *testing.T) {
 	require.Error(t, validateExclusiveRate(&negInf))
 }
 
+func TestAffiliateTransferAmountAcceptsArbitraryPositiveValue(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, isAllowedAffiliateTransferAmount(1.23))
+	require.True(t, isAllowedAffiliateTransferAmount(0.01))
+	require.False(t, isAllowedAffiliateTransferAmount(0))
+	require.False(t, isAllowedAffiliateTransferAmount(-1))
+	require.False(t, isAllowedAffiliateTransferAmount(math.NaN()))
+}
+
+func TestAffiliateWithdrawalAmountRequiresAtLeastOneYuan(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, isAllowedAffiliateWithdrawalAmount(1))
+	require.True(t, isAllowedAffiliateWithdrawalAmount(1.23))
+	require.False(t, isAllowedAffiliateWithdrawalAmount(0.99))
+	require.False(t, isAllowedAffiliateWithdrawalAmount(math.Inf(1)))
+}
+
+func TestAffiliatePaymentMethodOnlyAcceptsWechatOrAlipay(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, isAllowedAffiliatePaymentMethod("wechat"))
+	require.True(t, isAllowedAffiliatePaymentMethod("alipay"))
+	require.False(t, isAllowedAffiliatePaymentMethod("bank"))
+	require.False(t, isAllowedAffiliatePaymentMethod(""))
+}
+
+func TestCreateWithdrawalRequiresExclusiveRateAndPermission(t *testing.T) {
+	t.Parallel()
+
+	rate := 20.0
+	tests := []AffiliateSummary{
+		{UserID: 7, AffQuota: 10, WithdrawalEnabled: true},
+		{UserID: 7, AffQuota: 10, AffRebateRatePercent: &rate, WithdrawalEnabled: false},
+	}
+	for _, summary := range tests {
+		repo := &paymentFulfillmentAffiliateRepoStub{inviteeSummary: &summary}
+		svc := NewAffiliateService(repo, nil, nil, nil)
+		_, err := svc.CreateWithdrawal(context.Background(), 7, AffiliateWithdrawalInput{
+			Amount: 1, PaymentMethod: "wechat", CollectionQRData: "data:image/png;base64,iVBORw0KGgo=",
+		})
+		require.ErrorIs(t, err, ErrAffiliateWithdrawalForbidden)
+		require.Zero(t, repo.withdrawAmount)
+	}
+}
+
+func TestCreateWithdrawalPassesRequestChannelAndQRCode(t *testing.T) {
+	t.Parallel()
+
+	rate := 35.0
+	summary := &AffiliateSummary{
+		UserID: 7, AffQuota: 10, AffRebateRatePercent: &rate, WithdrawalEnabled: true,
+	}
+	repo := &paymentFulfillmentAffiliateRepoStub{inviteeSummary: summary}
+	svc := NewAffiliateService(repo, nil, nil, nil)
+	result, err := svc.CreateWithdrawal(context.Background(), 7, AffiliateWithdrawalInput{
+		Amount: 1, PaymentMethod: " ALIPAY ", CollectionQRData: "data:image/png;base64,iVBORw0KGgo=",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1.0, repo.withdrawAmount)
+	require.Equal(t, "alipay", repo.withdrawMethod)
+	require.Equal(t, "image/png", repo.withdrawQR.MIME)
+	require.Equal(t, "alipay", result.PaymentMethod)
+}
+
 func TestMaskEmail(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "a***@g***.com", maskEmail("alice@gmail.com"))

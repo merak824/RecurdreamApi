@@ -590,17 +590,53 @@ export default {
       rebateRateHint: '被邀请用户每次充值后你可获得的返利比例',
       invitedUsers: '邀请人数',
       availableQuota: '可转返利额度',
-      frozenQuota: '冻结中',
-      frozenQuotaHint: '新产生的返利正在冻结期中',
       totalQuota: '历史返利额度'
     },
     transfer: {
       title: '返利额度转余额',
-      description: '将当前可用返利额度一键转入账户余额',
+      description: '输入金额，将可用返利额度转入站内账户余额',
+      amount: '转入金额',
+      available: '当前可用：{amount}',
       button: '转入余额',
       transferring: '转入中...',
       empty: '当前没有可转入额度',
+      invalidAmount: '请输入不超过可用额度的有效金额',
       success: '已转入余额：{amount}'
+    },
+    withdraw: {
+      title: '提现到收款账户',
+      description: '提现权限由管理员为专属用户单独开启',
+      button: '申请提现',
+      amount: '提现金额',
+      available: '当前可提现：{amount}',
+      minimum: '单笔最低提现金额：{amount}',
+      paymentMethod: '收款方式',
+      paymentMethods: {
+        wechat: '微信',
+        alipay: '支付宝'
+      },
+      collectionQr: '收款码',
+      collectionQrPreview: '收款码预览',
+      imageHint: '支持 PNG、JPEG、WebP，最大 2 MB',
+      invalidImage: '请选择有效的收款码图片',
+      imageTooLarge: '图片不能超过 2 MB',
+      qrRequired: '请上传收款码',
+      invalidAmount: '请输入不低于 1 元且不超过可用额度的金额',
+      submitting: '提交中...',
+      submit: '提交申请',
+      success: '提现申请已提交',
+      failed: '提交提现申请失败',
+      records: '提现记录',
+      empty: '暂无提现记录',
+      status: '状态',
+      proof: '付款凭证',
+      createdAt: '申请时间',
+      note: '备注',
+      statuses: {
+        pending: '待处理',
+        paid: '已支付',
+        rejected: '已驳回'
+      }
     },
     invitees: {
       title: '已邀请用户',
@@ -616,8 +652,7 @@ export default {
       title: '使用说明',
       line1: '将邀请码或邀请链接分享给新用户。',
       line2: '被邀请用户充值后，你可获得 {rate} 的返利额度。',
-      line3: '返利额度可随时转入账户余额。',
-      line4: '新产生的返利需要经过冻结期后才能提现。'
+      line3: '返利额度可随时按任意金额转入账户余额。'
     }
   },
 

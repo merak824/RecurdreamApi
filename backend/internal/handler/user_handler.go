@@ -85,6 +85,7 @@ type UpdateProfileRequest struct {
 
 type CreateAffiliateWithdrawalRequest struct {
 	Amount           float64 `json:"amount" binding:"required"`
+	PaymentMethod    string  `json:"payment_method" binding:"required"`
 	CollectionQRData string  `json:"collection_qr_data" binding:"required"`
 }
 
@@ -249,7 +250,7 @@ func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
 	})
 }
 
-// CreateAffiliateWithdrawal creates an agent affiliate withdrawal request.
+// CreateAffiliateWithdrawal creates an affiliate withdrawal request.
 // POST /api/v1/user/aff/withdrawals
 func (h *UserHandler) CreateAffiliateWithdrawal(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
@@ -266,6 +267,7 @@ func (h *UserHandler) CreateAffiliateWithdrawal(c *gin.Context) {
 
 	withdrawal, err := h.affiliateService.CreateWithdrawal(c.Request.Context(), subject.UserID, service.AffiliateWithdrawalInput{
 		Amount:           req.Amount,
+		PaymentMethod:    req.PaymentMethod,
 		CollectionQRData: req.CollectionQRData,
 	})
 	if err != nil {

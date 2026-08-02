@@ -11,10 +11,10 @@ export interface AffiliateAdminEntry {
   user_id: number
   email: string
   username: string
-  role: string
   aff_code: string
   aff_code_custom: boolean
-  aff_rebate_rate_percent?: number | null
+  aff_rebate_rate_percent: number
+  withdrawal_enabled: boolean
   aff_count: number
 }
 
@@ -87,6 +87,7 @@ export interface AffiliateWithdrawalRecord {
   username?: string
   amount: number
   status: 'pending' | 'paid' | 'rejected' | 'completed' | string
+  payment_method?: 'wechat' | 'alipay' | string
   collection_qr_data?: string
   collection_qr_mime?: string
   collection_qr_size?: number
@@ -118,56 +119,10 @@ export interface AffiliateUserOverview {
   history_quota: number
 }
 
-export interface AffiliateAgentDailyUsage {
-  date: string
-  total_tokens: number
-  request_count: number
-  actual_cost: number
-}
-
-export interface AffiliateAgentInviteeUsage {
-  user_id: number
-  email: string
-  username: string
-  total_tokens: number
-  average_daily_tokens: number
-  request_count: number
-  actual_cost: number
-}
-
-export interface AffiliateAgentUsageSummary {
-  agent_user_id: number
-  week_start: string
-  week_end: string
-  total_tokens: number
-  average_daily_tokens: number
-  request_count: number
-  actual_cost: number
-  invitee_count: number
-  active_invitee_count: number
-  suggested_rebate_rate_percent: number
-  daily: AffiliateAgentDailyUsage[]
-  invitees: AffiliateAgentInviteeUsage[]
-}
-
-export interface GetAffiliateAgentUsageParams {
-  start_at?: string
-  end_at?: string
-  timezone?: string
-}
-
 export interface UpdateAffiliateUserRequest {
   aff_code?: string
-  aff_rebate_rate_percent?: number | null
-  /** Set true to explicitly clear the per-user rate (sets it to NULL). */
-  clear_rebate_rate?: boolean
-}
-
-export interface BatchSetRateRequest {
-  user_ids: number[]
-  aff_rebate_rate_percent?: number | null
-  /** Set true to clear rates instead of setting. */
-  clear?: boolean
+  aff_rebate_rate_percent: number
+  withdrawal_enabled: boolean
 }
 
 export interface MarkWithdrawalPaidRequest {
@@ -226,16 +181,6 @@ export async function clearUserSettings(
 ): Promise<{ user_id: number }> {
   const { data } = await apiClient.delete<{ user_id: number }>(
     `/admin/affiliates/users/${userId}`,
-  )
-  return data
-}
-
-export async function batchSetRate(
-  payload: BatchSetRateRequest,
-): Promise<{ affected: number }> {
-  const { data } = await apiClient.post<{ affected: number }>(
-    '/admin/affiliates/users/batch-rate',
-    payload,
   )
   return data
 }
@@ -324,29 +269,11 @@ export async function getUserOverview(
   return data
 }
 
-export async function getAgentUsage(
-  userId: number,
-  params: GetAffiliateAgentUsageParams = {},
-): Promise<AffiliateAgentUsageSummary> {
-  const { data } = await apiClient.get<AffiliateAgentUsageSummary>(
-    `/admin/affiliates/users/${userId}/usage`,
-    {
-      params: {
-        start_at: params.start_at || undefined,
-        end_at: params.end_at || undefined,
-        timezone: params.timezone || undefined,
-      },
-    },
-  )
-  return data
-}
-
 export const affiliatesAPI = {
   listUsers,
   lookupUsers,
   updateUserSettings,
   clearUserSettings,
-  batchSetRate,
   listInviteRecords,
   listRebateRecords,
   listTransferRecords,
@@ -354,7 +281,6 @@ export const affiliatesAPI = {
   markWithdrawalPaid,
   rejectWithdrawal,
   getUserOverview,
-  getAgentUsage,
 }
 
 export default affiliatesAPI

@@ -13,35 +13,32 @@ import (
 )
 
 var (
-	ErrAffiliateProfileNotFound   = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
-	ErrAffiliateCodeInvalid       = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
-	ErrAffiliateCodeTaken         = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
-	ErrAffiliateAlreadyBound      = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
-	ErrAffiliateQuotaEmpty        = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
-	ErrAffiliateTransferAmount    = infraerrors.BadRequest("AFFILIATE_TRANSFER_AMOUNT_INVALID", "invalid transfer amount")
-	ErrAffiliateQuotaInsufficient = infraerrors.BadRequest("AFFILIATE_QUOTA_INSUFFICIENT", "transfer amount exceeds available affiliate quota")
-	ErrAffiliateAgentOnly         = infraerrors.Forbidden("AFFILIATE_AGENT_ONLY", "agent rebate withdrawal is only available to agent users")
-	ErrAffiliateWithdrawAmount    = infraerrors.BadRequest("AFFILIATE_WITHDRAW_AMOUNT_INVALID", "invalid withdrawal amount")
-	ErrAffiliateWithdrawQuota     = infraerrors.BadRequest("AFFILIATE_WITHDRAW_QUOTA_INSUFFICIENT", "withdrawal amount exceeds available agent rebate")
-	ErrAffiliateWithdrawMissing   = infraerrors.NotFound("AFFILIATE_WITHDRAWAL_NOT_FOUND", "affiliate withdrawal not found")
-	ErrAffiliateWithdrawStatus    = infraerrors.Conflict("AFFILIATE_WITHDRAWAL_STATUS_INVALID", "affiliate withdrawal status invalid")
-	ErrAffiliateImageInvalid      = infraerrors.BadRequest("AFFILIATE_IMAGE_INVALID", "image must be a valid png, jpg or webp data URL")
-	ErrAffiliateImageTooLarge     = infraerrors.BadRequest("AFFILIATE_IMAGE_TOO_LARGE", "image must be 2MB or smaller")
+	ErrAffiliateProfileNotFound       = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
+	ErrAffiliateCodeInvalid           = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
+	ErrAffiliateCodeTaken             = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
+	ErrAffiliateAlreadyBound          = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
+	ErrAffiliateQuotaEmpty            = infraerrors.BadRequest("AFFILIATE_QUOTA_EMPTY", "no affiliate quota available to transfer")
+	ErrAffiliateTransferAmount        = infraerrors.BadRequest("AFFILIATE_TRANSFER_AMOUNT_INVALID", "invalid transfer amount")
+	ErrAffiliateQuotaInsufficient     = infraerrors.BadRequest("AFFILIATE_QUOTA_INSUFFICIENT", "transfer amount exceeds available affiliate quota")
+	ErrAffiliateWithdrawalForbidden   = infraerrors.Forbidden("AFFILIATE_WITHDRAWAL_FORBIDDEN", "affiliate withdrawal is not enabled for this user")
+	ErrAffiliateWithdrawAmount        = infraerrors.BadRequest("AFFILIATE_WITHDRAW_AMOUNT_INVALID", "invalid withdrawal amount")
+	ErrAffiliateWithdrawQuota         = infraerrors.BadRequest("AFFILIATE_WITHDRAW_QUOTA_INSUFFICIENT", "withdrawal amount exceeds available affiliate rebate")
+	ErrAffiliatePaymentMethod         = infraerrors.BadRequest("AFFILIATE_PAYMENT_METHOD_INVALID", "payment method must be wechat or alipay")
+	ErrAffiliateExclusiveRateRequired = infraerrors.BadRequest("AFFILIATE_EXCLUSIVE_RATE_REQUIRED", "exclusive rebate rate is required")
+	ErrAffiliateWithdrawMissing       = infraerrors.NotFound("AFFILIATE_WITHDRAWAL_NOT_FOUND", "affiliate withdrawal not found")
+	ErrAffiliateWithdrawStatus        = infraerrors.Conflict("AFFILIATE_WITHDRAWAL_STATUS_INVALID", "affiliate withdrawal status invalid")
+	ErrAffiliateImageInvalid          = infraerrors.BadRequest("AFFILIATE_IMAGE_INVALID", "image must be a valid png, jpg or webp data URL")
+	ErrAffiliateImageTooLarge         = infraerrors.BadRequest("AFFILIATE_IMAGE_TOO_LARGE", "image must be 2MB or smaller")
 )
 
 const (
-	affiliateInviteesLimit            = 100
-	affiliateImageMaxBytes            = 2 * 1024 * 1024
-	affiliateAgentTier1AvgDailyTokens = 1_000_000_000
-	affiliateAgentTier2AvgDailyTokens = 2_000_000_000
-	affiliateAgentTier3AvgDailyTokens = 3_000_000_000
+	affiliateInviteesLimit     = 100
+	affiliateImageMaxBytes     = 2 * 1024 * 1024
+	affiliateMinimumWithdrawal = 1.0
 	// AffiliateCodeMinLength / AffiliateCodeMaxLength bound both system-generated
 	// 12-char codes and admin-customized codes (e.g. "VIP2026").
 	AffiliateCodeMinLength = 4
 	AffiliateCodeMaxLength = 32
-
-	AffiliateRebateModeUser  = "user"
-	AffiliateRebateModeAgent = "agent"
 
 	AffiliateWithdrawalStatusPending   = "pending"
 	AffiliateWithdrawalStatusPaid      = "paid"
@@ -54,10 +51,6 @@ const (
 	AffiliateWithdrawalDestinationBalance      = "balance"
 	AffiliateWithdrawalDestinationAlipayWechat = "alipay_wechat"
 )
-
-var affiliateActionAllowedAmounts = map[float64]struct{}{
-	5: {}, 10: {}, 20: {}, 50: {}, 100: {}, 200: {}, 500: {}, 1000: {},
-}
 
 // affiliateCodeValidChar accepts uppercase letters, digits, underscore and dash.
 // All input passes through strings.ToUpper before validation, so lowercase from
@@ -94,15 +87,11 @@ type AffiliateSummary struct {
 	AffCode              string    `json:"aff_code"`
 	AffCodeCustom        bool      `json:"aff_code_custom"`
 	AffRebateRatePercent *float64  `json:"aff_rebate_rate_percent,omitempty"`
+	WithdrawalEnabled    bool      `json:"withdrawal_enabled"`
 	InviterID            *int64    `json:"inviter_id,omitempty"`
-	RebateMode           string    `json:"rebate_mode"`
 	AffCount             int       `json:"aff_count"`
 	AffQuota             float64   `json:"aff_quota"`
-	AffFrozenQuota       float64   `json:"aff_frozen_quota"`
 	AffHistoryQuota      float64   `json:"aff_history_quota"`
-	AgentAffQuota        float64   `json:"agent_aff_quota"`
-	AgentAffFrozenQuota  float64   `json:"agent_aff_frozen_quota"`
-	AgentAffHistoryQuota float64   `json:"agent_aff_history_quota"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
@@ -116,24 +105,13 @@ type AffiliateInvitee struct {
 }
 
 type AffiliateDetail struct {
-	UserID                 int64   `json:"user_id"`
-	Role                   string  `json:"role"`
-	CurrentMode            string  `json:"current_mode"`
-	AffCode                string  `json:"aff_code"`
-	InviterID              *int64  `json:"inviter_id,omitempty"`
-	InviteRebateMode       string  `json:"invite_rebate_mode"`
-	AffCount               int     `json:"aff_count"`
-	AffQuota               float64 `json:"aff_quota"`
-	AffFrozenQuota         float64 `json:"aff_frozen_quota"`
-	AffHistoryQuota        float64 `json:"aff_history_quota"`
-	AgentAffQuota          float64 `json:"agent_aff_quota"`
-	AgentAffFrozenQuota    float64 `json:"agent_aff_frozen_quota"`
-	AgentAffHistoryQuota   float64 `json:"agent_aff_history_quota"`
-	CurrentAffQuota        float64 `json:"current_aff_quota"`
-	CurrentAffFrozenQuota  float64 `json:"current_aff_frozen_quota"`
-	CurrentAffHistoryQuota float64 `json:"current_aff_history_quota"`
-	AgentWithdrawPending   float64 `json:"agent_withdraw_pending"`
-	AgentWithdrawPaid      float64 `json:"agent_withdraw_paid"`
+	UserID            int64   `json:"user_id"`
+	AffCode           string  `json:"aff_code"`
+	InviterID         *int64  `json:"inviter_id,omitempty"`
+	AffCount          int     `json:"aff_count"`
+	AffQuota          float64 `json:"aff_quota"`
+	AffHistoryQuota   float64 `json:"aff_history_quota"`
+	WithdrawalEnabled bool    `json:"withdrawal_enabled"`
 	// EffectiveRebateRatePercent 是当前用户作为邀请人时实际生效的返利比例：
 	// 优先用户自己的专属比例（aff_rebate_rate_percent），否则回退到全局比例。
 	// 用于在用户的 /affiliate 页面直观展示「分享后能拿到多少」。
@@ -149,6 +127,7 @@ type AffiliateWithdrawal struct {
 	Username         string     `json:"username,omitempty"`
 	Amount           float64    `json:"amount"`
 	Status           string     `json:"status"`
+	PaymentMethod    string     `json:"payment_method"`
 	CollectionQRData string     `json:"collection_qr_data,omitempty"`
 	CollectionQRMIME string     `json:"collection_qr_mime,omitempty"`
 	CollectionQRSize int        `json:"collection_qr_size,omitempty"`
@@ -172,6 +151,7 @@ type AffiliateWithdrawalRecord struct {
 	Username            string     `json:"username,omitempty"`
 	Amount              float64    `json:"amount"`
 	Status              string     `json:"status"`
+	PaymentMethod       string     `json:"payment_method"`
 	CollectionQRData    string     `json:"collection_qr_data,omitempty"`
 	CollectionQRMIME    string     `json:"collection_qr_mime,omitempty"`
 	CollectionQRSize    int        `json:"collection_qr_size,omitempty"`
@@ -193,11 +173,18 @@ type AffiliateWithdrawalRecord struct {
 
 type AffiliateWithdrawalInput struct {
 	Amount           float64
+	PaymentMethod    string
 	CollectionQRData string
 }
 
 type AffiliateTransferInput struct {
 	Amount float64
+}
+
+type AffiliateExclusiveSettingsInput struct {
+	AffCode           *string
+	RebateRatePercent *float64
+	WithdrawalEnabled bool
 }
 
 type AffiliateWithdrawalAdminActionInput struct {
@@ -216,22 +203,16 @@ type AffiliateImageData struct {
 type AffiliateRepository interface {
 	EnsureUserAffiliate(ctx context.Context, userID int64) (*AffiliateSummary, error)
 	GetAffiliateByCode(ctx context.Context, code string) (*AffiliateSummary, error)
-	GetUserRole(ctx context.Context, userID int64) (string, error)
-	BindInviter(ctx context.Context, userID, inviterID int64, rebateMode string) (bool, error)
-	AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64, rebateMode string) (bool, error)
-	GetAccruedRebateFromInvitee(ctx context.Context, inviterID, inviteeUserID int64, rebateMode string) (float64, error)
-	ThawFrozenQuota(ctx context.Context, userID int64, rebateMode string) (float64, error)
-	TransferQuotaToBalance(ctx context.Context, userID int64, rebateMode string, amount float64) (float64, float64, error)
+	BindInviter(ctx context.Context, userID, inviterID int64) (bool, error)
+	AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, sourceOrderID *int64) (bool, error)
+	TransferQuotaToBalance(ctx context.Context, userID int64, amount float64) (float64, float64, error)
 	ListInvitees(ctx context.Context, inviterID int64, limit int) ([]AffiliateInvitee, error)
-	CreateWithdrawal(ctx context.Context, userID int64, amount float64, collectionQR AffiliateImageData) (*AffiliateWithdrawal, error)
+	CreateWithdrawal(ctx context.Context, userID int64, amount float64, paymentMethod string, collectionQR AffiliateImageData) (*AffiliateWithdrawal, error)
 	ListWithdrawalsByUser(ctx context.Context, userID int64, limit int) ([]AffiliateWithdrawal, error)
 	GetWithdrawalStats(ctx context.Context, userID int64) (pending float64, paid float64, err error)
 
-	// 管理端：用户级专属配置
-	UpdateUserAffCode(ctx context.Context, userID int64, newCode string) error
-	ResetUserAffCode(ctx context.Context, userID int64) (string, error)
-	SetUserRebateRate(ctx context.Context, userID int64, ratePercent *float64) error
-	BatchSetUserRebateRate(ctx context.Context, userIDs []int64, ratePercent *float64) error
+	UpdateExclusiveSettings(ctx context.Context, userID int64, input AffiliateExclusiveSettingsInput) error
+	ClearExclusiveSettings(ctx context.Context, userID int64) (string, error)
 	ListUsersWithCustomSettings(ctx context.Context, filter AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error)
 	ListAffiliateInviteRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateInviteRecord, int64, error)
 	ListAffiliateRebateRecords(ctx context.Context, filter AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error)
@@ -240,7 +221,6 @@ type AffiliateRepository interface {
 	MarkWithdrawalPaid(ctx context.Context, withdrawalID int64, input AffiliateWithdrawalAdminActionInput, proof AffiliateImageData) (*AffiliateWithdrawal, error)
 	RejectWithdrawal(ctx context.Context, withdrawalID int64, input AffiliateWithdrawalAdminActionInput) (*AffiliateWithdrawal, error)
 	GetAffiliateUserOverview(ctx context.Context, userID int64) (*AffiliateUserOverview, error)
-	GetAffiliateAgentUsage(ctx context.Context, agentUserID int64, startAt, endAt time.Time) (*AffiliateAgentUsageSummary, error)
 }
 
 // AffiliateAdminFilter 列表筛选条件
@@ -259,6 +239,7 @@ type AffiliateAdminEntry struct {
 	AffCode              string   `json:"aff_code"`
 	AffCodeCustom        bool     `json:"aff_code_custom"`
 	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent,omitempty"`
+	WithdrawalEnabled    bool     `json:"withdrawal_enabled"`
 	AffCount             int      `json:"aff_count"`
 }
 
@@ -332,38 +313,6 @@ type AffiliateUserOverview struct {
 	HistoryQuota        float64 `json:"history_quota"`
 }
 
-type AffiliateAgentDailyUsage struct {
-	Date         string  `json:"date"`
-	TotalTokens  int64   `json:"total_tokens"`
-	RequestCount int64   `json:"request_count"`
-	ActualCost   float64 `json:"actual_cost"`
-}
-
-type AffiliateAgentInviteeUsage struct {
-	UserID             int64   `json:"user_id"`
-	Email              string  `json:"email"`
-	Username           string  `json:"username"`
-	TotalTokens        int64   `json:"total_tokens"`
-	AverageDailyTokens float64 `json:"average_daily_tokens"`
-	RequestCount       int64   `json:"request_count"`
-	ActualCost         float64 `json:"actual_cost"`
-}
-
-type AffiliateAgentUsageSummary struct {
-	AgentUserID                int64                        `json:"agent_user_id"`
-	WeekStart                  time.Time                    `json:"week_start"`
-	WeekEnd                    time.Time                    `json:"week_end"`
-	TotalTokens                int64                        `json:"total_tokens"`
-	AverageDailyTokens         float64                      `json:"average_daily_tokens"`
-	RequestCount               int64                        `json:"request_count"`
-	ActualCost                 float64                      `json:"actual_cost"`
-	InviteeCount               int                          `json:"invitee_count"`
-	ActiveInviteeCount         int                          `json:"active_invitee_count"`
-	SuggestedRebateRatePercent float64                      `json:"suggested_rebate_rate_percent"`
-	Daily                      []AffiliateAgentDailyUsage   `json:"daily"`
-	Invitees                   []AffiliateAgentInviteeUsage `json:"invitees"`
-}
-
 type AffiliateService struct {
 	repo                 AffiliateRepository
 	settingService       *SettingService
@@ -399,67 +348,29 @@ func (s *AffiliateService) EnsureUserAffiliate(ctx context.Context, userID int64
 }
 
 func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64) (*AffiliateDetail, error) {
-	// Lazy thaw: move any matured frozen quota to available before reading.
-	if s != nil && s.repo != nil {
-		// best-effort: thaw failure is non-fatal
-		_, _ = s.repo.ThawFrozenQuota(ctx, userID, AffiliateRebateModeUser)
-		_, _ = s.repo.ThawFrozenQuota(ctx, userID, AffiliateRebateModeAgent)
-	}
-
 	summary, err := s.EnsureUserAffiliate(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-	role, err := s.repo.GetUserRole(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	currentMode := affiliateModeForRole(role)
-	currentQuota := summary.AffQuota
-	currentFrozen := summary.AffFrozenQuota
-	currentHistory := summary.AffHistoryQuota
-	if currentMode == AffiliateRebateModeAgent {
-		currentQuota = summary.AgentAffQuota
-		currentFrozen = summary.AgentAffFrozenQuota
-		currentHistory = summary.AgentAffHistoryQuota
 	}
 	invitees, err := s.listInvitees(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	var withdrawals []AffiliateWithdrawal
-	var pending, paid float64
-	if currentMode == AffiliateRebateModeAgent {
+	withdrawals := []AffiliateWithdrawal{}
+	if summary.WithdrawalEnabled {
 		withdrawals, err = s.repo.ListWithdrawalsByUser(ctx, userID, 50)
 		if err != nil {
 			return nil, err
 		}
-		pending, paid, err = s.repo.GetWithdrawalStats(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		withdrawals = []AffiliateWithdrawal{}
 	}
 	return &AffiliateDetail{
 		UserID:                     summary.UserID,
-		Role:                       role,
-		CurrentMode:                currentMode,
 		AffCode:                    summary.AffCode,
 		InviterID:                  summary.InviterID,
-		InviteRebateMode:           normalizeAffiliateRebateMode(summary.RebateMode),
 		AffCount:                   summary.AffCount,
 		AffQuota:                   summary.AffQuota,
-		AffFrozenQuota:             summary.AffFrozenQuota,
 		AffHistoryQuota:            summary.AffHistoryQuota,
-		AgentAffQuota:              summary.AgentAffQuota,
-		AgentAffFrozenQuota:        summary.AgentAffFrozenQuota,
-		AgentAffHistoryQuota:       summary.AgentAffHistoryQuota,
-		CurrentAffQuota:            currentQuota,
-		CurrentAffFrozenQuota:      currentFrozen,
-		CurrentAffHistoryQuota:     currentHistory,
-		AgentWithdrawPending:       pending,
-		AgentWithdrawPaid:          paid,
+		WithdrawalEnabled:          summary.WithdrawalEnabled,
 		EffectiveRebateRatePercent: s.resolveRebateRatePercent(ctx, summary),
 		Invitees:                   invitees,
 		Withdrawals:                withdrawals,
@@ -501,12 +412,7 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 		return ErrAffiliateCodeInvalid
 	}
 
-	inviterRole, err := s.repo.GetUserRole(ctx, inviterSummary.UserID)
-	if err != nil {
-		return err
-	}
-	rebateMode := affiliateModeForRole(inviterRole)
-	bound, err := s.repo.BindInviter(ctx, userID, inviterSummary.UserID, rebateMode)
+	bound, err := s.repo.BindInviter(ctx, userID, inviterSummary.UserID)
 	if err != nil {
 		return err
 	}
@@ -540,20 +446,12 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 		return 0, nil
 	}
 
-	rebateMode := normalizeAffiliateRebateMode(inviteeSummary.RebateMode)
 	// 加载邀请人 profile，优先使用专属比例（覆盖全局）
 	inviterSummary, err := s.repo.EnsureUserAffiliate(ctx, *inviteeSummary.InviterID)
 	if err != nil {
 		return 0, err
 	}
 	// 有效期检查：超过返利有效期后不再产生返利
-	if s.settingService != nil {
-		if durationDays := s.settingService.GetAffiliateRebateDurationDays(ctx); durationDays > 0 {
-			if time.Now().After(inviteeSummary.CreatedAt.AddDate(0, 0, durationDays)) {
-				return 0, nil
-			}
-		}
-	}
 
 	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary)
 	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100), 8)
@@ -562,27 +460,7 @@ func (s *AffiliateService) AccrueInviteRebateForOrder(ctx context.Context, invit
 	}
 
 	// 单人上限检查：精确截断到剩余额度
-	if s.settingService != nil {
-		if perInviteeCap := s.settingService.GetAffiliateRebatePerInviteeCap(ctx); perInviteeCap > 0 {
-			existing, err := s.repo.GetAccruedRebateFromInvitee(ctx, *inviteeSummary.InviterID, inviteeUserID, rebateMode)
-			if err != nil {
-				return 0, err
-			}
-			if existing >= perInviteeCap {
-				return 0, nil
-			}
-			if remaining := perInviteeCap - existing; rebate > remaining {
-				rebate = roundTo(remaining, 8)
-			}
-		}
-	}
-
-	var freezeHours int
-	if s.settingService != nil {
-		freezeHours = s.settingService.GetAffiliateRebateFreezeHours(ctx)
-	}
-
-	applied, err := s.repo.AccrueQuota(ctx, *inviteeSummary.InviterID, inviteeUserID, rebate, freezeHours, sourceOrderID, rebateMode)
+	applied, err := s.repo.AccrueQuota(ctx, *inviteeSummary.InviterID, inviteeUserID, rebate, sourceOrderID)
 	if err != nil {
 		return 0, err
 	}
@@ -619,15 +497,11 @@ func (s *AffiliateService) TransferAffiliateQuota(ctx context.Context, userID in
 		return 0, 0, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
 	amount := roundTo(input.Amount, 8)
-	if !isAllowedAffiliateActionAmount(amount) {
+	if !isAllowedAffiliateTransferAmount(amount) {
 		return 0, 0, ErrAffiliateTransferAmount
 	}
 
-	role, err := s.repo.GetUserRole(ctx, userID)
-	if err != nil {
-		return 0, 0, err
-	}
-	transferred, balance, err := s.repo.TransferQuotaToBalance(ctx, userID, affiliateModeForRole(role), amount)
+	transferred, balance, err := s.repo.TransferQuotaToBalance(ctx, userID, amount)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -641,23 +515,26 @@ func (s *AffiliateService) CreateWithdrawal(ctx context.Context, userID int64, i
 	if s == nil || s.repo == nil {
 		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
-	role, err := s.repo.GetUserRole(ctx, userID)
+	summary, err := s.repo.EnsureUserAffiliate(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if role != RoleAgent {
-		return nil, ErrAffiliateAgentOnly
+	if summary.AffRebateRatePercent == nil || !summary.WithdrawalEnabled {
+		return nil, ErrAffiliateWithdrawalForbidden
 	}
 	amount := roundTo(input.Amount, 8)
-	if !isAllowedAffiliateActionAmount(amount) {
+	if !isAllowedAffiliateWithdrawalAmount(amount) {
 		return nil, ErrAffiliateWithdrawAmount
+	}
+	paymentMethod := strings.ToLower(strings.TrimSpace(input.PaymentMethod))
+	if !isAllowedAffiliatePaymentMethod(paymentMethod) {
+		return nil, ErrAffiliatePaymentMethod
 	}
 	qr, err := parseAffiliateImageDataURL(input.CollectionQRData, true)
 	if err != nil {
 		return nil, err
 	}
-	_, _ = s.repo.ThawFrozenQuota(ctx, userID, AffiliateRebateModeAgent)
-	withdrawal, err := s.repo.CreateWithdrawal(ctx, userID, amount, qr)
+	withdrawal, err := s.repo.CreateWithdrawal(ctx, userID, amount, paymentMethod, qr)
 	if err != nil {
 		return nil, err
 	}
@@ -716,26 +593,27 @@ func roundTo(v float64, scale int) float64 {
 	return math.Round(v*factor) / factor
 }
 
-func affiliateModeForRole(role string) string {
-	if strings.EqualFold(strings.TrimSpace(role), RoleAgent) {
-		return AffiliateRebateModeAgent
-	}
-	return AffiliateRebateModeUser
-}
-
-func normalizeAffiliateRebateMode(mode string) string {
-	if strings.EqualFold(strings.TrimSpace(mode), AffiliateRebateModeAgent) {
-		return AffiliateRebateModeAgent
-	}
-	return AffiliateRebateModeUser
-}
-
-func isAllowedAffiliateActionAmount(amount float64) bool {
+func isAllowedAffiliateTransferAmount(amount float64) bool {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return false
 	}
-	_, ok := affiliateActionAllowedAmounts[roundTo(amount, 8)]
-	return ok
+	return amount > 0
+}
+
+func isAllowedAffiliateWithdrawalAmount(amount float64) bool {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return false
+	}
+	return amount >= affiliateMinimumWithdrawal
+}
+
+func isAllowedAffiliatePaymentMethod(paymentMethod string) bool {
+	switch strings.ToLower(strings.TrimSpace(paymentMethod)) {
+	case "wechat", "alipay":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseAffiliateImageDataURL(raw string, required bool) (AffiliateImageData, error) {
@@ -849,55 +727,37 @@ func validateExclusiveRate(ratePercent *float64) error {
 	return nil
 }
 
-// AdminUpdateUserAffCode 管理员改写用户的邀请码（专属邀请码）。
-func (s *AffiliateService) AdminUpdateUserAffCode(ctx context.Context, userID int64, rawCode string) error {
+func (s *AffiliateService) AdminUpdateExclusiveSettings(ctx context.Context, userID int64, input AffiliateExclusiveSettingsInput) error {
 	if s == nil || s.repo == nil {
 		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
-	code := strings.ToUpper(strings.TrimSpace(rawCode))
-	if !isValidAffiliateCodeFormat(code) {
-		return ErrAffiliateCodeInvalid
+	if userID <= 0 {
+		return infraerrors.BadRequest("INVALID_USER", "invalid user")
 	}
-	return s.repo.UpdateUserAffCode(ctx, userID, code)
+	if input.RebateRatePercent == nil {
+		return ErrAffiliateExclusiveRateRequired
+	}
+	if err := validateExclusiveRate(input.RebateRatePercent); err != nil {
+		return err
+	}
+	if input.AffCode != nil {
+		code := strings.ToUpper(strings.TrimSpace(*input.AffCode))
+		if code != "" && !isValidAffiliateCodeFormat(code) {
+			return ErrAffiliateCodeInvalid
+		}
+		input.AffCode = &code
+	}
+	return s.repo.UpdateExclusiveSettings(ctx, userID, input)
 }
 
-// AdminResetUserAffCode 重置用户邀请码为系统随机码。
-func (s *AffiliateService) AdminResetUserAffCode(ctx context.Context, userID int64) (string, error) {
+func (s *AffiliateService) AdminClearExclusiveSettings(ctx context.Context, userID int64) (string, error) {
 	if s == nil || s.repo == nil {
 		return "", infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
 	}
-	return s.repo.ResetUserAffCode(ctx, userID)
-}
-
-// AdminSetUserRebateRate 设置/清除用户专属返利比例。ratePercent==nil 表示清除。
-func (s *AffiliateService) AdminSetUserRebateRate(ctx context.Context, userID int64, ratePercent *float64) error {
-	if s == nil || s.repo == nil {
-		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	if userID <= 0 {
+		return "", infraerrors.BadRequest("INVALID_USER", "invalid user")
 	}
-	if err := validateExclusiveRate(ratePercent); err != nil {
-		return err
-	}
-	return s.repo.SetUserRebateRate(ctx, userID, ratePercent)
-}
-
-// AdminBatchSetUserRebateRate 批量设置/清除用户专属返利比例。
-func (s *AffiliateService) AdminBatchSetUserRebateRate(ctx context.Context, userIDs []int64, ratePercent *float64) error {
-	if s == nil || s.repo == nil {
-		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
-	}
-	if err := validateExclusiveRate(ratePercent); err != nil {
-		return err
-	}
-	cleaned := make([]int64, 0, len(userIDs))
-	for _, uid := range userIDs {
-		if uid > 0 {
-			cleaned = append(cleaned, uid)
-		}
-	}
-	if len(cleaned) == 0 {
-		return nil
-	}
-	return s.repo.BatchSetUserRebateRate(ctx, cleaned, ratePercent)
+	return s.repo.ClearExclusiveSettings(ctx, userID)
 }
 
 // AdminListCustomUsers 列出有专属配置的用户。
@@ -954,46 +814,6 @@ func (s *AffiliateService) AdminGetUserOverview(ctx context.Context, userID int6
 		overview.RebateRatePercent = clampAffiliateRebateRate(overview.RebateRatePercent)
 	}
 	return overview, nil
-}
-
-func (s *AffiliateService) AdminGetAgentUsage(ctx context.Context, userID int64, startAt, endAt time.Time) (*AffiliateAgentUsageSummary, error) {
-	if userID <= 0 {
-		return nil, infraerrors.BadRequest("INVALID_USER", "invalid user")
-	}
-	if s == nil || s.repo == nil {
-		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
-	}
-	if !endAt.After(startAt) {
-		endAt = startAt.AddDate(0, 0, 7)
-	}
-	role, err := s.repo.GetUserRole(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if !strings.EqualFold(strings.TrimSpace(role), RoleAgent) {
-		return nil, ErrAffiliateAgentOnly
-	}
-	summary, err := s.repo.GetAffiliateAgentUsage(ctx, userID, startAt, endAt)
-	if err != nil {
-		return nil, err
-	}
-	if summary != nil {
-		summary.SuggestedRebateRatePercent = suggestAffiliateAgentRebateRate(summary.AverageDailyTokens)
-	}
-	return summary, nil
-}
-
-func suggestAffiliateAgentRebateRate(avgDailyTokens float64) float64 {
-	switch {
-	case avgDailyTokens > affiliateAgentTier3AvgDailyTokens:
-		return 40
-	case avgDailyTokens > affiliateAgentTier2AvgDailyTokens:
-		return 30
-	case avgDailyTokens > affiliateAgentTier1AvgDailyTokens:
-		return 20
-	default:
-		return 0
-	}
 }
 
 func normalizeAffiliateRecordFilter(filter AffiliateRecordFilter) AffiliateRecordFilter {

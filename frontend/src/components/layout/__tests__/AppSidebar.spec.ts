@@ -77,11 +77,17 @@ describe('AppSidebar header styles', () => {
 })
 
 describe('AppSidebar red packet reminder', () => {
+  it('disables the browser-local reminder for administrator sessions', () => {
+    expect(componentSource).toContain(
+      "const redPacketReminderUserId = computed(() => authStore.isAdmin ? null : authStore.user?.id)"
+    )
+  })
+
   it('connects browser-local unread state to the user-facing red packet item', () => {
     expect(componentSource).toContain("import { useRedPacketReminder } from '@/composables/useRedPacketReminder'")
     expect(componentSource).toContain('unread?: boolean')
     expect(componentSource).toContain('const { hasUnread: hasUnreadRedPacket } = useRedPacketReminder(')
-    expect(componentSource).toContain('computed(() => authStore.user?.id)')
+    expect(componentSource).toContain('redPacketReminderUserId')
     expect(componentSource).toContain('computed(() => route.path)')
     expect(componentSource).toContain("path: '/red-packets'")
     expect(componentSource).toContain('unread: hasUnreadRedPacket.value')

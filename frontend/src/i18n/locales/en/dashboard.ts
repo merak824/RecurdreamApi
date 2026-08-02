@@ -585,17 +585,53 @@ export default {
       rebateRateHint: 'What you earn each time an invitee recharges',
       invitedUsers: 'Invited Users',
       availableQuota: 'Available Rebate Quota',
-      frozenQuota: 'Frozen',
-      frozenQuotaHint: 'Recently earned rebates pending release',
       totalQuota: 'Historical Rebate Quota'
     },
     transfer: {
       title: 'Transfer Rebate Quota',
-      description: 'Move available rebate quota into your account balance',
+      description: 'Enter an amount to move available rebate quota into your account balance',
+      amount: 'Transfer Amount',
+      available: 'Available: {amount}',
       button: 'Transfer to Balance',
       transferring: 'Transferring...',
       empty: 'No available rebate quota',
+      invalidAmount: 'Enter a valid amount that does not exceed the available quota',
       success: '{amount} has been transferred to your balance'
+    },
+    withdraw: {
+      title: 'Withdraw to Payment Account',
+      description: 'Withdrawal access is enabled individually for exclusive users',
+      button: 'Request Withdrawal',
+      amount: 'Withdrawal Amount',
+      available: 'Available to withdraw: {amount}',
+      minimum: 'Minimum withdrawal: {amount}',
+      paymentMethod: 'Payment Method',
+      paymentMethods: {
+        wechat: 'WeChat',
+        alipay: 'Alipay'
+      },
+      collectionQr: 'Collection QR Code',
+      collectionQrPreview: 'Collection QR code preview',
+      imageHint: 'PNG, JPEG, or WebP, up to 2 MB',
+      invalidImage: 'Select a valid collection QR image',
+      imageTooLarge: 'The image must not exceed 2 MB',
+      qrRequired: 'Upload a collection QR code',
+      invalidAmount: 'Enter at least 1 and no more than the available quota',
+      submitting: 'Submitting...',
+      submit: 'Submit Request',
+      success: 'Withdrawal request submitted',
+      failed: 'Failed to submit withdrawal request',
+      records: 'Withdrawal Records',
+      empty: 'No withdrawal records yet',
+      status: 'Status',
+      proof: 'Payment Proof',
+      createdAt: 'Requested At',
+      note: 'Note',
+      statuses: {
+        pending: 'Pending',
+        paid: 'Paid',
+        rejected: 'Rejected'
+      }
     },
     invitees: {
       title: 'Invited Users',
@@ -611,8 +647,7 @@ export default {
       title: 'How It Works',
       line1: 'Share your affiliate code or invite link with new users.',
       line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
-      line3: 'Transfer rebate quota to balance at any time.',
-      line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
+      line3: 'Transfer any amount of rebate quota to balance at any time.'
     }
   },
 

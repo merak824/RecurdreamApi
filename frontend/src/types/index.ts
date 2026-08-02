@@ -137,25 +137,13 @@ export interface AffiliateInvitee {
 
 export interface UserAffiliateDetail {
   user_id: number
-  role: 'admin' | 'user' | 'agent' | string
-  current_mode: 'user' | 'agent'
   aff_code: string
   inviter_id?: number | null
-  invite_rebate_mode?: 'user' | 'agent' | string
   aff_count: number
   aff_quota: number
-  aff_frozen_quota: number
   aff_history_quota: number
-  agent_aff_quota: number
-  agent_aff_frozen_quota: number
-  agent_aff_history_quota: number
-  current_aff_quota: number
-  current_aff_frozen_quota: number
-  current_aff_history_quota: number
-  agent_withdraw_pending: number
-  agent_withdraw_paid: number
-  /** 当前用户作为邀请人时实际生效的返利比例（专属覆盖全局）。0-100。 */
   effective_rebate_rate_percent: number
+  withdrawal_enabled: boolean
   invitees: AffiliateInvitee[]
   withdrawals: AffiliateWithdrawal[]
 }
@@ -166,6 +154,7 @@ export interface AffiliateWithdrawal {
   user_email?: string
   username?: string
   amount: number
+  payment_method?: 'wechat' | 'alipay' | string
   status: 'pending' | 'paid' | 'rejected' | string
   collection_qr_data?: string
   collection_qr_mime?: string
@@ -183,6 +172,7 @@ export interface AffiliateWithdrawal {
 
 export interface AffiliateWithdrawalRequest {
   amount: number
+  payment_method: 'wechat' | 'alipay'
   collection_qr_data: string
 }
 

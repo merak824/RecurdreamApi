@@ -49,14 +49,10 @@ func (h *AffiliateHandler) ListUsers(c *gin.Context) {
 
 // UpdateUserSettings updates a user's affiliate settings.
 // PUT /api/v1/admin/affiliates/users/:user_id
-//
-// Both fields are optional and applied independently.
 type UpdateAffiliateUserRequest struct {
 	AffCode              *string  `json:"aff_code"`
-	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent"`
-	// ClearRebateRate explicitly clears the per-user rate (sets it to NULL).
-	// Used to disambiguate from "field not provided".
-	ClearRebateRate bool `json:"clear_rebate_rate"`
+	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent" binding:"required"`
+	WithdrawalEnabled    bool     `json:"withdrawal_enabled"`
 }
 
 func (h *AffiliateHandler) UpdateUserSettings(c *gin.Context) {
@@ -72,23 +68,13 @@ func (h *AffiliateHandler) UpdateUserSettings(c *gin.Context) {
 		return
 	}
 
-	if req.AffCode != nil {
-		if err := h.affiliateService.AdminUpdateUserAffCode(c.Request.Context(), userID, *req.AffCode); err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-	}
-
-	if req.ClearRebateRate {
-		if err := h.affiliateService.AdminSetUserRebateRate(c.Request.Context(), userID, nil); err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-	} else if req.AffRebateRatePercent != nil {
-		if err := h.affiliateService.AdminSetUserRebateRate(c.Request.Context(), userID, req.AffRebateRatePercent); err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
+	if err := h.affiliateService.AdminUpdateExclusiveSettings(c.Request.Context(), userID, service.AffiliateExclusiveSettingsInput{
+		AffCode:           req.AffCode,
+		RebateRatePercent: req.AffRebateRatePercent,
+		WithdrawalEnabled: req.WithdrawalEnabled,
+	}); err != nil {
+		response.ErrorFrom(c, err)
+		return
 	}
 
 	response.Success(c, gin.H{"user_id": userID})
@@ -98,8 +84,6 @@ func (h *AffiliateHandler) UpdateUserSettings(c *gin.Context) {
 // the exclusive rebate rate AND regenerates the invite code as a new system
 // random one. Conceptually this "removes the user from the custom list".
 //
-// Both writes happen in this handler; failure of one leaves the other applied,
-// but the operation is idempotent so the admin can re-run it safely.
 // DELETE /api/v1/admin/affiliates/users/:user_id
 func (h *AffiliateHandler) ClearUserSettings(c *gin.Context) {
 	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
@@ -107,55 +91,11 @@ func (h *AffiliateHandler) ClearUserSettings(c *gin.Context) {
 		response.BadRequest(c, "Invalid user_id")
 		return
 	}
-	if err := h.affiliateService.AdminSetUserRebateRate(c.Request.Context(), userID, nil); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	if _, err := h.affiliateService.AdminResetUserAffCode(c.Request.Context(), userID); err != nil {
+	if _, err := h.affiliateService.AdminClearExclusiveSettings(c.Request.Context(), userID); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 	response.Success(c, gin.H{"user_id": userID})
-}
-
-// BatchSetRate applies the same rebate rate (or clears it) to multiple users.
-//
-// Protocol: pass `clear: true` to clear rates (aff_rebate_rate_percent is
-// ignored). Otherwise aff_rebate_rate_percent is required and applied to
-// every user_id. The explicit `clear` flag exists because Go's JSON unmarshal
-// can't distinguish a missing field from `null`, and a silent clear from a
-// frontend that forgot to include the rate would be a footgun.
-//
-// POST /api/v1/admin/affiliates/users/batch-rate
-type BatchSetRateRequest struct {
-	UserIDs              []int64  `json:"user_ids" binding:"required"`
-	AffRebateRatePercent *float64 `json:"aff_rebate_rate_percent"`
-	Clear                bool     `json:"clear"`
-}
-
-func (h *AffiliateHandler) BatchSetRate(c *gin.Context) {
-	var req BatchSetRateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-	if len(req.UserIDs) == 0 {
-		response.BadRequest(c, "user_ids cannot be empty")
-		return
-	}
-	if !req.Clear && req.AffRebateRatePercent == nil {
-		response.BadRequest(c, "aff_rebate_rate_percent is required unless clear=true")
-		return
-	}
-	rate := req.AffRebateRatePercent
-	if req.Clear {
-		rate = nil
-	}
-	if err := h.affiliateService.AdminBatchSetUserRebateRate(c.Request.Context(), req.UserIDs, rate); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, gin.H{"affected": len(req.UserIDs)})
 }
 
 // AffiliateUserSummary is the minimal user shape returned by LookupUsers,
@@ -202,23 +142,6 @@ func (h *AffiliateHandler) GetUserOverview(c *gin.Context) {
 	response.Success(c, overview)
 }
 
-// GetAgentUsage returns the previous complete week's invited-user usage for one agent.
-// GET /api/v1/admin/affiliates/users/:user_id/usage
-func (h *AffiliateHandler) GetAgentUsage(c *gin.Context) {
-	userID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
-	if err != nil || userID <= 0 {
-		response.BadRequest(c, "Invalid user_id")
-		return
-	}
-	startAt, endAt := parseAffiliateAgentUsageWindow(c)
-	summary, err := h.affiliateService.AdminGetAgentUsage(c.Request.Context(), userID, startAt, endAt)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, summary)
-}
-
 // ListInviteRecords returns all inviter-invitee relationships.
 // GET /api/v1/admin/affiliates/invites
 func (h *AffiliateHandler) ListInviteRecords(c *gin.Context) {
@@ -258,7 +181,7 @@ func (h *AffiliateHandler) ListTransferRecords(c *gin.Context) {
 	response.Paginated(c, items, total, filter.Page, filter.PageSize)
 }
 
-// ListWithdrawalRecords returns agent affiliate withdrawal requests and records.
+// ListWithdrawalRecords returns affiliate withdrawal requests and records.
 // GET /api/v1/admin/affiliates/withdrawals
 func (h *AffiliateHandler) ListWithdrawalRecords(c *gin.Context) {
 	page, pageSize := response.ParsePagination(c)
@@ -276,7 +199,7 @@ type AffiliateWithdrawalPaidRequest struct {
 	AdminNote        string `json:"admin_note"`
 }
 
-// MarkWithdrawalPaid marks a pending agent withdrawal as paid.
+// MarkWithdrawalPaid marks a pending affiliate withdrawal as paid.
 // POST /api/v1/admin/affiliates/withdrawals/:id/paid
 func (h *AffiliateHandler) MarkWithdrawalPaid(c *gin.Context) {
 	withdrawalID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -307,7 +230,7 @@ type AffiliateWithdrawalRejectRequest struct {
 	AdminNote    string `json:"admin_note"`
 }
 
-// RejectWithdrawal rejects a pending agent withdrawal and returns its quota.
+// RejectWithdrawal rejects a pending affiliate withdrawal and returns its quota.
 // POST /api/v1/admin/affiliates/withdrawals/:id/reject
 func (h *AffiliateHandler) RejectWithdrawal(c *gin.Context) {
 	withdrawalID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -354,36 +277,6 @@ func parseAffiliateRecordFilter(c *gin.Context, page, pageSize int) service.Affi
 	return filter
 }
 
-func parseAffiliateAgentUsageWindow(c *gin.Context) (time.Time, time.Time) {
-	userTZ := c.Query("timezone")
-	startRaw := strings.TrimSpace(c.Query("start_at"))
-	endRaw := strings.TrimSpace(c.Query("end_at"))
-
-	if start := parseAffiliateRecordStartTime(startRaw, userTZ); start != nil {
-		if end := parseAffiliateUsageEndTime(endRaw, userTZ); end != nil && end.After(*start) {
-			return *start, *end
-		}
-		return *start, start.AddDate(0, 0, 7)
-	}
-	if end := parseAffiliateUsageEndTime(endRaw, userTZ); end != nil {
-		return end.AddDate(0, 0, -7), *end
-	}
-
-	now := timezone.NowInUserLocation(userTZ)
-	weekStart := startOfWeekInSameLocation(now)
-	return weekStart.AddDate(0, 0, -7), weekStart
-}
-
-func startOfWeekInSameLocation(t time.Time) time.Time {
-	loc := t.Location()
-	t = t.In(loc)
-	weekday := int(t.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	return time.Date(t.Year(), t.Month(), t.Day()-weekday+1, 0, 0, 0, 0, loc)
-}
-
 func parseAffiliateRecordStartTime(raw string, userTZ string) *time.Time {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -394,21 +287,6 @@ func parseAffiliateRecordStartTime(raw string, userTZ string) *time.Time {
 	}
 	if parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ); err == nil {
 		return &parsed
-	}
-	return nil
-}
-
-func parseAffiliateUsageEndTime(raw string, userTZ string) *time.Time {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
-		return &parsed
-	}
-	if parsed, err := timezone.ParseInUserLocation("2006-01-02", raw, userTZ); err == nil {
-		end := parsed.AddDate(0, 0, 1)
-		return &end
 	}
 	return nil
 }

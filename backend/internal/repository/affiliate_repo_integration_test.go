@@ -62,7 +62,7 @@ INSERT INTO user_affiliates (user_id, aff_code, aff_quota, aff_history_quota, cr
 VALUES ($1, $2, $3, $3, NOW(), NOW())`, u.ID, affCode, 12.34)
 	require.NoError(t, err)
 
-	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, service.AffiliateRebateModeUser, 10)
+	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, 10)
 	require.NoError(t, err)
 	require.InDelta(t, 10.0, transferred, 1e-9)
 	require.InDelta(t, 15.5, balance, 1e-9)
@@ -141,11 +141,18 @@ func TestAffiliateRepository_AccrueQuota_ReusesOuterTransaction(t *testing.T) {
 	_, err = repo.EnsureUserAffiliate(txCtx, invitee.ID)
 	require.NoError(t, err)
 
-	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID, service.AffiliateRebateModeUser)
+	bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
 	require.NoError(t, err)
 	require.True(t, bound, "invitee must bind to inviter")
 
-	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, 0, nil, service.AffiliateRebateModeUser)
+	lotteryPoints := querySingleInt(t, txCtx, client,
+		"SELECT lottery_points FROM user_affiliates WHERE user_id = $1", inviter.ID)
+	require.Equal(t, 1, lotteryPoints)
+	grantCount := querySingleInt(t, txCtx, client,
+		"SELECT COUNT(*) FROM invite_lottery_point_ledger WHERE invitee_user_id = $1 AND action = 'invite_grant'", invitee.ID)
+	require.Equal(t, 1, grantCount)
+
+	applied, err := repo.AccrueQuota(txCtx, inviter.ID, invitee.ID, 3.5, nil)
 	require.NoError(t, err)
 	require.True(t, applied, "AccrueQuota must report applied=true")
 
@@ -193,7 +200,7 @@ INSERT INTO user_affiliates (user_id, aff_code, aff_quota, aff_history_quota, cr
 VALUES ($1, $2, 0, 0, NOW(), NOW())`, u.ID, affCode)
 	require.NoError(t, err)
 
-	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, service.AffiliateRebateModeUser, 5)
+	transferred, balance, err := repo.TransferQuotaToBalance(txCtx, u.ID, 5)
 	require.ErrorIs(t, err, service.ErrAffiliateQuotaEmpty)
 	require.InDelta(t, 0.0, transferred, 1e-9)
 	require.InDelta(t, 0.0, balance, 1e-9)
@@ -201,157 +208,6 @@ VALUES ($1, $2, 0, 0, NOW(), NOW())`, u.ID, affCode)
 	persistedBalance := querySingleFloat(t, txCtx, client,
 		"SELECT balance::double precision FROM users WHERE id = $1", u.ID)
 	require.InDelta(t, 3.21, persistedBalance, 1e-9)
-}
-
-// TestAffiliateRepository_AdminCustomCode covers the success path of admin
-// invite-code rewrite + reset within a shared test transaction:
-// - UpdateUserAffCode replaces aff_code, sets aff_code_custom=true, lookup works
-// - the old code can no longer be found
-// - ResetUserAffCode reverts aff_code_custom and assigns a new system-format code
-//
-// The conflict path (duplicate code → ErrAffiliateCodeTaken) lives in its own
-// test because a unique-violation aborts the surrounding Postgres tx, which
-// would poison subsequent assertions in the same transaction.
-func TestAffiliateRepository_AdminCustomCode(t *testing.T) {
-	ctx := context.Background()
-	tx := testEntTx(t)
-	txCtx := dbent.NewTxContext(ctx, tx)
-	client := tx.Client()
-
-	repo := NewAffiliateRepository(client, integrationDB)
-
-	u := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("affiliate-custom-%d@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-		Role:         service.RoleUser,
-		Status:       service.StatusActive,
-	})
-
-	original, err := repo.EnsureUserAffiliate(txCtx, u.ID)
-	require.NoError(t, err)
-	require.False(t, original.AffCodeCustom, "system-generated codes start as non-custom")
-	originalCode := original.AffCode
-
-	// Rewrite to a custom code
-	customCode := fmt.Sprintf("VIP%09d", time.Now().UnixNano()%1_000_000_000)
-	require.NoError(t, repo.UpdateUserAffCode(txCtx, u.ID, customCode))
-
-	updated, err := repo.EnsureUserAffiliate(txCtx, u.ID)
-	require.NoError(t, err)
-	require.Equal(t, customCode, updated.AffCode)
-	require.True(t, updated.AffCodeCustom)
-
-	// Lookup by new custom code finds the user
-	byCode, err := repo.GetAffiliateByCode(txCtx, customCode)
-	require.NoError(t, err)
-	require.Equal(t, u.ID, byCode.UserID)
-
-	// Old system code should no longer match
-	_, err = repo.GetAffiliateByCode(txCtx, originalCode)
-	require.ErrorIs(t, err, service.ErrAffiliateProfileNotFound)
-
-	// Reset back to a fresh system code, clears custom flag
-	newSysCode, err := repo.ResetUserAffCode(txCtx, u.ID)
-	require.NoError(t, err)
-	require.NotEqual(t, customCode, newSysCode)
-
-	reset, err := repo.EnsureUserAffiliate(txCtx, u.ID)
-	require.NoError(t, err)
-	require.Equal(t, newSysCode, reset.AffCode)
-	require.False(t, reset.AffCodeCustom)
-
-	// The old custom code is now free again
-	_, err = repo.GetAffiliateByCode(txCtx, customCode)
-	require.ErrorIs(t, err, service.ErrAffiliateProfileNotFound)
-}
-
-// TestAffiliateRepository_AdminCustomCode_Conflict isolates the unique-violation
-// path. PostgreSQL aborts the enclosing tx when a unique constraint fires, so
-// this test must be the only assertion and run in its own tx — production
-// callers each have their own outer tx, so this matches real behavior.
-func TestAffiliateRepository_AdminCustomCode_Conflict(t *testing.T) {
-	ctx := context.Background()
-	tx := testEntTx(t)
-	txCtx := dbent.NewTxContext(ctx, tx)
-	client := tx.Client()
-
-	repo := NewAffiliateRepository(client, integrationDB)
-
-	taker := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("affiliate-conflict-taker-%d@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-		Role:         service.RoleUser, Status: service.StatusActive,
-	})
-	requester := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("affiliate-conflict-req-%d@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-		Role:         service.RoleUser, Status: service.StatusActive,
-	})
-
-	takenCode := fmt.Sprintf("HOT%09d", time.Now().UnixNano()%1_000_000_000)
-	require.NoError(t, repo.UpdateUserAffCode(txCtx, taker.ID, takenCode))
-
-	// Now requester tries to grab the same code → conflict.
-	err := repo.UpdateUserAffCode(txCtx, requester.ID, takenCode)
-	require.ErrorIs(t, err, service.ErrAffiliateCodeTaken)
-}
-
-// TestAffiliateRepository_AdminRebateRate covers per-user exclusive rate
-// set/clear and the Batch variant including NULL semantics.
-func TestAffiliateRepository_AdminRebateRate(t *testing.T) {
-	ctx := context.Background()
-	tx := testEntTx(t)
-	txCtx := dbent.NewTxContext(ctx, tx)
-	client := tx.Client()
-
-	repo := NewAffiliateRepository(client, integrationDB)
-
-	u1 := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("affiliate-rate-%d-a@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-		Role:         service.RoleUser,
-		Status:       service.StatusActive,
-	})
-	u2 := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("affiliate-rate-%d-b@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-		Role:         service.RoleUser,
-		Status:       service.StatusActive,
-	})
-
-	// Set exclusive rate for u1
-	rate := 42.5
-	require.NoError(t, repo.SetUserRebateRate(txCtx, u1.ID, &rate))
-
-	got, err := repo.EnsureUserAffiliate(txCtx, u1.ID)
-	require.NoError(t, err)
-	require.NotNil(t, got.AffRebateRatePercent)
-	require.InDelta(t, 42.5, *got.AffRebateRatePercent, 1e-9)
-
-	// Clear exclusive rate
-	require.NoError(t, repo.SetUserRebateRate(txCtx, u1.ID, nil))
-	cleared, err := repo.EnsureUserAffiliate(txCtx, u1.ID)
-	require.NoError(t, err)
-	require.Nil(t, cleared.AffRebateRatePercent)
-
-	// Batch set both users
-	batchRate := 15.0
-	require.NoError(t, repo.BatchSetUserRebateRate(txCtx, []int64{u1.ID, u2.ID}, &batchRate))
-
-	for _, uid := range []int64{u1.ID, u2.ID} {
-		v, err := repo.EnsureUserAffiliate(txCtx, uid)
-		require.NoError(t, err)
-		require.NotNil(t, v.AffRebateRatePercent)
-		require.InDelta(t, 15.0, *v.AffRebateRatePercent, 1e-9)
-	}
-
-	// Batch clear
-	require.NoError(t, repo.BatchSetUserRebateRate(txCtx, []int64{u1.ID, u2.ID}, nil))
-	for _, uid := range []int64{u1.ID, u2.ID} {
-		v, err := repo.EnsureUserAffiliate(txCtx, uid)
-		require.NoError(t, err)
-		require.Nil(t, v.AffRebateRatePercent)
-	}
 }
 
 // TestAffiliateRepository_ListUsersWithCustomSettings verifies the admin list
@@ -373,13 +229,34 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 	_, err := repo.EnsureUserAffiliate(txCtx, uPlain.ID)
 	require.NoError(t, err)
 
-	// User with a custom code — should appear.
+	// Legacy user with a custom code but no exclusive rate must remain visible
+	// so an administrator can explicitly configure a rate or clear the code.
+	uCodeOnly := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-codeonly-legacy-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	codeOnly := fmt.Sprintf("LEGACY%06d", time.Now().UnixNano()%1_000_000)
+	_, err = client.ExecContext(txCtx, `
+INSERT INTO user_affiliates (
+    user_id, aff_code, aff_code_custom, aff_rebate_rate_percent,
+    withdrawal_enabled, created_at, updated_at
+)
+VALUES ($1, $2, TRUE, NULL, FALSE, NOW(), NOW())`, uCodeOnly.ID, codeOnly)
+	require.NoError(t, err)
+
+	// User with a custom code and required exclusive rate - should appear.
 	uCode := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("affiliate-codeonly-%d@example.com", time.Now().UnixNano()),
 		PasswordHash: "hash",
 		Role:         service.RoleUser, Status: service.StatusActive,
 	})
-	require.NoError(t, repo.UpdateUserAffCode(txCtx, uCode.ID, fmt.Sprintf("VIP%09d", time.Now().UnixNano()%1_000_000_000)))
+	customCode := fmt.Sprintf("VIP%09d", time.Now().UnixNano()%1_000_000_000)
+	customRate := 15.0
+	require.NoError(t, repo.UpdateExclusiveSettings(txCtx, uCode.ID, service.AffiliateExclusiveSettingsInput{
+		AffCode: &customCode, RebateRatePercent: &customRate,
+	}))
 
 	// User with only an exclusive rate — should appear.
 	uRate := mustCreateUser(t, client, &service.User{
@@ -388,7 +265,9 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 		Role:         service.RoleUser, Status: service.StatusActive,
 	})
 	r := 33.3
-	require.NoError(t, repo.SetUserRebateRate(txCtx, uRate.ID, &r))
+	require.NoError(t, repo.UpdateExclusiveSettings(txCtx, uRate.ID, service.AffiliateExclusiveSettingsInput{
+		RebateRatePercent: &r,
+	}))
 
 	entries, total, err := repo.ListUsersWithCustomSettings(txCtx, service.AffiliateAdminFilter{
 		Page: 1, PageSize: 100,
@@ -404,10 +283,16 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 
 	require.NotContains(t, byUserID, uPlain.ID, "users without overrides must not appear")
 
+	codeOnlyEntry, ok := byUserID[uCodeOnly.ID]
+	require.True(t, ok, "legacy custom-code user missing from list")
+	require.True(t, codeOnlyEntry.AffCodeCustom)
+	require.Nil(t, codeOnlyEntry.AffRebateRatePercent)
+
 	codeEntry, ok := byUserID[uCode.ID]
 	require.True(t, ok, "custom-code user missing from list")
 	require.True(t, codeEntry.AffCodeCustom)
-	require.Nil(t, codeEntry.AffRebateRatePercent)
+	require.NotNil(t, codeEntry.AffRebateRatePercent)
+	require.InDelta(t, 15.0, *codeEntry.AffRebateRatePercent, 1e-9)
 
 	rateEntry, ok := byUserID[uRate.ID]
 	require.True(t, ok, "custom-rate user missing from list")
@@ -415,5 +300,175 @@ func TestAffiliateRepository_ListUsersWithCustomSettings(t *testing.T) {
 	require.NotNil(t, rateEntry.AffRebateRatePercent)
 	require.InDelta(t, 33.3, *rateEntry.AffRebateRatePercent, 1e-9)
 
-	require.GreaterOrEqual(t, total, int64(2), "total must include at least our 2 custom rows")
+	require.GreaterOrEqual(t, total, int64(3), "total must include at least our 3 custom rows")
+}
+
+func TestAffiliateRepository_UpdateExclusiveSettings_RollsBackAllFieldsOnCodeConflict(t *testing.T) {
+	ctx := context.Background()
+	repo := NewAffiliateRepository(integrationEntClient, integrationDB)
+
+	taker := mustCreateUser(t, integrationEntClient, &service.User{
+		Email:        fmt.Sprintf("affiliate-exclusive-taker-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	target := mustCreateUser(t, integrationEntClient, &service.User{
+		Email:        fmt.Sprintf("affiliate-exclusive-target-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	t.Cleanup(func() {
+		_, _ = integrationEntClient.ExecContext(context.Background(),
+			"DELETE FROM users WHERE id IN ($1, $2)", taker.ID, target.ID)
+	})
+
+	takenCode := fmt.Sprintf("TAKEN%07d", time.Now().UnixNano()%10_000_000)
+	takerRate := 10.0
+	require.NoError(t, repo.UpdateExclusiveSettings(ctx, taker.ID, service.AffiliateExclusiveSettingsInput{
+		AffCode:           &takenCode,
+		RebateRatePercent: &takerRate,
+	}))
+
+	originalCode := fmt.Sprintf("ORIG%08d", time.Now().UnixNano()%100_000_000)
+	originalRate := 25.0
+	require.NoError(t, repo.UpdateExclusiveSettings(ctx, target.ID, service.AffiliateExclusiveSettingsInput{
+		AffCode:           &originalCode,
+		RebateRatePercent: &originalRate,
+		WithdrawalEnabled: false,
+	}))
+
+	replacementRate := 60.0
+	err := repo.UpdateExclusiveSettings(ctx, target.ID, service.AffiliateExclusiveSettingsInput{
+		AffCode:           &takenCode,
+		RebateRatePercent: &replacementRate,
+		WithdrawalEnabled: true,
+	})
+	require.ErrorIs(t, err, service.ErrAffiliateCodeTaken)
+
+	actual, err := repo.EnsureUserAffiliate(ctx, target.ID)
+	require.NoError(t, err)
+	require.Equal(t, originalCode, actual.AffCode)
+	require.True(t, actual.AffCodeCustom)
+	require.NotNil(t, actual.AffRebateRatePercent)
+	require.InDelta(t, originalRate, *actual.AffRebateRatePercent, 1e-9)
+	require.False(t, actual.WithdrawalEnabled)
+}
+
+func TestAffiliateRepository_ClearExclusiveSettings_ResetsCodeRateAndWithdrawalPermission(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-exclusive-clear-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	customCode := fmt.Sprintf("CLEAR%07d", time.Now().UnixNano()%10_000_000)
+	rate := 32.5
+	require.NoError(t, repo.UpdateExclusiveSettings(txCtx, u.ID, service.AffiliateExclusiveSettingsInput{
+		AffCode:           &customCode,
+		RebateRatePercent: &rate,
+		WithdrawalEnabled: true,
+	}))
+
+	newCode, err := repo.ClearExclusiveSettings(txCtx, u.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, newCode)
+	require.NotEqual(t, customCode, newCode)
+
+	actual, err := repo.EnsureUserAffiliate(txCtx, u.ID)
+	require.NoError(t, err)
+	require.Equal(t, newCode, actual.AffCode)
+	require.False(t, actual.AffCodeCustom)
+	require.Nil(t, actual.AffRebateRatePercent)
+	require.False(t, actual.WithdrawalEnabled)
+}
+
+func TestAffiliateRepository_CreateWithdrawalEnforcesPermissionInsideTransaction(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-withdraw-disabled-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	code := fmt.Sprintf("NOWD%08d", time.Now().UnixNano()%100_000_000)
+	_, err := client.ExecContext(txCtx, `
+INSERT INTO user_affiliates (
+    user_id, aff_code, aff_rebate_rate_percent, withdrawal_enabled,
+    aff_quota, aff_history_quota, created_at, updated_at
+)
+VALUES ($1, $2, 30, FALSE, 10, 10, NOW(), NOW())`, u.ID, code)
+	require.NoError(t, err)
+
+	_, err = repo.CreateWithdrawal(txCtx, u.ID, 4, "wechat", service.AffiliateImageData{
+		DataURL: "data:image/png;base64,iVBORw0KGgo=",
+		MIME:    "image/png",
+		Size:    8,
+	})
+	require.ErrorIs(t, err, service.ErrAffiliateWithdrawalForbidden)
+	require.InDelta(t, 10.0, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.Equal(t, 0, querySingleInt(t, txCtx, client,
+		"SELECT COUNT(*) FROM user_affiliate_withdrawals WHERE user_id = $1", u.ID))
+}
+
+func TestAffiliateRepository_RejectWithdrawal_ReturnsUnifiedQuotaOnce(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	u := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-withdraw-reject-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+	})
+	affCode := fmt.Sprintf("WD%010d", time.Now().UnixNano()%10_000_000_000)
+	_, err := client.ExecContext(txCtx, `
+INSERT INTO user_affiliates (
+    user_id, aff_code, aff_rebate_rate_percent, withdrawal_enabled,
+    aff_quota, aff_history_quota, created_at, updated_at
+)
+VALUES ($1, $2, 30, TRUE, 10, 10, NOW(), NOW())`, u.ID, affCode)
+	require.NoError(t, err)
+
+	withdrawal, err := repo.CreateWithdrawal(txCtx, u.ID, 4, "wechat", service.AffiliateImageData{
+		DataURL: "data:image/png;base64,iVBORw0KGgo=",
+		MIME:    "image/png",
+		Size:    8,
+	})
+	require.NoError(t, err)
+	require.InDelta(t, 6.0, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+
+	rejected, err := repo.RejectWithdrawal(txCtx, withdrawal.ID, service.AffiliateWithdrawalAdminActionInput{
+		RejectReason: "invalid collection code",
+	})
+	require.NoError(t, err)
+	require.Equal(t, service.AffiliateWithdrawalStatusRejected, rejected.Status)
+	require.InDelta(t, 10.0, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.InDelta(t, 0.0, querySingleFloat(t, txCtx, client,
+		"SELECT agent_aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+
+	_, err = repo.RejectWithdrawal(txCtx, withdrawal.ID, service.AffiliateWithdrawalAdminActionInput{})
+	require.ErrorIs(t, err, service.ErrAffiliateWithdrawStatus)
+	require.InDelta(t, 10.0, querySingleFloat(t, txCtx, client,
+		"SELECT aff_quota::double precision FROM user_affiliates WHERE user_id = $1", u.ID), 1e-9)
+	require.Equal(t, 1, querySingleInt(t, txCtx, client,
+		"SELECT COUNT(*) FROM user_affiliate_ledger WHERE user_id = $1 AND action = 'withdraw_reject'", u.ID))
 }

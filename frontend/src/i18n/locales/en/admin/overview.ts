@@ -387,6 +387,7 @@ export default {
       invitesDescription: 'View site-wide inviter and invitee relationships',
       rebatesDescription: 'View recharge orders that generated affiliate rebates',
       transfersDescription: 'View affiliate quota transfers into account balance',
+      withdrawalsDescription: 'Review WeChat or Alipay withdrawals submitted by exclusive users',
       errors: {
         loadFailed: 'Failed to load affiliate records'
       },
@@ -398,6 +399,38 @@ export default {
         inviter: 'Inviter',
         invitee: 'Invitee',
         user: 'User',
+        amount: 'Amount',
+        paymentMethod: 'Payment Method',
+        destination: 'Destination',
+        status: 'Status',
+        collectionQr: 'Collection QR',
+        paymentProof: 'Payment Proof',
+        createdAt: 'Requested At',
+        processedAt: 'Processed At',
+        note: 'Note',
+        actions: 'Actions',
+        markPaid: 'Mark Paid',
+        reject: 'Reject',
+        uploadProof: 'Upload Payment Proof',
+        imageHint: 'PNG, JPEG, or WebP, up to 2 MB',
+        adminNote: 'Admin Note',
+        rejectReason: 'Reject Reason',
+        paidSuccess: 'Withdrawal marked as paid',
+        rejectSuccess: 'Withdrawal rejected and the amount returned to rebate quota',
+        paymentMethods: {
+          wechat: 'WeChat',
+          alipay: 'Alipay'
+        },
+        destinations: {
+          balance: 'Account Balance',
+          alipay_wechat: 'WeChat / Alipay'
+        },
+        statuses: {
+          pending: 'Pending',
+          paid: 'Paid',
+          rejected: 'Rejected',
+          completed: 'Completed'
+        },
         affCode: 'Invite Code',
         order: 'Order',
         totalRebate: 'Total Rebate',

@@ -289,6 +289,7 @@ import {
 } from '@/api/channelMonitor'
 import { DEFAULT_SITE_LOGO, resolveSiteLogo, resolveSiteName } from '@/config/branding'
 import { useAppStore, useAuthStore } from '@/stores'
+import { summarizeChannelStatus } from '@/utils/channelStatusSummary'
 import { sanitizeUrl } from '@/utils/url'
 
 const authStore = useAuthStore()
@@ -337,16 +338,7 @@ const channelStatusSummary = computed<{ label: string; tone: ChannelStatusTone }
   if (channelMonitors.value.length === 0) {
     return { label: '暂无监控', tone: 'neutral' }
   }
-  if (channelMonitors.value.some(item => item.primary_status === 'failed' || item.primary_status === 'error')) {
-    return { label: '部分异常', tone: 'failed' }
-  }
-  if (channelMonitors.value.some(item => item.primary_status === 'degraded')) {
-    return { label: '性能波动', tone: 'degraded' }
-  }
-  if (channelMonitors.value.some(item => !item.primary_status)) {
-    return { label: '部分待检测', tone: 'neutral' }
-  }
-  return { label: '服务正常', tone: 'operational' }
+  return summarizeChannelStatus(channelMonitors.value.map(item => item.primary_status))
 })
 
 const launchedAt = new Date('2025-12-18T02:26:18Z').getTime()

@@ -37,6 +37,9 @@
           <template #cell-amount="{ row }">
             <span class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(row.amount) }}</span>
           </template>
+          <template #cell-payment_method="{ row }">
+            <span class="badge badge-gray">{{ paymentMethodLabel(row.payment_method) }}</span>
+          </template>
           <template #cell-destination="{ row }">
             <span :class="destinationClass(row.destination)">{{ destinationLabel(row.destination) }}</span>
           </template>
@@ -169,6 +172,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const columns: Column[] = [
   { key: 'user', label: t('admin.affiliates.records.user'), sortable: true },
   { key: 'amount', label: t('admin.affiliates.records.amount'), sortable: true },
+  { key: 'payment_method', label: t('admin.affiliates.records.paymentMethod') },
   { key: 'destination', label: t('admin.affiliates.records.destination'), sortable: true },
   { key: 'status', label: t('admin.affiliates.records.status'), sortable: true },
   { key: 'collection_qr', label: t('admin.affiliates.records.collectionQr') },
@@ -253,6 +257,10 @@ function destinationLabel(destination: string): string {
   return t(`admin.affiliates.records.destinations.${destination}`, destination)
 }
 
+function paymentMethodLabel(method?: string): string {
+  return method ? t(`admin.affiliates.records.paymentMethods.${method}`, method) : '-'
+}
+
 function destinationClass(destination: string): string {
   const base = 'badge '
   return destination === 'balance' ? base + 'badge-primary' : base + 'badge-warning'
@@ -286,11 +294,15 @@ function openRejectDialog(row: AffiliateWithdrawalRecord) {
   rejectDialog.value = true
 }
 
-function closeActionDialog() {
-  if (submitting.value) return
+function resetActionDialogs() {
   paidDialog.value = false
   rejectDialog.value = false
   selected.value = null
+}
+
+function closeActionDialog() {
+  if (submitting.value) return
+  resetActionDialogs()
 }
 
 async function readImageFile(file: File): Promise<string> {
@@ -329,7 +341,7 @@ async function submitPaid(): Promise<void> {
       admin_note: paidForm.adminNote,
     })
     appStore.showSuccess(t('admin.affiliates.records.paidSuccess'))
-    closeActionDialog()
+    resetActionDialogs()
     await loadRecords()
   } catch (error) {
     appStore.showError(extractI18nErrorMessage(error, t, 'admin.affiliates.errors', t('common.error')))
@@ -347,7 +359,7 @@ async function submitReject(): Promise<void> {
       admin_note: rejectForm.adminNote,
     })
     appStore.showSuccess(t('admin.affiliates.records.rejectSuccess'))
-    closeActionDialog()
+    resetActionDialogs()
     await loadRecords()
   } catch (error) {
     appStore.showError(extractI18nErrorMessage(error, t, 'admin.affiliates.errors', t('common.error')))

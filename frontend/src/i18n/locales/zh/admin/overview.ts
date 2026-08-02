@@ -387,6 +387,7 @@ export default {
       invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
       rebatesDescription: '查看每一笔产生返利的充值订单',
       transfersDescription: '查看返利额度转入账户余额的提取流水',
+      withdrawalsDescription: '审核专属用户提交的微信或支付宝提现申请',
       errors: {
         loadFailed: '加载邀请返利记录失败'
       },
@@ -398,6 +399,38 @@ export default {
         inviter: '邀请人',
         invitee: '被邀请人',
         user: '用户',
+        amount: '金额',
+        paymentMethod: '收款方式',
+        destination: '去向',
+        status: '状态',
+        collectionQr: '收款码',
+        paymentProof: '付款凭证',
+        createdAt: '申请时间',
+        processedAt: '处理时间',
+        note: '备注',
+        actions: '操作',
+        markPaid: '标记已支付',
+        reject: '驳回',
+        uploadProof: '上传付款凭证',
+        imageHint: '支持 PNG、JPEG、WebP，最大 2 MB',
+        adminNote: '管理员备注',
+        rejectReason: '驳回原因',
+        paidSuccess: '提现申请已标记为已支付',
+        rejectSuccess: '提现申请已驳回，金额已退回返利余额',
+        paymentMethods: {
+          wechat: '微信',
+          alipay: '支付宝'
+        },
+        destinations: {
+          balance: '站内余额',
+          alipay_wechat: '微信/支付宝'
+        },
+        statuses: {
+          pending: '待处理',
+          paid: '已支付',
+          rejected: '已驳回',
+          completed: '已完成'
+        },
         affCode: '邀请码',
         order: '订单',
         totalRebate: '累计返利',

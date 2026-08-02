@@ -32,6 +32,10 @@ const {
   adminSettingsFetch,
   showError,
   showSuccess,
+  listAffiliateUsers,
+  lookupAffiliateUsers,
+  updateAffiliateUserSettings,
+  clearAffiliateUserSettings,
 } = vi.hoisted(() => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -73,6 +77,10 @@ const {
   adminSettingsFetch: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
+  listAffiliateUsers: vi.fn(),
+  lookupAffiliateUsers: vi.fn(),
+  updateAffiliateUserSettings: vi.fn(),
+  clearAffiliateUserSettings: vi.fn(),
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
@@ -114,6 +122,16 @@ vi.mock("@/api", () => ({
     },
   },
 }));
+
+vi.mock("@/api/admin/affiliates", () => {
+  const affiliatesAPI = {
+    listUsers: listAffiliateUsers,
+    lookupUsers: lookupAffiliateUsers,
+    updateUserSettings: updateAffiliateUserSettings,
+    clearUserSettings: clearAffiliateUserSettings,
+  };
+  return { affiliatesAPI, default: affiliatesAPI };
+});
 
 vi.mock("@/stores", () => ({
   useAppStore: () => ({
@@ -586,6 +604,16 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
   await flushPromises();
 }
 
+async function openFeaturesTab(wrapper: ReturnType<typeof mountView>) {
+  const featuresTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.features"));
+
+  expect(featuresTabButton).toBeDefined();
+  await featuresTabButton?.trigger("click");
+  await flushPromises();
+}
+
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
     getSettings.mockReset();
@@ -613,6 +641,10 @@ describe("admin SettingsView payment visible method controls", () => {
     adminSettingsFetch.mockReset();
     showError.mockReset();
     showSuccess.mockReset();
+    listAffiliateUsers.mockReset();
+    lookupAffiliateUsers.mockReset();
+    updateAffiliateUserSettings.mockReset();
+    clearAffiliateUserSettings.mockReset();
     localeRef.value = "zh-CN";
 
     getSettings.mockResolvedValue({ ...baseSettingsResponse });
@@ -678,6 +710,10 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+    listAffiliateUsers.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+    lookupAffiliateUsers.mockResolvedValue([]);
+    updateAffiliateUserSettings.mockResolvedValue({ user_id: 7 });
+    clearAffiliateUserSettings.mockResolvedValue({ user_id: 7 });
   });
 
   it("renders panel rate limit card and saves settings", async () => {
@@ -873,25 +909,50 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
   });
 
-  it("submits the admin recharge affiliate rebate setting", async () => {
+  it("shows only current affiliate settings and submits exclusive user settings atomically", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
       affiliate_enabled: true,
-      affiliate_admin_recharge_enabled: true,
+      affiliate_rebate_rate: 12,
+    });
+    listAffiliateUsers.mockResolvedValueOnce({
+      items: [{
+        user_id: 7,
+        email: "exclusive@example.com",
+        username: "exclusive",
+        aff_code: "OLDVIP",
+        aff_code_custom: true,
+        aff_rebate_rate_percent: 20,
+        withdrawal_enabled: false,
+        aff_count: 3,
+      }],
+      total: 1,
+      page: 1,
+      page_size: 20,
     });
 
     const wrapper = mountView();
 
     await flushPromises();
-    await wrapper.find("form").trigger("submit.prevent");
+    await openFeaturesTab(wrapper);
+
+    expect(wrapper.text()).not.toContain("admin.settings.features.affiliate.adminRechargeRebate");
+    expect(wrapper.text()).not.toContain("admin.settings.features.affiliate.freezeHours");
+    expect(wrapper.text()).not.toContain("admin.settings.features.affiliate.durationDays");
+    expect(wrapper.text()).not.toContain("admin.settings.features.affiliate.perInviteeCap");
+
+    await wrapper.get('[data-testid="affiliate-edit-7"]').trigger("click");
+    await wrapper.get('input[name="affiliate-code"]').setValue("dreamvip");
+    await wrapper.get('input[name="affiliate-rate"]').setValue("32");
+    await wrapper.get('input[name="affiliate-withdrawal-enabled"]').setValue(true);
+    await wrapper.get('[data-testid="affiliate-save"]').trigger("click");
     await flushPromises();
 
-    expect(updateSettings).toHaveBeenCalledTimes(1);
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        affiliate_admin_recharge_enabled: true,
-      }),
-    );
+    expect(updateAffiliateUserSettings).toHaveBeenCalledWith(7, {
+      aff_code: "DREAMVIP",
+      aff_rebate_rate_percent: 32,
+      withdrawal_enabled: true,
+    });
   });
 
   it("submits Anthropic cache TTL injection gateway setting", async () => {

@@ -334,9 +334,10 @@ const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
+const redPacketReminderUserId = computed(() => authStore.isAdmin ? null : authStore.user?.id)
 const adminSettingsStore = useAdminSettingsStore()
 const { hasUnread: hasUnreadRedPacket } = useRedPacketReminder(
-  computed(() => authStore.user?.id),
+  redPacketReminderUserId,
   computed(() => route.path)
 )
 
@@ -920,6 +921,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/affiliates/invites', label: t('nav.affiliateInviteRecords'), icon: UsersIcon },
         { path: '/admin/affiliates/rebates', label: t('nav.affiliateRebateRecords'), icon: OrderIcon },
         { path: '/admin/affiliates/transfers', label: t('nav.affiliateTransferRecords'), icon: CreditCardIcon },
+        { path: '/admin/affiliates/withdrawals', label: t('nav.affiliateWithdrawalRecords'), icon: CreditCardIcon },
       ],
     },
     {
