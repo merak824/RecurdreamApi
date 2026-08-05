@@ -25,6 +25,29 @@ export interface RedeemHistoryItem {
   }
 }
 
+export type BalanceHistoryType =
+  | 'balance'
+  | 'admin_balance'
+  | 'affiliate_balance'
+  | 'red_packet_reward'
+
+export interface BalanceHistoryItem {
+  id: string
+  type: BalanceHistoryType
+  amount: number
+  occurred_at: string
+  reference: string
+  description: string
+}
+
+export interface BalanceHistoryResponse {
+  items: BalanceHistoryItem[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
 /**
  * Redeem a code
  * @param code - Redeem code string
@@ -59,9 +82,25 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
   return data
 }
 
+export async function getBalanceHistory(
+  page = 1,
+  pageSize = 20,
+  type?: BalanceHistoryType
+): Promise<BalanceHistoryResponse> {
+  const { data } = await apiClient.get<BalanceHistoryResponse>('/balance-history', {
+    params: {
+      page,
+      page_size: pageSize,
+      ...(type ? { type } : {})
+    }
+  })
+  return data
+}
+
 export const redeemAPI = {
   redeem,
-  getHistory
+  getHistory,
+  getBalanceHistory
 }
 
 export default redeemAPI

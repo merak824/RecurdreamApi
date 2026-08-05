@@ -1,13 +1,73 @@
 <template>
   <AppLayout>
-    <div class="space-y-4">
+    <div class="mb-4 border-b border-gray-200 dark:border-dark-700">
+      <div
+        role="tablist"
+        :aria-label="t('payment.orders.title')"
+        class="flex min-h-11 items-end gap-1 overflow-x-auto"
+      >
+        <button
+          ref="ordersTab"
+          id="orders-tab"
+          type="button"
+          role="tab"
+          :aria-selected="activeSection === 'orders'"
+          aria-controls="orders-panel"
+          :tabindex="activeSection === 'orders' ? 0 : -1"
+          :class="[
+            'min-h-11 shrink-0 border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-900',
+            activeSection === 'orders'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-gray-400 dark:hover:border-dark-500 dark:hover:text-gray-200'
+          ]"
+          @click="activeSection = 'orders'"
+          @keydown="handleTabKeydown"
+        >
+          {{ t('payment.orders.orderTab') }}
+        </button>
+        <button
+          ref="balanceHistoryTab"
+          id="balance-history-tab"
+          type="button"
+          role="tab"
+          :aria-selected="activeSection === 'balance'"
+          aria-controls="balance-history-panel"
+          :tabindex="activeSection === 'balance' ? 0 : -1"
+          :class="[
+            'min-h-11 shrink-0 border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-900',
+            activeSection === 'balance'
+              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-gray-400 dark:hover:border-dark-500 dark:hover:text-gray-200'
+          ]"
+          @click="activeSection = 'balance'"
+          @keydown="handleTabKeydown"
+        >
+          {{ t('payment.orders.balanceHistoryTab') }}
+        </button>
+      </div>
+    </div>
+
+    <div
+      v-if="activeSection === 'orders'"
+      id="orders-panel"
+      role="tabpanel"
+      aria-labelledby="orders-tab"
+      class="space-y-4"
+    >
       <!-- Filters -->
       <div class="card p-4">
         <div class="flex flex-wrap items-center gap-3">
           <Select v-model="currentFilter" :options="statusFilters" class="w-36" @change="fetchOrders" />
           <div class="flex flex-1 items-center justify-end gap-2">
-            <button @click="fetchOrders" :disabled="loading" class="btn btn-secondary" :title="t('common.refresh')">
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            <button
+              type="button"
+              class="btn btn-secondary h-11 w-11 p-0"
+              :disabled="loading"
+              :aria-label="t('common.refresh')"
+              :title="t('common.refresh')"
+              @click="fetchOrders"
+            >
+              <Icon name="refresh" size="md" :class="loading ? 'animate-spin motion-reduce:animate-none' : ''" />
             </button>
             <button class="btn btn-primary" @click="router.push('/purchase')">{{ t('payment.result.backToRecharge') }}</button>
           </div>
@@ -40,6 +100,13 @@
         @update:pageSize="handlePageSizeChange"
       />
     </div>
+
+    <UserBalanceHistoryPanel
+      v-else
+      id="balance-history-panel"
+      role="tabpanel"
+      aria-labelledby="balance-history-tab"
+    />
 
     <!-- Cancel Confirm Dialog -->
     <BaseDialog :show="!!cancelTargetId" :title="t('payment.orders.cancel')" width="narrow" @close="cancelTargetId = null">
@@ -81,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores'
@@ -94,10 +161,14 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import OrderTable from '@/components/payment/OrderTable.vue'
+import UserBalanceHistoryPanel from '@/components/payment/UserBalanceHistoryPanel.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const activeSection = ref<'orders' | 'balance'>('orders')
+const ordersTab = ref<HTMLButtonElement | null>(null)
+const balanceHistoryTab = ref<HTMLButtonElement | null>(null)
 
 const loading = ref(false)
 const actionLoading = ref(false)
@@ -116,6 +187,27 @@ const statusFilters = computed(() => [
   { value: 'FAILED', label: t('payment.status.failed') },
   { value: 'REFUNDED', label: t('payment.status.refunded') },
 ])
+
+function handleTabKeydown(event: KeyboardEvent) {
+  let nextSection: 'orders' | 'balance' | null = null
+  if (event.key === 'ArrowRight') {
+    nextSection = activeSection.value === 'orders' ? 'balance' : 'orders'
+  } else if (event.key === 'ArrowLeft') {
+    nextSection = activeSection.value === 'orders' ? 'balance' : 'orders'
+  } else if (event.key === 'Home') {
+    nextSection = 'orders'
+  } else if (event.key === 'End') {
+    nextSection = 'balance'
+  }
+
+  if (!nextSection) return
+  event.preventDefault()
+  activeSection.value = nextSection
+  nextTick(() => {
+    const target = nextSection === 'orders' ? ordersTab.value : balanceHistoryTab.value
+    target?.focus()
+  })
+}
 
 async function fetchOrders() {
   loading.value = true

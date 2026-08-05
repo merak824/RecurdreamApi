@@ -130,6 +130,8 @@ func RegisterUserRoutes(
 			redPackets.POST("/:id/participate", h.RedPacket.Participate)
 		}
 
+		authenticated.GET("/balance-history", h.Redeem.GetBalanceHistory)
+
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
 		{

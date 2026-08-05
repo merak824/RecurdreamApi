@@ -17,6 +17,7 @@ func TestRedPacketRoutesAreRegisteredForUsersAndAdmins(t *testing.T) {
 	router := gin.New()
 	handlers := &handler.Handlers{
 		RedPacket: handler.NewRedPacketHandler(nil),
+		Redeem:    handler.NewRedeemHandler(nil),
 		Admin: &handler.AdminHandlers{
 			RedPacket: adminhandler.NewRedPacketHandler(nil),
 		},
@@ -30,6 +31,7 @@ func TestRedPacketRoutesAreRegisteredForUsersAndAdmins(t *testing.T) {
 	RegisterAdminRoutes(router.Group("/api/v1"), handlers, adminAuth, auditLog, stepUp, nil, nil)
 
 	want := map[string]struct{}{
+		"GET /api/v1/balance-history":                {},
 		"GET /api/v1/red-packets/current":            {},
 		"GET /api/v1/red-packets/eligibility":        {},
 		"GET /api/v1/red-packets/recent":             {},
