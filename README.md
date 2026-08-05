@@ -1,18 +1,34 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.170`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.171`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.170`
+- 当前版本：`v0.1.171`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.170](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.170)
-- Recurdream 定制基线：`v0.1.170`
+- 上游最新同步版本：[v0.1.171](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.171)
+- Recurdream 定制基线：`v0.1.171`
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.171 - 2026-08-05
+
+- 同步上游 Sub2API `v0.1.171`，本次升级不新增数据库迁移，现有利润控制、TTFT、红包和返利数据结构保持不变。
+- 人机验证新增腾讯天御和阿里云验证码 2.0；管理端“安全与认证”统一为总开关与服务商单选，Cloudflare Turnstile、腾讯天御和阿里云三者互斥。OAuth 登录启动和 Passkey 登录也纳入验证码保护，阿里云支持中国内地与新加坡线路并在保存时校验 AccessKey。
+- Codex 出站身份统一管理：HTTP、透传、WebSocket、探针、模型列表和 Alpha Search 等路径使用一致的 User-Agent、originator 与版本来源，降低请求落入上游降载分桶后账号被错误冷却的概率。
+- Codex 客户端版本默认每 6 小时自动同步官方最新稳定版，支持在管理面板关闭；旧的自定义 UA 会保留客户端名和系统指纹，版本段自动按当前生效版本重建。新增 `gateway.disable_codex_originator_normalization` 回滚开关，默认关闭。
+- 组合分组支持推理强度上限和映射规则，并覆盖 Messages 路线；仅在客户端明确传入 reasoning effort 时应用，不改变协议桥接的默认推理强度。
+- OpenAI 账号卡片缓存并展示剩余重置次数和到期时间，自动剔除过期额度；修复刷新失败中断账号恢复以及客户端中断导致额度恢复不完整的问题。
+- 管理端退款流程增加余额不足强制确认：不再只扣可用余额却按全额退款；接口会返回 `require_force`，管理员确认后在同一事务内完成余额扣减和状态流转。直接集成退款 API 的调用方需要兼容这一破坏性变更，Stripe 退款同时增加幂等保护。
+- 修复计费失败导致整条用量记录丢失、同一订阅并发续期覆盖天数、前端访问令牌并发刷新偶发掉登录、OpenAI Messages 临时不可调度错误不切号、WebSocket 租约终止事件丢失以及请求取消后仍读取调度快照等问题。
+- 修复模型广场图片模型展示价与实际结算口径不一致、提示词安全审计遗漏 Responses `output_text`、待建号 OAuth 验证码消费后仍可重复提交等问题；Grok CLI 固定版本升级到 `0.2.114`，Claude OAuth 地址与 Claude Code CLI 保持一致。
+- Recurdream 新增统一余额明细：用户订单页可查看充值/管理员调账、邀请返利转余额和红包奖励，支持类型筛选与分页；管理端用户余额历史同步纳入红包奖励，同时不改变“累计充值”口径。
+- 保留 Recurdream 的红包活动、邀请返利和提现、分组利润控制、上游倍率探测、OpenAI TTFT 优化、中文品牌首页、备份脚本及 Docker Compose blue/green 热部署诊断。
+
+升级注意：如自定义过 CSP，请放行腾讯与阿里云验证码所需域名；升级后原 Turnstile 配置保持不变，切换验证码服务商会自动关闭其它服务商；余额不足退款必须由管理员显式强制确认。
 
 ### v0.1.170 - 2026-08-02
 
@@ -128,7 +144,8 @@
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.170` | 当前最新基线，Sub2API `v0.1.170` + Recurdream 定制 |
+| `v0.1.171` | 当前最新基线，Sub2API `v0.1.171` + Recurdream 定制 |
+| `v0.1.170` | 上一版基线，Sub2API `v0.1.170` + Recurdream 定制 |
 | `v0.1.169` | 上一版基线，Sub2API `v0.1.169` + Recurdream 定制 |
 | `v0.1.165` | 上一版基线，Sub2API `v0.1.165` + Recurdream 定制 |
 | `v0.1.160` | 同步 Sub2API `v0.1.160` 的上一发布版本 |
