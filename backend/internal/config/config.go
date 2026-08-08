@@ -2239,7 +2239,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.openai_high_effort_first_output_timeout_seconds", 0)
 	viper.SetDefault("gateway.openai_ttft_optimizer_enabled", true)
-	viper.SetDefault("gateway.openai_ttft_optimizer_rollout_percent", 0)
+	viper.SetDefault("gateway.openai_ttft_optimizer_rollout_percent", 100)
 	viper.SetDefault("gateway.openai_ttft_stable_threshold_ms", 5000)
 	viper.SetDefault("gateway.openai_ttft_exploration_percent", 0)
 	viper.SetDefault("gateway.log_upstream_error_body", true)

@@ -213,6 +213,14 @@ gateway:
   openai_first_output_timeout_seconds: 0
   # Optional high/xhigh/max override (seconds, 0=use the standard timeout)
   openai_high_effort_first_output_timeout_seconds: 0
+  # Global OpenAI streaming TTFT ranking. Set rollout to 0 for emergency rollback.
+  # OpenAI 流式首 Token 全局排序；紧急回滚时可将发布比例设为 0。
+  openai_ttft_optimizer_enabled: true
+  openai_ttft_optimizer_rollout_percent: 100
+  openai_ttft_stable_threshold_ms: 5000
+  # Active exploration stays disabled by default; passive requests still collect samples.
+  # 默认不主动探索；正常流式请求仍会被动积累样本。
+  openai_ttft_exploration_percent: 0
   # Max request body size in bytes (default: 256MB)
   # 请求体最大字节数（默认 256MB）
   max_body_size: 268435456
