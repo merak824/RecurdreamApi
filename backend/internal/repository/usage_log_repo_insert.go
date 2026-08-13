@@ -31,6 +31,8 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // model
 	"text",        // requested_model
 	"text",        // upstream_model
+	"text",        // upstream_response_model
+	"boolean",     // upstream_model_mismatch
 	"bigint",      // group_id
 	"bigint",      // subscription_id
 	"integer",     // input_tokens
@@ -230,6 +232,8 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -284,12 +288,11 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			client_disconnected,
 			openai_ttft_context
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9,
-			$10, $11, $12, $13,
-			$14, $15, $16, $17,
-			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11,
+			$12, $13, $14, $15,
+			$16, $17, $18, $19,
+			$20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -688,6 +691,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -743,9 +748,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			openai_ttft_context
 		) AS (VALUES `)
 
-	// Each batch row prepends the synthetic input_index before the 60
+	// Each batch row prepends the synthetic input_index before the 62
 	// usage-log column values.
-	args := make([]any, 0, len(keys)*61)
+	args := make([]any, 0, len(keys)*63)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -781,6 +786,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				model,
 				requested_model,
 				upstream_model,
+				upstream_response_model,
+				upstream_model_mismatch,
 				group_id,
 				subscription_id,
 				input_tokens,
@@ -843,6 +850,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				model,
 				requested_model,
 				upstream_model,
+				upstream_response_model,
+				upstream_model_mismatch,
 				group_id,
 				subscription_id,
 				input_tokens,
@@ -945,6 +954,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1000,7 +1011,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			openai_ttft_context
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*60)
+	args := make([]any, 0, len(preparedList)*62)
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
@@ -1033,6 +1044,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1095,6 +1108,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1165,6 +1180,8 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			model,
 			requested_model,
 			upstream_model,
+			upstream_response_model,
+			upstream_model_mismatch,
 			group_id,
 			subscription_id,
 			input_tokens,
@@ -1214,14 +1231,16 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			billing_mode,
 			account_stats_cost,
 			session_id,
-			created_at
+			created_at,
+			upstream_first_token_ms,
+			client_disconnected,
+			openai_ttft_context
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9,
-			$10, $11, $12, $13,
-			$14, $15, $16, $17,
-			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11,
+			$12, $13, $14, $15,
+			$16, $17, $18, $19,
+			$20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1271,6 +1290,8 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 		requestedModel = strings.TrimSpace(log.Model)
 	}
 	upstreamModel := nullString(log.UpstreamModel)
+	upstreamResponseModel := nullString(log.UpstreamResponseModel)
+	upstreamModelMismatch := nullBool(log.UpstreamModelMismatch)
 
 	var requestIDArg any
 	if requestID != "" {
@@ -1290,6 +1311,8 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.Model,
 			nullString(&requestedModel),
 			upstreamModel,
+			upstreamResponseModel,
+			upstreamModelMismatch,
 			groupID,
 			subscriptionID,
 			log.InputTokens,
