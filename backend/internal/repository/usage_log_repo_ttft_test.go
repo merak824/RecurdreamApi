@@ -86,7 +86,8 @@ func usageLogScanTestValues(now time.Time) []any {
 	return []any{
 		int64(1), int64(10), int64(20), int64(30),
 		sql.NullString{Valid: true, String: "req-ttft-scan"}, "gpt-5",
-		sql.NullString{Valid: true, String: "gpt-5"}, sql.NullString{}, sql.NullInt64{}, sql.NullInt64{},
+		sql.NullString{Valid: true, String: "gpt-5"}, sql.NullString{}, sql.NullString{}, sql.NullBool{},
+		sql.NullInt64{}, sql.NullInt64{},
 		1, 2, 3, 4, 5, 6,
 		0, 0.0, 0, 0.0, 0.1, 0.2, 0.3, 0.4, 1.0, 0.9, 1.0,
 		sql.NullFloat64{}, int16(service.BillingTypeBalance), int16(service.RequestTypeStream), true, false,
