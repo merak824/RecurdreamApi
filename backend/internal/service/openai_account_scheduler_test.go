@@ -2725,6 +2725,23 @@ func TestDefaultOpenAIAccountScheduler_ShouldEscapeStickyAccount_ThresholdBounda
 	require.InDelta(t, 15000, observedTTFT, 1e-9)
 }
 
+func TestDefaultOpenAIAccountScheduler_TTFTOptimizerDisablesLegacyEWMAEscapeOnly(t *testing.T) {
+	stats := newOpenAIAccountRuntimeStats()
+	accountID := int64(21502)
+	ttft := 20000
+	stats.report(accountID, true, &ttft)
+	scheduler := &defaultOpenAIAccountScheduler{stats: stats}
+	cfg := openAIStickyEscapeConfig{enabled: true, ttftMs: 15000, errorRate: 0.5}
+
+	reason, _, _, shouldEscape := scheduler.shouldEscapeStickyAccountWithTTFT(accountID, cfg, false)
+	require.False(t, shouldEscape)
+	require.Empty(t, reason)
+
+	reason, _, _, shouldEscape = scheduler.shouldEscapeStickyAccountWithTTFT(accountID, cfg, true)
+	require.True(t, shouldEscape)
+	require.Equal(t, "ttft", reason)
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky_ForceHTTP(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(1010)

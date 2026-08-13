@@ -40,6 +40,7 @@ const (
 	openAIQuotaHeadroomSnapshotStaleAfter      = 8 * time.Hour
 	openAIUpstreamCostNeutralFactor            = 0.5
 	defaultOpenAIOAuthSchedulingRateMultiplier = 1.0
+	defaultOpenAITTFTStableThresholdMs         = 10_000
 )
 
 type cachedOpenAIAdvancedSchedulerSetting struct {
@@ -547,7 +548,8 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 		return nil, false, nil
 	}
 	escapeCfg := s.service.openAIStickyEscapeConfig()
-	if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccount(accountID, escapeCfg); shouldEscape {
+	allowLegacyTTFTEscape := !s.shouldUseOpenAITTFTOptimizer(req)
+	if reason, errorRate, ttft, shouldEscape := s.shouldEscapeStickyAccountWithTTFT(accountID, escapeCfg, allowLegacyTTFTEscape); shouldEscape {
 		slog.Info("sticky_escape_triggered",
 			"account_id", accountID,
 			"reason", reason,
@@ -601,7 +603,7 @@ func (s *defaultOpenAIAccountScheduler) shouldEscapeOpenAITTFTSticky(req OpenAIA
 		return false
 	}
 	transport := openAITTFTTransportForSchedule(req.RequiredTransport)
-	threshold := 5000
+	threshold := defaultOpenAITTFTStableThresholdMs
 	if s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTStableThresholdMs > 0 {
 		threshold = s.service.cfg.Gateway.OpenAITTFTStableThresholdMs
 	}
@@ -637,11 +639,15 @@ func openAIAccountSchedulingPriority(account *Account) int {
 }
 
 func (s *defaultOpenAIAccountScheduler) shouldEscapeStickyAccount(accountID int64, cfg openAIStickyEscapeConfig) (reason string, errorRate float64, ttft float64, shouldEscape bool) {
+	return s.shouldEscapeStickyAccountWithTTFT(accountID, cfg, true)
+}
+
+func (s *defaultOpenAIAccountScheduler) shouldEscapeStickyAccountWithTTFT(accountID int64, cfg openAIStickyEscapeConfig, allowTTFT bool) (reason string, errorRate float64, ttft float64, shouldEscape bool) {
 	if !cfg.enabled || s == nil || s.stats == nil || accountID <= 0 {
 		return "", 0, 0, false
 	}
 	errorRate, ttft, hasTTFT := s.stats.snapshot(accountID)
-	if hasTTFT && ttft > cfg.ttftMs {
+	if allowTTFT && hasTTFT && ttft > cfg.ttftMs {
 		return "ttft", errorRate, ttft, true
 	}
 	if errorRate > cfg.errorRate {
@@ -721,9 +727,9 @@ func orderOpenAIAccountCandidatesByTTFT(
 ) []openAIAccountCandidateScore {
 	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
 	if stableThresholdMs <= 0 {
-		stableThresholdMs = 5000
+		stableThresholdMs = defaultOpenAITTFTStableThresholdMs
 	}
-	state := func(candidate openAIAccountCandidateScore) (known, stable bool, p90, p50 int) {
+	state := func(candidate openAIAccountCandidateScore) (mature, stable bool, p90, p50 int) {
 		if candidate.account == nil {
 			return false, false, 0, 0
 		}
@@ -731,7 +737,8 @@ func orderOpenAIAccountCandidatesByTTFT(
 		if !ok || snapshot.Count == 0 || snapshot.P90Ms <= 0 {
 			return false, false, 0, 0
 		}
-		return true, snapshot.Count >= openAITTFTWindowSampleCap && snapshot.P90Ms <= stableThresholdMs, snapshot.P90Ms, snapshot.P50Ms
+		mature = snapshot.Count >= openAITTFTWindowSampleCap
+		return mature, mature && snapshot.P90Ms <= stableThresholdMs, snapshot.P90Ms, snapshot.P50Ms
 	}
 	sort.SliceStable(ordered, func(i, j int) bool {
 		left, right := ordered[i], ordered[j]
@@ -741,15 +748,15 @@ func orderOpenAIAccountCandidatesByTTFT(
 		if left.account.Priority != right.account.Priority {
 			return left.account.Priority < right.account.Priority
 		}
-		leftKnown, leftStable, leftP90, leftP50 := state(left)
-		rightKnown, rightStable, rightP90, rightP50 := state(right)
+		leftMature, leftStable, leftP90, leftP50 := state(left)
+		rightMature, rightStable, rightP90, rightP50 := state(right)
 		if leftStable != rightStable {
 			return leftStable
 		}
-		if leftKnown != rightKnown {
-			return leftKnown
+		if leftMature != rightMature {
+			return leftMature
 		}
-		if leftP90 != rightP90 {
+		if leftMature && leftP90 != rightP90 {
 			if leftP90 == 0 {
 				return false
 			}
@@ -758,7 +765,7 @@ func orderOpenAIAccountCandidatesByTTFT(
 			}
 			return leftP90 < rightP90
 		}
-		if leftP50 != rightP50 {
+		if leftMature && leftP50 != rightP50 {
 			if leftP50 == 0 {
 				return false
 			}
@@ -1039,7 +1046,7 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 				keys = append(keys, OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport})
 			}
 		}
-		threshold := 5000
+		threshold := defaultOpenAITTFTStableThresholdMs
 		if s.service != nil && s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTStableThresholdMs > 0 {
 			threshold = s.service.cfg.Gateway.OpenAITTFTStableThresholdMs
 		}

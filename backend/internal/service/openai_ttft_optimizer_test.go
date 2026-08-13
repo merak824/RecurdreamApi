@@ -198,8 +198,8 @@ func TestOpenAITTFTWindowUsesLatestTenValidSamples(t *testing.T) {
 
 	snapshot := window.Snapshot(now)
 	require.Equal(t, 10, snapshot.Count)
-	require.Equal(t, 800, snapshot.P50Ms)
-	require.Equal(t, 1200, snapshot.P90Ms)
+	require.Equal(t, 700, snapshot.P50Ms)
+	require.Equal(t, 1100, snapshot.P90Ms)
 }
 
 func TestOpenAITTFTWindowSeparatesTransportAndIgnoresInvalidSamples(t *testing.T) {

@@ -46,7 +46,7 @@ func TestLoadDefaultOpenAITTFTOptimizerSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, cfg.Gateway.OpenAITTFTOptimizerEnabled)
 	require.Equal(t, 100, cfg.Gateway.OpenAITTFTOptimizerRolloutPercent)
-	require.Equal(t, 5000, cfg.Gateway.OpenAITTFTStableThresholdMs)
+	require.Equal(t, 10000, cfg.Gateway.OpenAITTFTStableThresholdMs)
 	require.Zero(t, cfg.Gateway.OpenAITTFTExplorationPercent)
 }
 

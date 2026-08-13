@@ -92,6 +92,56 @@ type TrendDataPoint struct {
 	ActualCost          float64 `json:"actual_cost"` // 实际扣除
 }
 
+// ProfitMonitorSummary is the usage-margin summary shown to admins. Sales is
+// the amount charged to users (actual_cost), while Cost uses the upstream rate
+// snapshot recorded on each usage row. Until a provider reconciliation snapshot
+// exists, VerificationStatus is "unverified".
+type ProfitMonitorSummary struct {
+	Sales               float64  `json:"sales"`
+	Cost                float64  `json:"cost"`
+	Profit              float64  `json:"profit"`
+	MarginPercent       *float64 `json:"margin_percent,omitempty"`
+	Requests            int64    `json:"requests"`
+	Tokens              int64    `json:"tokens"`
+	UnknownCostCount    int64    `json:"unknown_cost_count"`
+	UnverifiedCostCount int64    `json:"unverified_cost_count"`
+	CostSource          string   `json:"cost_source"`
+	VerificationStatus  string   `json:"verification_status"`
+}
+
+// ProfitMonitorTrendPoint is one date/hour bucket in the margin trend.
+type ProfitMonitorTrendPoint struct {
+	Date          string   `json:"date"`
+	Sales         float64  `json:"sales"`
+	Cost          float64  `json:"cost"`
+	Profit        float64  `json:"profit"`
+	MarginPercent *float64 `json:"margin_percent,omitempty"`
+}
+
+// ProfitMonitorDimensionStat is a margin row for group, model, or account.
+type ProfitMonitorDimensionStat struct {
+	ID                 int64    `json:"id,omitempty"`
+	Name               string   `json:"name"`
+	Requests           int64    `json:"requests"`
+	Tokens             int64    `json:"tokens"`
+	Sales              float64  `json:"sales"`
+	Cost               float64  `json:"cost"`
+	Profit             float64  `json:"profit"`
+	MarginPercent      *float64 `json:"margin_percent,omitempty"`
+	CostSource         string   `json:"cost_source"`
+	VerificationStatus string   `json:"verification_status"`
+}
+
+// ProfitMonitorResponse contains all data rendered inside the admin dashboard.
+type ProfitMonitorResponse struct {
+	Summary     ProfitMonitorSummary         `json:"summary"`
+	Trend       []ProfitMonitorTrendPoint    `json:"trend"`
+	Groups      []ProfitMonitorDimensionStat `json:"groups"`
+	Models      []ProfitMonitorDimensionStat `json:"models"`
+	Accounts    []ProfitMonitorDimensionStat `json:"accounts"`
+	GeneratedAt string                       `json:"generated_at"`
+}
+
 // ModelStat represents usage statistics for a single model
 type ModelStat struct {
 	Model               string  `json:"model"`

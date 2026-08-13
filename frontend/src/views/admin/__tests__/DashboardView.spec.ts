@@ -126,7 +126,7 @@ describe('admin DashboardView', () => {
           Select: true,
           ModelDistributionChart: true,
           TokenUsageTrend: true,
-          Line: true
+          Line: { template: '<div />' }
         }
       }
     })
@@ -140,7 +140,61 @@ describe('admin DashboardView', () => {
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
-      granularity: 'hour'
+      granularity: 'hour',
+      include_profit: true
     }))
+  })
+
+  it('renders profit summary and switches dimension tabs from snapshot data', async () => {
+    getSnapshotV2.mockResolvedValueOnce({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-10T00:00:00Z',
+        summary: {
+          sales: 10,
+          cost: 7,
+          profit: 3,
+          margin_percent: 30,
+          requests: 2,
+          tokens: 100,
+          unknown_cost_count: 1,
+          unverified_cost_count: 2,
+          cost_source: 'usage_record_upstream_rate',
+          verification_status: 'unverified'
+        },
+        trend: [],
+        groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'legacy_formula', verification_status: 'unverified' }],
+        models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'legacy_formula', verification_status: 'unverified' }],
+        accounts: []
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    expect(monitor.text()).toContain('admin.dashboard.profit')
+    expect(monitor.text()).toContain('default')
+
+    const modelTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitModels')
+    expect(modelTab).toBeDefined()
+    await modelTab!.trigger('click')
+    expect(monitor.text()).toContain('gpt-test')
   })
 })

@@ -49,6 +49,38 @@ func TestOrderOpenAIAccountCandidatesByTTFTUsesP90ThenP50AndFallsBackToLoad(t *t
 	require.Equal(t, int64(2), ordered[2].account.ID)
 }
 
+func TestOrderOpenAIAccountCandidatesByTTFTPrefersMatureAccountsWhenNoStableAccountExists(t *testing.T) {
+	accounts := []*Account{{ID: 11, Priority: 1}, {ID: 12, Priority: 1}}
+	candidates := []openAIAccountCandidateScore{
+		{account: accounts[0], loadInfo: &AccountLoadInfo{AccountID: 11, LoadRate: 5, WaitingCount: 0}},
+		{account: accounts[1], loadInfo: &AccountLoadInfo{AccountID: 12, LoadRate: 90, WaitingCount: 4}},
+	}
+	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 11, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 1, P50Ms: 100, P90Ms: 100},
+		{AccountID: 12, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 10, P50Ms: 9000, P90Ms: 12000},
+	}
+
+	ordered := orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, OpenAITTFTTransportHTTPSSE, 10000)
+	require.Equal(t, int64(12), ordered[0].account.ID)
+	require.Equal(t, int64(11), ordered[1].account.ID)
+}
+
+func TestOrderOpenAIAccountCandidatesByTTFTUsesLoadWhenAllAccountsAreImmature(t *testing.T) {
+	accounts := []*Account{{ID: 21, Priority: 1}, {ID: 22, Priority: 1}}
+	candidates := []openAIAccountCandidateScore{
+		{account: accounts[0], loadInfo: &AccountLoadInfo{AccountID: 21, LoadRate: 90, WaitingCount: 4}},
+		{account: accounts[1], loadInfo: &AccountLoadInfo{AccountID: 22, LoadRate: 10, WaitingCount: 1}},
+	}
+	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 21, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 1, P50Ms: 100, P90Ms: 100},
+		{AccountID: 22, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 2, P50Ms: 900, P90Ms: 900},
+	}
+
+	ordered := orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, OpenAITTFTTransportHTTPSSE, 10000)
+	require.Equal(t, int64(22), ordered[0].account.ID)
+	require.Equal(t, int64(21), ordered[1].account.ID)
+}
+
 func TestPromoteOpenAITTFTExplorationCandidateStaysWithinManualPriority(t *testing.T) {
 	accounts := []*Account{{ID: 1, Priority: 1}, {ID: 2, Priority: 1}, {ID: 3, Priority: 2}}
 	candidates := []openAIAccountCandidateScore{

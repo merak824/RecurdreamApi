@@ -29,11 +29,12 @@ type dashboardSnapshotV2Response struct {
 	EndDate     string `json:"end_date"`
 	Granularity string `json:"granularity"`
 
-	Stats      *dashboardSnapshotV2Stats        `json:"stats,omitempty"`
-	Trend      []usagestats.TrendDataPoint      `json:"trend,omitempty"`
-	Models     []usagestats.ModelStat           `json:"models,omitempty"`
-	Groups     []usagestats.GroupStat           `json:"groups,omitempty"`
-	UsersTrend []usagestats.UserUsageTrendPoint `json:"users_trend,omitempty"`
+	Stats      *dashboardSnapshotV2Stats         `json:"stats,omitempty"`
+	Trend      []usagestats.TrendDataPoint       `json:"trend,omitempty"`
+	Models     []usagestats.ModelStat            `json:"models,omitempty"`
+	Groups     []usagestats.GroupStat            `json:"groups,omitempty"`
+	UsersTrend []usagestats.UserUsageTrendPoint  `json:"users_trend,omitempty"`
+	Profit     *usagestats.ProfitMonitorResponse `json:"profit,omitempty"`
 }
 
 type dashboardSnapshotV2Filters struct {
@@ -67,6 +68,7 @@ type dashboardSnapshotV2CacheKey struct {
 	IncludeGroups         bool   `json:"include_groups"`
 	IncludeUsersTrend     bool   `json:"include_users_trend"`
 	UsersTrendLimit       int    `json:"users_trend_limit"`
+	IncludeProfit     bool   `json:"include_profit"`
 }
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
@@ -81,6 +83,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 	includeModels := parseBoolQueryWithDefault(c.Query("include_model_stats"), true)
 	includeGroups := parseBoolQueryWithDefault(c.Query("include_group_stats"), false)
 	includeUsersTrend := parseBoolQueryWithDefault(c.Query("include_users_trend"), false)
+	includeProfit := parseBoolQueryWithDefault(c.Query("include_profit"), false)
 	usersTrendLimit := 12
 	if raw := strings.TrimSpace(c.Query("users_trend_limit")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 50 {
@@ -113,6 +116,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		IncludeGroups:         includeGroups,
 		IncludeUsersTrend:     includeUsersTrend,
 		UsersTrendLimit:       usersTrendLimit,
+		IncludeProfit:     includeProfit,
 	})
 	cacheKey := string(keyRaw)
 
@@ -129,6 +133,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 			includeGroups,
 			includeUsersTrend,
 			usersTrendLimit,
+			includeProfit,
 		)
 	})
 	if err != nil {
@@ -154,6 +159,7 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 	filters *dashboardSnapshotV2Filters,
 	includeStats, includeTrend, includeModels, includeGroups, includeUsersTrend bool,
 	usersTrendLimit int,
+	includeProfit bool,
 ) (*dashboardSnapshotV2Response, error) {
 	resp := &dashboardSnapshotV2Response{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -242,6 +248,39 @@ func (h *DashboardHandler) buildSnapshotV2Response(
 			return nil, errors.New("failed to get user usage trend")
 		}
 		resp.UsersTrend = usersTrend
+	}
+
+	if includeProfit {
+		profit, err := h.dashboardService.GetProfitMonitor(
+			ctx,
+			startTime,
+			endTime,
+			granularity,
+			filters.UserID,
+			filters.APIKeyID,
+			filters.AccountID,
+			filters.GroupID,
+			filters.Model,
+			filters.RequestType,
+			filters.Stream,
+			filters.BillingType,
+		)
+		if err != nil {
+			// Profit data is an optional dashboard section. Keep the existing
+			// snapshot usable when a legacy database has not enabled the query yet.
+			resp.Profit = &usagestats.ProfitMonitorResponse{
+				Summary: usagestats.ProfitMonitorSummary{
+					CostSource:         "unavailable",
+					VerificationStatus: "unavailable",
+				},
+				Trend:    []usagestats.ProfitMonitorTrendPoint{},
+				Groups:   []usagestats.ProfitMonitorDimensionStat{},
+				Models:   []usagestats.ProfitMonitorDimensionStat{},
+				Accounts: []usagestats.ProfitMonitorDimensionStat{},
+			}
+		} else {
+			resp.Profit = profit
+		}
 	}
 
 	return resp, nil

@@ -217,7 +217,7 @@ gateway:
   # OpenAI 流式首 Token 全局排序；紧急回滚时可将发布比例设为 0。
   openai_ttft_optimizer_enabled: true
   openai_ttft_optimizer_rollout_percent: 100
-  openai_ttft_stable_threshold_ms: 5000
+  openai_ttft_stable_threshold_ms: 10000
   # Active exploration stays disabled by default; passive requests still collect samples.
   # 默认不主动探索；正常流式请求仍会被动积累样本。
   openai_ttft_exploration_percent: 0

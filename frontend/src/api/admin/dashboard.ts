@@ -133,6 +133,50 @@ export interface DashboardSnapshotV2Params extends TrendParams {
   include_group_stats?: boolean
   include_users_trend?: boolean
   users_trend_limit?: number
+  include_profit?: boolean
+}
+
+export interface ProfitMonitorSummary {
+  sales: number
+  cost: number
+  profit: number
+  margin_percent?: number | null
+  requests: number
+  tokens: number
+  unknown_cost_count: number
+  unverified_cost_count: number
+  cost_source: string
+  verification_status: string
+}
+
+export interface ProfitMonitorTrendPoint {
+  date: string
+  sales: number
+  cost: number
+  profit: number
+  margin_percent?: number | null
+}
+
+export interface ProfitMonitorDimensionStat {
+  id?: number
+  name: string
+  requests: number
+  tokens: number
+  sales: number
+  cost: number
+  profit: number
+  margin_percent?: number | null
+  cost_source: string
+  verification_status: string
+}
+
+export interface ProfitMonitorResponse {
+  generated_at: string
+  summary: ProfitMonitorSummary
+  trend: ProfitMonitorTrendPoint[]
+  groups: ProfitMonitorDimensionStat[]
+  models: ProfitMonitorDimensionStat[]
+  accounts: ProfitMonitorDimensionStat[]
 }
 
 export interface DashboardSnapshotV2Stats extends DashboardStats {
@@ -149,6 +193,7 @@ export interface DashboardSnapshotV2Response {
   models?: ModelStat[]
   groups?: GroupStat[]
   users_trend?: UserUsageTrendPoint[]
+  profit?: ProfitMonitorResponse
 }
 
 /**

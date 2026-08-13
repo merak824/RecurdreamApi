@@ -29,7 +29,7 @@ func TestOpenAITTFTStoreKeepsLatestTenSamplesAndSeparatesTransport(t *testing.T)
 	windows, err := store.GetWindows(ctx, []service.OpenAITTFTWindowKey{keySSE, keyWS}, now.Add(13*time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, 10, windows[keySSE].Count)
-	require.Equal(t, 800, windows[keySSE].P50Ms)
+	require.Equal(t, 700, windows[keySSE].P50Ms)
 	require.Equal(t, 50, windows[keyWS].P90Ms)
 }
 

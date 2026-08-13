@@ -174,7 +174,7 @@ func snapshotOpenAITTFTValues(values []int) service.OpenAITTFTWindowSnapshot {
 		}
 	}
 	nearestRank := func(percentile float64) int {
-		rank := int(math.Ceil(percentile * float64(len(values)+1)))
+		rank := int(math.Ceil(percentile * float64(len(values))))
 		if rank < 1 {
 			rank = 1
 		}
