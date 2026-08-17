@@ -15,9 +15,14 @@ const profitMonitorCostExpr = "COALESCE(ul.account_stats_cost, ul.total_cost) * 
 
 const profitMonitorEligibleExpr = "(COALESCE(ul.actual_cost, 0) > 0 OR COALESCE(ul.total_cost, 0) > 0 OR COALESCE(ul.input_tokens, 0) + COALESCE(ul.output_tokens, 0) + COALESCE(ul.cache_creation_tokens, 0) + COALESCE(ul.cache_read_tokens, 0) > 0)"
 
+// profitMonitorValidAfterExpr is an optional deployment-specific floor for
+// profit reporting. It excludes rows whose stored upstream-rate snapshot is
+// known to predate reliable capture without rewriting the usage ledger.
+const profitMonitorValidAfterExpr = "COALESCE((SELECT NULLIF(s.value, '')::timestamptz FROM settings s WHERE s.key = 'profit_monitor_cost_valid_after'), '-infinity'::timestamptz)"
+
 func profitMonitorWhere(startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, model string, requestType *int16, stream *bool, billingType *int8) (string, []any) {
 	conditions := []string{
-		"ul.created_at >= $1",
+		fmt.Sprintf("ul.created_at >= GREATEST($1, %s)", profitMonitorValidAfterExpr),
 		"ul.created_at < $2",
 		profitMonitorEligibleExpr,
 	}
