@@ -58,6 +58,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Docker Go version
+        shell: bash
+        run: bash deploy/tests/docker-go-version-test.sh
+
       - name: Validate deployment inputs
         shell: bash
         run: |
