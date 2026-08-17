@@ -1,18 +1,30 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.173`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.1.177`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.1.173`
+- 当前版本：`v0.1.177`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.1.173](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.173)
-- Recurdream 定制基线：`v0.1.173`
+- 上游最新同步版本：[v0.1.177](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.1.177)
+- Recurdream 定制基线：`v0.1.177`
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.1.177
+
+- 同步上游 Sub2API `v0.1.177`，将本地版本标记统一更新为 `0.1.177`，并继续保留 Recurdream 的红包活动、邀请返利与提现、余额明细、分组利润控制、上游倍率探测、OpenAI TTFT 优化、中文品牌页面、备份脚本及 Docker Compose blue/green 热部署能力。
+- 修复 OpenAI Responses 上游只返回空 `response.completed` 时被错误记录为成功 `0/0` 用量的问题；该场景现在会进入故障转移，并保留上游请求诊断信息。
+- 完善 OpenAI 首字和用量完整性：区分可见输出与终止事件，改进首字超时保护、流式输出暂存、上游首字耗时和语义输出诊断，避免仅有 usage 的终止事件污染 TTFT 统计。
+- 完善 Codex 兼容：统一指纹与客户端元数据，增加 turn state 透传与跨账号切换处理，增强原生 Responses compaction v2、上下文压缩和工具调用兼容。
+- 新增并完善 `x_search` 能力，补齐 Responses、Chat Completions 兼容桥接、搜索调用计费和相关模型能力识别。
+- 扩展 Grok/xAI 支持：补充 Grok 4.6 及订阅档位识别、OAuth/API Key 账号判断、媒体资格和配额处理，并修复相关模型、音频、图像和视频路径的计费与调度边界。
+- 完善分组与计费：支持按分组逐模型配置价格，新增分组用量汇总和每日 rollup，补充时区迁移、模型价格解析、图片/搜索等非文本计费回归测试。
+- 完善备份与数据管理：新增备份归档处理和 S3 存储测试，增强备份列表、下载、归档和恢复相关的管理端流程；数据库新增分组模型价格及用量汇总迁移 `221` 至 `223`。
+- 完善 API Key、模型广场和后台页面：增加 API Key 参数校验，更新分组模型价格编辑、账号用量刷新、用量统计、备份管理、渠道价格和模型广场相关页面及中英文文案。
 
 ### v0.1.173 - 2026-08-09
 
@@ -160,7 +172,8 @@
 
 | Tag | 说明 |
 | --- | --- |
-| `v0.1.173` | 当前最新基线，Sub2API `v0.1.173` + Recurdream 定制 |
+| `v0.1.177` | 当前最新基线，Sub2API `v0.1.177` + Recurdream 定制 |
+| `v0.1.173` | 上一版基线，Sub2API `v0.1.173` + Recurdream 定制 |
 | `v0.1.171` | 上一版基线，Sub2API `v0.1.171` + Recurdream 定制 |
 | `v0.1.170` | 上一版基线，Sub2API `v0.1.170` + Recurdream 定制 |
 | `v0.1.169` | 上一版基线，Sub2API `v0.1.169` + Recurdream 定制 |
