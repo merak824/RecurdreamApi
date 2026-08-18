@@ -68,7 +68,7 @@ type dashboardSnapshotV2CacheKey struct {
 	IncludeGroups         bool   `json:"include_groups"`
 	IncludeUsersTrend     bool   `json:"include_users_trend"`
 	UsersTrendLimit       int    `json:"users_trend_limit"`
-	IncludeProfit     bool   `json:"include_profit"`
+	IncludeProfit         bool   `json:"include_profit"`
 }
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
@@ -116,7 +116,7 @@ func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 		IncludeGroups:         includeGroups,
 		IncludeUsersTrend:     includeUsersTrend,
 		UsersTrendLimit:       usersTrendLimit,
-		IncludeProfit:     includeProfit,
+		IncludeProfit:         includeProfit,
 	})
 	cacheKey := string(keyRaw)
 

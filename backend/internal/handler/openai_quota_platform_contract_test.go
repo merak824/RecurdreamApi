@@ -41,6 +41,30 @@ func TestOpenAIRecordUsageInputsCarryQuotaPlatform(t *testing.T) {
 	}
 }
 
+func TestStreamingOpenAIRecordUsageInputsCarrySessionHash(t *testing.T) {
+	for _, name := range []string{"openai_gateway_handler.go", "openai_chat_completions.go"} {
+		t.Run(name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, filepath.Join(".", name), nil, 0)
+			require.NoError(t, err)
+
+			var missing []token.Position
+			ast.Inspect(file, func(node ast.Node) bool {
+				literal, ok := node.(*ast.CompositeLit)
+				if !ok || !isOpenAIRecordUsageInputLiteral(literal.Type) {
+					return true
+				}
+				if !compositeLiteralHasKey(literal, "SessionHash") {
+					missing = append(missing, fset.Position(literal.Lbrace))
+				}
+				return true
+			})
+
+			require.Empty(t, missing, "streaming OpenAI usage must carry the scheduler session hash")
+		})
+	}
+}
+
 func isOpenAIRecordUsageInputLiteral(expr ast.Expr) bool {
 	selector, ok := expr.(*ast.SelectorExpr)
 	if !ok {

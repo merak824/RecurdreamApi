@@ -52,6 +52,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("marshal default forwarded client IP headers: %w", err)
 	}
+	ttftDefaults := defaultOpenAITTFTRuntimeSettings(s.cfg)
 
 	// 初始化默认设置
 	defaults := map[string]string{
@@ -242,6 +243,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		openAIAdvancedSchedulerSettingKey:                            "false",
 		SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled:       "false",
 		SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled: "false",
+		SettingKeyOpenAITTFTOptimizerEnabled:                         strconv.FormatBool(ttftDefaults.Enabled),
+		SettingKeyOpenAITTFTBaseP90Seconds:                           strconv.Itoa(ttftDefaults.BaseP90Ms / 1000),
+		SettingKeyOpenAITTFTCacheProtectionEnabled:                   strconv.FormatBool(ttftDefaults.CacheProtectionEnabled),
+		SettingKeyOpenAITTFTCacheMinContextTokens:                    strconv.Itoa(ttftDefaults.MinContextTokens),
+		SettingKeyOpenAITTFTCacheMinHitRatePercent:                   strconv.Itoa(ttftDefaults.MinHitRatePercent),
+		SettingKeyOpenAITTFTCacheElasticP90CapSeconds:                strconv.Itoa(ttftDefaults.ElasticP90CapMs / 1000),
 		SettingKeyOpenAIAdvancedSchedulerLBTopK:                      "",
 		SettingKeyOpenAIAdvancedSchedulerWeightPriority:              "",
 		SettingKeyOpenAIAdvancedSchedulerWeightLoad:                  "",
@@ -277,6 +284,11 @@ func parseForwardedClientIPHeadersSetting(value string) ([]string, error) {
 
 // parseSettings 解析设置到结构体
 func (s *SettingService) parseSettings(settings map[string]string) *SystemSettings {
+	var cfg *config.Config
+	if s != nil {
+		cfg = s.cfg
+	}
+	ttftSettings := parseOpenAITTFTRuntimeSettings(settings, defaultOpenAITTFTRuntimeSettings(cfg))
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
 	loginAgreementDocuments := parseLoginAgreementDocuments(settings[SettingKeyLoginAgreementDocuments])
 	loginAgreementUpdatedAt := strings.TrimSpace(settings[SettingKeyLoginAgreementUpdatedAt])
@@ -883,6 +895,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.OpenAIAdvancedSchedulerEnabled = settings[openAIAdvancedSchedulerSettingKey] == "true"
 	result.OpenAIAdvancedSchedulerStickyWeightedEnabled = settings[SettingKeyOpenAIAdvancedSchedulerStickyWeightedEnabled] == "true"
 	result.OpenAIAdvancedSchedulerSubscriptionPriorityEnabled = settings[SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled] == "true"
+	result.OpenAITTFTOptimizerEnabled = ttftSettings.Enabled
+	result.OpenAITTFTBaseP90Seconds = ttftSettings.BaseP90Ms / 1000
+	result.OpenAITTFTCacheProtectionEnabled = ttftSettings.CacheProtectionEnabled
+	result.OpenAITTFTCacheMinContextTokens = ttftSettings.MinContextTokens
+	result.OpenAITTFTCacheMinHitRatePercent = ttftSettings.MinHitRatePercent
+	result.OpenAITTFTCacheElasticP90CapSeconds = ttftSettings.ElasticP90CapMs / 1000
 	result.OpenAIAdvancedSchedulerLBTopK = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerLBTopK])
 	result.OpenAIAdvancedSchedulerWeightPriority = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerWeightPriority])
 	result.OpenAIAdvancedSchedulerWeightLoad = strings.TrimSpace(settings[SettingKeyOpenAIAdvancedSchedulerWeightLoad])

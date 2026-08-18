@@ -343,6 +343,37 @@ func TestOpenAIGatewayServiceRecordUsage_ZeroUsageStillWritesUsageLog(t *testing
 	require.Zero(t, billingRepo.lastCmd.AccountQuotaCost)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_PersistsTTFTOptimizerAppliedDiagnostic(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(
+		usageRepo,
+		billingRepo,
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:     "resp_ttft_optimizer_diagnostic",
+			Usage:         OpenAIUsage{InputTokens: 100, OutputTokens: 10},
+			Model:         "gpt-5.1",
+			Duration:      time.Second,
+			Stream:        true,
+			TTFTOptimized: true,
+		},
+		APIKey:  &APIKey{ID: 1001, Group: &Group{RateMultiplier: 1}},
+		User:    &User{ID: 2001},
+		Account: &Account{ID: 3001, Type: AccountTypeAPIKey, Platform: PlatformOpenAI},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.OpenAITTFTContext)
+	require.True(t, usageRepo.lastLog.OpenAITTFTContext.OptimizerApplied)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_MissingPricingRecordsZeroCostUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

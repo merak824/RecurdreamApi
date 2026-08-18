@@ -94,19 +94,26 @@ type TrendDataPoint struct {
 
 // ProfitMonitorSummary is the usage-margin summary shown to admins. Sales is
 // the amount charged to users (actual_cost), while Cost uses the upstream rate
-// snapshot recorded on each usage row. Until a provider reconciliation snapshot
-// exists, VerificationStatus is "unverified".
+// snapshot recorded on each usage row. Reconciliation fields compare that
+// local cost with the cumulative actual charge reported by upstream API keys.
+// Official provider accounts use an explicit zero-cost source and are excluded
+// from relay billing reconciliation.
 type ProfitMonitorSummary struct {
-	Sales               float64  `json:"sales"`
-	Cost                float64  `json:"cost"`
-	Profit              float64  `json:"profit"`
-	MarginPercent       *float64 `json:"margin_percent,omitempty"`
-	Requests            int64    `json:"requests"`
-	Tokens              int64    `json:"tokens"`
-	UnknownCostCount    int64    `json:"unknown_cost_count"`
-	UnverifiedCostCount int64    `json:"unverified_cost_count"`
-	CostSource          string   `json:"cost_source"`
-	VerificationStatus  string   `json:"verification_status"`
+	Sales                           float64  `json:"sales"`
+	Cost                            float64  `json:"cost"`
+	Profit                          float64  `json:"profit"`
+	MarginPercent                   *float64 `json:"margin_percent,omitempty"`
+	Requests                        int64    `json:"requests"`
+	Tokens                          int64    `json:"tokens"`
+	UnknownCostCount                int64    `json:"unknown_cost_count"`
+	UnverifiedCostCount             int64    `json:"unverified_cost_count"`
+	CostSource                      string   `json:"cost_source"`
+	VerificationStatus              string   `json:"verification_status"`
+	ReconciliationStatus            string   `json:"reconciliation_status,omitempty"`
+	UpstreamActualCost              *float64 `json:"upstream_actual_cost,omitempty"`
+	ReconciliationDifference        *float64 `json:"reconciliation_difference,omitempty"`
+	ReconciliationDifferencePercent *float64 `json:"reconciliation_difference_percent,omitempty"`
+	ReconciliationObservedAt        string   `json:"reconciliation_observed_at,omitempty"`
 }
 
 // ProfitMonitorTrendPoint is one date/hour bucket in the margin trend.
@@ -120,16 +127,21 @@ type ProfitMonitorTrendPoint struct {
 
 // ProfitMonitorDimensionStat is a margin row for group, model, or account.
 type ProfitMonitorDimensionStat struct {
-	ID                 int64    `json:"id,omitempty"`
-	Name               string   `json:"name"`
-	Requests           int64    `json:"requests"`
-	Tokens             int64    `json:"tokens"`
-	Sales              float64  `json:"sales"`
-	Cost               float64  `json:"cost"`
-	Profit             float64  `json:"profit"`
-	MarginPercent      *float64 `json:"margin_percent,omitempty"`
-	CostSource         string   `json:"cost_source"`
-	VerificationStatus string   `json:"verification_status"`
+	ID                              int64    `json:"id,omitempty"`
+	Name                            string   `json:"name"`
+	Requests                        int64    `json:"requests"`
+	Tokens                          int64    `json:"tokens"`
+	Sales                           float64  `json:"sales"`
+	Cost                            float64  `json:"cost"`
+	Profit                          float64  `json:"profit"`
+	MarginPercent                   *float64 `json:"margin_percent,omitempty"`
+	CostSource                      string   `json:"cost_source"`
+	VerificationStatus              string   `json:"verification_status"`
+	ReconciliationStatus            string   `json:"reconciliation_status,omitempty"`
+	UpstreamActualCost              *float64 `json:"upstream_actual_cost,omitempty"`
+	ReconciliationDifference        *float64 `json:"reconciliation_difference,omitempty"`
+	ReconciliationDifferencePercent *float64 `json:"reconciliation_difference_percent,omitempty"`
+	ReconciliationObservedAt        string   `json:"reconciliation_observed_at,omitempty"`
 }
 
 // ProfitMonitorResponse contains all data rendered inside the admin dashboard.

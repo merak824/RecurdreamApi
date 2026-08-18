@@ -226,8 +226,30 @@
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyFirstToken') }}</span>
-              <span v-if="row.first_token_ms != null" class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">{{ formatDuration(row.first_token_ms) }}</span>
-              <span v-else class="text-gray-400 dark:text-gray-500">-</span>
+              <span v-if="row.first_token_ms != null" class="inline-flex items-center gap-1 font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[firstTokenSeverity(row.first_token_ms)]">
+                <span>{{ formatDuration(row.first_token_ms) }}</span>
+                <span
+                  v-if="row.openai_ttft_context"
+                  class="inline-flex cursor-help text-gray-400 hover:text-primary-500 dark:text-gray-500 dark:hover:text-primary-400"
+                  :title="openAITTFTDiagnosticTitle(row)"
+                  :aria-label="t('usage.ttftDiagnostics')"
+                  data-testid="openai-ttft-diagnostics"
+                >
+                  <Icon name="infoCircle" size="xs" />
+                </span>
+              </span>
+              <span v-else class="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500">
+                <span>-</span>
+                <span
+                  v-if="row.openai_ttft_context"
+                  class="inline-flex cursor-help hover:text-primary-500 dark:hover:text-primary-400"
+                  :title="openAITTFTDiagnosticTitle(row)"
+                  :aria-label="t('usage.ttftDiagnostics')"
+                  data-testid="openai-ttft-diagnostics"
+                >
+                  <Icon name="infoCircle" size="xs" />
+                </span>
+              </span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
               <span v-if="row.upstream_first_token_ms != null" class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyUpstreamFirstToken') }}</span>
@@ -689,6 +711,77 @@ const formatDuration = (ms: number | null | undefined): string => {
   const totalSec = Math.round(ms / 1000)
   if (totalSec < 3600) return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`
   return `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`
+}
+
+const ttftCacheStatusKeys: Record<string, string> = {
+  eligible: 'usage.ttftCacheStatusEligible',
+  disabled: 'usage.ttftCacheStatusDisabled',
+  missing: 'usage.ttftCacheStatusMissing',
+  expired: 'usage.ttftCacheStatusExpired',
+  invalid: 'usage.ttftCacheStatusInvalid',
+  short_context: 'usage.ttftCacheStatusShortContext',
+  low_hit_rate: 'usage.ttftCacheStatusLowHitRate',
+  read_error: 'usage.ttftCacheStatusReadError',
+  unavailable: 'usage.ttftCacheStatusUnavailable',
+}
+
+const ttftReasonKeys: Record<string, string> = {
+  ttft_p90: 'usage.ttftReasonP90',
+  concurrency_full: 'usage.ttftReasonConcurrencyFull',
+}
+
+const translatedTTFTCode = (code: string | undefined, keys: Record<string, string>): string => {
+  if (!code) return '-'
+  const key = keys[code]
+  return key ? t(key) : code
+}
+
+const openAITTFTDiagnosticTitle = (row: AdminUsageLog): string | undefined => {
+  const context = row.openai_ttft_context
+  if (!context) return undefined
+
+  const lines = [t('usage.ttftDiagnostics')]
+  if (context.optimizer_applied != null) {
+    lines.push(`${t('usage.ttftOptimizerApplied')}: ${t(context.optimizer_applied ? 'usage.ttftApplied' : 'usage.ttftNotApplied')}`)
+  }
+  if (context.transport) {
+    lines.push(`${t('usage.ttftTransport')}: ${context.transport}`)
+  }
+  if (context.sample_count != null) {
+    const metrics = [String(context.sample_count)]
+    if (context.sample_p50_ms != null) metrics.push(`P50 ${formatDuration(context.sample_p50_ms)}`)
+    if (context.sample_p90_ms != null) metrics.push(`P90 ${formatDuration(context.sample_p90_ms)}`)
+    lines.push(`${t('usage.ttftSamples')}: ${metrics.join(' · ')}`)
+  }
+  if (context.cache_profile_status) {
+    lines.push(`${t('usage.ttftCacheProfile')}: ${translatedTTFTCode(context.cache_profile_status, ttftCacheStatusKeys)}`)
+  }
+  if (context.cache_eligible != null) {
+    lines.push(`${t('usage.ttftCacheEligible')}: ${t(context.cache_eligible ? 'usage.ttftYes' : 'usage.ttftNo')}`)
+  }
+  if (context.cache_context_tokens != null && context.cache_context_tokens > 0) {
+    lines.push(`${t('usage.ttftCacheContext')}: ${context.cache_context_tokens.toLocaleString()}`)
+  }
+  if (context.cache_hit_rate_percent != null) {
+    lines.push(`${t('usage.ttftCacheHitRate')}: ${context.cache_hit_rate_percent.toFixed(1)}%`)
+  }
+  if (context.base_p90_ms != null && context.base_p90_ms > 0) {
+    lines.push(`${t('usage.ttftP90Thresholds')}: ${formatDuration(context.base_p90_ms)} → ${formatDuration(context.effective_p90_ms ?? context.base_p90_ms)}`)
+  }
+
+  const decision = context.sticky_switched
+    ? t('usage.ttftDecisionSwitched')
+    : context.debounce_kept
+      ? t('usage.ttftDecisionDebounced')
+      : t('usage.ttftDecisionKept')
+  lines.push(`${t('usage.ttftDecision')}: ${decision}`)
+  if (context.sticky_escape_reason) {
+    lines.push(`${t('usage.ttftReason')}: ${translatedTTFTCode(context.sticky_escape_reason, ttftReasonKeys)}`)
+  }
+  if (context.first_semantic_event) {
+    lines.push(`${t('usage.ttftFirstSemanticEvent')}: ${context.first_semantic_event}`)
+  }
+  return lines.join('\n')
 }
 
 // Cost tooltip functions

@@ -161,12 +161,12 @@ describe('admin DashboardView', () => {
           tokens: 100,
           unknown_cost_count: 1,
           unverified_cost_count: 2,
-          cost_source: 'usage_record_upstream_rate',
+          cost_source: 'mixed',
           verification_status: 'unverified'
         },
         trend: [],
-        groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'legacy_formula', verification_status: 'unverified' }],
-        models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'legacy_formula', verification_status: 'unverified' }],
+        groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }],
+        models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'group_break_even_estimate', verification_status: 'unverified' }],
         accounts: []
       }
     })
@@ -191,10 +191,80 @@ describe('admin DashboardView', () => {
     const monitor = wrapper.get('[data-testid="profit-monitor"]')
     expect(monitor.text()).toContain('admin.dashboard.profit')
     expect(monitor.text()).toContain('default')
+    expect(monitor.text()).toContain('admin.dashboard.profitUpstreamProbe')
+    expect(monitor.text()).toContain('admin.dashboard.profitPendingCostCount')
 
     const modelTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitModels')
     expect(modelTab).toBeDefined()
     await modelTab!.trigger('click')
     expect(monitor.text()).toContain('gpt-test')
+    expect(monitor.text()).toContain('admin.dashboard.profitGroupEstimate')
+  })
+
+  it('renders automatic upstream reconciliation states and the mismatch amount', async () => {
+    getSnapshotV2.mockResolvedValueOnce({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-18T08:20:00Z',
+        summary: {
+          sales: 50,
+          cost: 40,
+          profit: 10,
+          margin_percent: 20,
+          requests: 5,
+          tokens: 500,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'difference',
+          upstream_actual_cost: 42,
+          reconciliation_difference: 2,
+          reconciliation_difference_percent: 4.7619,
+          reconciliation_observed_at: '2026-08-18T08:20:00Z'
+        },
+        trend: [],
+        groups: [],
+        models: [],
+        accounts: [
+          { id: 1, name: 'matched-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'matched', upstream_actual_cost: 8.005, reconciliation_difference: 0.005 },
+          { id: 2, name: 'difference-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'difference', upstream_actual_cost: 10, reconciliation_difference: 2, reconciliation_difference_percent: 20 },
+          { id: 3, name: 'pending-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'pending' },
+          { id: 4, name: 'unavailable-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'unavailable' },
+          { id: 5, name: 'estimated-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'group_break_even_estimate', verification_status: 'unverified', reconciliation_status: 'estimated' }
+        ]
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    const accountTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitAccounts')
+    expect(accountTab).toBeDefined()
+    await accountTab!.trigger('click')
+
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationMatched')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationDifference')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationPending')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationUnavailable')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationEstimated')
+    expect(monitor.text()).toContain('+$2.00')
+    expect(monitor.text()).not.toContain('admin.dashboard.profitUnverified')
   })
 })

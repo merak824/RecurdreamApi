@@ -47,7 +47,7 @@ func (r *usageLogRepository) ListRecentOpenAITTFTSamples(ctx context.Context, si
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result := make([]service.OpenAITTFTSample, 0)
 	for rows.Next() {

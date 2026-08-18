@@ -257,6 +257,12 @@ type SystemSettings struct {
 	OpenAIAdvancedSchedulerEffectiveWeightUpstreamCost     string  `json:"openai_advanced_scheduler_effective_weight_upstream_cost"`
 	OpenAIAdvancedSchedulerEffectiveWeightPreviousResponse string  `json:"openai_advanced_scheduler_effective_weight_previous_response"`
 	OpenAIAdvancedSchedulerEffectiveWeightSessionSticky    string  `json:"openai_advanced_scheduler_effective_weight_session_sticky"`
+	OpenAITTFTOptimizerEnabled                             bool    `json:"openai_ttft_optimizer_enabled"`
+	OpenAITTFTBaseP90Seconds                               int     `json:"openai_ttft_base_p90_seconds"`
+	OpenAITTFTCacheProtectionEnabled                       bool    `json:"openai_ttft_cache_protection_enabled"`
+	OpenAITTFTCacheMinContextTokens                        int     `json:"openai_ttft_cache_min_context_tokens"`
+	OpenAITTFTCacheMinHitRatePercent                       int     `json:"openai_ttft_cache_min_hit_rate_percent"`
+	OpenAITTFTCacheElasticP90CapSeconds                    int     `json:"openai_ttft_cache_elastic_p90_cap_seconds"`
 
 	// Payment configuration
 	PaymentEnabled                   bool     `json:"payment_enabled"`

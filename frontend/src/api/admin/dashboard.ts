@@ -147,6 +147,11 @@ export interface ProfitMonitorSummary {
   unverified_cost_count: number
   cost_source: string
   verification_status: string
+  reconciliation_status?: string
+  upstream_actual_cost?: number | null
+  reconciliation_difference?: number | null
+  reconciliation_difference_percent?: number | null
+  reconciliation_observed_at?: string
 }
 
 export interface ProfitMonitorTrendPoint {
@@ -168,6 +173,11 @@ export interface ProfitMonitorDimensionStat {
   margin_percent?: number | null
   cost_source: string
   verification_status: string
+  reconciliation_status?: string
+  upstream_actual_cost?: number | null
+  reconciliation_difference?: number | null
+  reconciliation_difference_percent?: number | null
+  reconciliation_observed_at?: string
 }
 
 export interface ProfitMonitorResponse {

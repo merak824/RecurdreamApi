@@ -280,6 +280,12 @@ type SystemSettings struct {
 	OpenAIAdvancedSchedulerEffectiveWeightUpstreamCost     string
 	OpenAIAdvancedSchedulerEffectiveWeightPreviousResponse string
 	OpenAIAdvancedSchedulerEffectiveWeightSessionSticky    string
+	OpenAITTFTOptimizerEnabled                             bool
+	OpenAITTFTBaseP90Seconds                               int
+	OpenAITTFTCacheProtectionEnabled                       bool
+	OpenAITTFTCacheMinContextTokens                        int
+	OpenAITTFTCacheMinHitRatePercent                       int
+	OpenAITTFTCacheElasticP90CapSeconds                    int
 
 	// 余额不足提醒
 	BalanceLowNotifyEnabled     bool

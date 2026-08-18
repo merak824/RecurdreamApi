@@ -164,10 +164,13 @@ type UsageLog struct {
 	ActualCost                float64
 	RateMultiplier            float64
 	LongContextBillingApplied bool
-	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
+	// AccountRateMultiplier 上游探测倍率快照（nil 表示没有有效探测证据；利润监测不按 1.0 猜测）
 	AccountRateMultiplier *float64
 	// AccountStatsCost 账号统计定价预计算费用（nil = 使用默认公式 total_cost × account_rate_multiplier）
 	AccountStatsCost *float64
+	// ProfitCostSource freezes the evidence used by profit monitoring for this
+	// request. Empty values are persisted as unknown for legacy callers.
+	ProfitCostSource string
 
 	BillingType  int8
 	RequestType  RequestType
@@ -219,23 +222,34 @@ type UsageLog struct {
 // OpenAI first-token optimizer. Pointer fields preserve the distinction between
 // an unavailable measurement and a measured zero value.
 type OpenAITTFTContext struct {
-	Version               int    `json:"version"`
-	Transport             string `json:"transport"`
-	UserFirstTokenMs      *int   `json:"user_first_token_ms,omitempty"`
-	UpstreamFirstTokenMs  *int   `json:"upstream_first_token_ms,omitempty"`
-	RoutingMs             *int64 `json:"routing_ms,omitempty"`
-	QueueWaitMs           *int64 `json:"queue_wait_ms,omitempty"`
-	ConnectionAcquireMs   *int64 `json:"connection_acquire_ms,omitempty"`
-	ConnectionReused      *bool  `json:"connection_reused,omitempty"`
-	Exploration           bool   `json:"exploration"`
-	SampleCount           int    `json:"sample_count"`
-	SampleP50Ms           *int   `json:"sample_p50_ms,omitempty"`
-	SampleP90Ms           *int   `json:"sample_p90_ms,omitempty"`
-	FirstSemanticEvent    string `json:"first_semantic_event,omitempty"`
-	FirstOutputTimeoutMs  int64  `json:"first_output_timeout_ms"`
-	SwitchCount           int    `json:"switch_count"`
-	SwitchedFromAccountID *int64 `json:"switched_from_account_id,omitempty"`
-	ClientDisconnected    bool   `json:"client_disconnected"`
+	Version                        int      `json:"version"`
+	Transport                      string   `json:"transport"`
+	OptimizerApplied               bool     `json:"optimizer_applied"`
+	UserFirstTokenMs               *int     `json:"user_first_token_ms,omitempty"`
+	UpstreamFirstTokenMs           *int     `json:"upstream_first_token_ms,omitempty"`
+	RoutingMs                      *int64   `json:"routing_ms,omitempty"`
+	QueueWaitMs                    *int64   `json:"queue_wait_ms,omitempty"`
+	ConnectionAcquireMs            *int64   `json:"connection_acquire_ms,omitempty"`
+	ConnectionReused               *bool    `json:"connection_reused,omitempty"`
+	Exploration                    bool     `json:"exploration"`
+	SampleCount                    int      `json:"sample_count"`
+	SampleP50Ms                    *int     `json:"sample_p50_ms,omitempty"`
+	SampleP90Ms                    *int     `json:"sample_p90_ms,omitempty"`
+	CacheProfileStatus             string   `json:"cache_profile_status,omitempty"`
+	CacheEligible                  bool     `json:"cache_eligible"`
+	CacheContextTokens             int      `json:"cache_context_tokens,omitempty"`
+	CacheHitRatePercent            *float64 `json:"cache_hit_rate_percent,omitempty"`
+	BaseP90Ms                      int      `json:"base_p90_ms,omitempty"`
+	EffectiveP90Ms                 int      `json:"effective_p90_ms,omitempty"`
+	StickySwitched                 bool     `json:"sticky_switched"`
+	DebounceKept                   bool     `json:"debounce_kept"`
+	StickyEscapeReason             string   `json:"sticky_escape_reason,omitempty"`
+	SchedulerSwitchedFromAccountID *int64   `json:"scheduler_switched_from_account_id,omitempty"`
+	FirstSemanticEvent             string   `json:"first_semantic_event,omitempty"`
+	FirstOutputTimeoutMs           int64    `json:"first_output_timeout_ms"`
+	SwitchCount                    int      `json:"switch_count"`
+	SwitchedFromAccountID          *int64   `json:"switched_from_account_id,omitempty"`
+	ClientDisconnected             bool     `json:"client_disconnected"`
 }
 
 func (c *OpenAITTFTContext) MarshalJSONValue() (string, error) {

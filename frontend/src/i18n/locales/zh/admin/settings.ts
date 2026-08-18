@@ -408,6 +408,24 @@ export default {
         accountSchedulingThresholdsDisabledHint: '100 表示禁用该平台自动停调；1–99 表示达到该利用率后暂停调度。',
         accountSchedulingThresholdsRangeHint: '整数 1–100（百分比）。仅 OpenAI / Anthropic / Grok。'
       },
+      openaiTTFT: {
+        title: 'OpenAI 首 Token 优化',
+        description: '根据历史流式首 Token 表现选择更稳定的 OpenAI 账号；长上下文热缓存会话可在限定范围内减少不必要的换号。不会并行重发请求。',
+        optimizerEnabled: '启用首 Token 优化',
+        optimizerEnabledHint: '作用于全部符合条件的 OpenAI 文本流式请求；关闭后恢复原有调度。',
+        baseP90: '基础稳定 P90',
+        baseP90Hint: '新会话、冷缓存和普通上下文使用，范围 1–30 秒。这是后续请求的历史选号门槛，不是当前请求超时。',
+        cacheProtectionEnabled: '长上下文缓存保护',
+        cacheProtectionEnabledHint: '仅对满足上下文和缓存命中率条件的热缓存会话使用弹性 P90；关闭不影响基础首 Token 优化。',
+        cacheMinContextTokens: '缓存保护门槛',
+        cacheMinContextTokensHint: '达到该上下文 Token 数后才评估缓存保护，范围 1,000–10,000,000。',
+        cacheMinHitRate: '最低缓存命中率',
+        cacheMinHitRateHint: '达到该比例后才启用弹性 P90，范围 1%–100%。',
+        elasticP90Cap: '弹性 P90 上限',
+        elasticP90CapHint: '不得低于基础稳定 P90，最大 60 秒；明确错误仍立即执行原有重试。',
+        invalidSettings: 'OpenAI 首 Token 配置无效，请检查各项范围以及基础 P90 与弹性上限的关系。',
+        secondsUnit: '秒'
+      },
       upstreamBillingProbe: {
         title: '上游倍率自动探测',
         description: '定期获取 API Key 账号所连接上游 Sub2API 站点声明的计费倍率；只有另行开启“同步上游声明倍率”的账号才会更新账号倍率。',

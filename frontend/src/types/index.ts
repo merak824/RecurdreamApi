@@ -1727,14 +1727,31 @@ export interface AdminUsageLog extends UsageLog {
   openai_ttft_context?: {
     version?: number
     transport?: string
+    optimizer_applied?: boolean
     user_first_token_ms?: number | null
     upstream_first_token_ms?: number | null
     sample_count?: number
     sample_p50_ms?: number | null
     sample_p90_ms?: number | null
+    routing_ms?: number | null
+    queue_wait_ms?: number | null
+    connection_acquire_ms?: number | null
+    connection_reused?: boolean | null
+    cache_profile_status?: string
+    cache_eligible?: boolean
+    cache_context_tokens?: number
+    cache_hit_rate_percent?: number | null
+    base_p90_ms?: number
+    effective_p90_ms?: number
+    sticky_switched?: boolean
+    debounce_kept?: boolean
+    sticky_escape_reason?: string
+    scheduler_switched_from_account_id?: number | null
     first_semantic_event?: string
     exploration?: boolean
+    first_output_timeout_ms?: number
     switch_count?: number
+    switched_from_account_id?: number | null
     client_disconnected?: boolean
   }
   upstream_model?: string | null

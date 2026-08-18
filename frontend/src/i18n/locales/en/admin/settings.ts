@@ -415,6 +415,24 @@ export default {
         accountSchedulingThresholdsDisabledHint: '100 disables platform auto-pause. Values 1–99 pause scheduling once utilization reaches that percent.',
         accountSchedulingThresholdsRangeHint: 'Integer 1–100 (percent). OpenAI/Anthropic/Grok only.'
       },
+      openaiTTFT: {
+        title: 'OpenAI First-token Optimization',
+        description: 'Select more stable OpenAI accounts from historical streaming first-token performance while limiting unnecessary switches for hot-cache long-context sessions. Requests are never duplicated in parallel.',
+        optimizerEnabled: 'Enable first-token optimization',
+        optimizerEnabledHint: 'Applies to all eligible OpenAI text streaming requests. Disabling restores the previous scheduling behavior.',
+        baseP90: 'Base stable P90',
+        baseP90Hint: 'Used for new, cold-cache, and normal-context sessions. Range: 1–30 seconds. This is a historical selection threshold for later requests, not an in-flight timeout.',
+        cacheProtectionEnabled: 'Long-context cache protection',
+        cacheProtectionEnabledHint: 'Use elastic P90 only for hot-cache sessions that meet both context and cache-hit thresholds. Disabling does not turn off base first-token optimization.',
+        cacheMinContextTokens: 'Cache protection threshold',
+        cacheMinContextTokensHint: 'Evaluate cache protection at or above this context size. Range: 1,000–10,000,000 tokens.',
+        cacheMinHitRate: 'Minimum cache hit rate',
+        cacheMinHitRateHint: 'Enable elastic P90 at or above this rate. Range: 1%–100%.',
+        elasticP90Cap: 'Elastic P90 cap',
+        elasticP90CapHint: 'Must be at least the base stable P90 and no more than 60 seconds. Explicit errors still use the existing retry path immediately.',
+        invalidSettings: 'The OpenAI first-token settings are invalid. Check each range and ensure the elastic cap is not below the base P90.',
+        secondsUnit: 'sec'
+      },
       upstreamBillingProbe: {
         title: 'Upstream Rate Auto Detection',
         description: 'Periodically retrieve rates declared by upstream Sub2API sites. Account rates change only when the separate sync switch is enabled.',

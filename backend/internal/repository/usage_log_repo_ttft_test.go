@@ -33,15 +33,16 @@ func TestPrepareUsageLogInsertPersistsOpenAITTFTFieldsAtTail(t *testing.T) {
 	})
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
-	require.Equal(t, sql.NullInt64{Int64: int64(upstream), Valid: true}, prepared.args[len(prepared.args)-3])
-	require.Equal(t, true, prepared.args[len(prepared.args)-2])
-	payloadValue, ok := prepared.args[len(prepared.args)-1].(sql.NullString)
+	require.Equal(t, sql.NullInt64{Int64: int64(upstream), Valid: true}, prepared.args[len(prepared.args)-4])
+	require.Equal(t, true, prepared.args[len(prepared.args)-3])
+	payloadValue, ok := prepared.args[len(prepared.args)-2].(sql.NullString)
 	require.True(t, ok)
 	require.True(t, payloadValue.Valid)
 	var decoded service.OpenAITTFTContext
 	require.NoError(t, json.Unmarshal([]byte(payloadValue.String), &decoded))
 	require.Equal(t, contextValue.Version, decoded.Version)
 	require.Equal(t, contextValue.Transport, decoded.Transport)
+	require.Equal(t, service.ProfitCostSourceUnknown, prepared.args[len(prepared.args)-1])
 }
 
 func TestScanUsageLogHydratesOpenAITTFTFields(t *testing.T) {

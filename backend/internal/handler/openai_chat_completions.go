@@ -371,6 +371,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				APIKeyService:      h.apiKeyService,
 				QuotaPlatform:      quotaPlatform,
 				SessionID:          sessionID,
+				SessionHash:        sessionHash,
 				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
 				PricingAt:          pricingAt,
 				CyberBlocked:       cyberBlocked,

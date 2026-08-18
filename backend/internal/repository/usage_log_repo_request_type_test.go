@@ -16,6 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPrepareUsageLogInsertPersistsProfitCostSource(t *testing.T) {
+	source := service.ProfitCostSourceGroupBreakEven
+	log := &service.UsageLog{
+		Model:            "gpt-test",
+		ProfitCostSource: source,
+	}
+
+	prepared := prepareUsageLogInsert(log)
+	require.Equal(t, source, prepared.args[len(prepared.args)-1])
+
+	query, args := buildUsageLogBestEffortInsertQuery([]usageLogInsertPrepared{prepared})
+	require.Contains(t, query, "profit_cost_source")
+	require.Equal(t, source, args[len(args)-1])
+}
+
 func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}
@@ -103,6 +118,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // upstream_first_token_ms
 			log.ClientDisconnected,
 			sqlmock.AnyArg(), // openai_ttft_context
+			service.ProfitCostSourceUnknown,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
 
@@ -198,6 +214,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // upstream_first_token_ms
 			log.ClientDisconnected,
 			sqlmock.AnyArg(), // openai_ttft_context
+			service.ProfitCostSourceUnknown,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
 

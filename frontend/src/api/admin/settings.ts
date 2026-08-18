@@ -667,6 +667,12 @@ export interface SystemSettings {
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
   payment_visible_method_wxpay_enabled?: boolean;
+  openai_ttft_optimizer_enabled?: boolean;
+  openai_ttft_base_p90_seconds?: number;
+  openai_ttft_cache_protection_enabled?: boolean;
+  openai_ttft_cache_min_context_tokens?: number;
+  openai_ttft_cache_min_hit_rate_percent?: number;
+  openai_ttft_cache_elastic_p90_cap_seconds?: number;
   openai_low_upstream_rate_priority_enabled?: boolean;
   openai_oauth_scheduling_rate_multiplier?: number;
   openai_advanced_scheduler_enabled?: boolean;
@@ -973,6 +979,12 @@ export interface UpdateSettingsRequest {
   payment_visible_method_wxpay_source?: string;
   payment_visible_method_alipay_enabled?: boolean;
   payment_visible_method_wxpay_enabled?: boolean;
+  openai_ttft_optimizer_enabled?: boolean;
+  openai_ttft_base_p90_seconds?: number;
+  openai_ttft_cache_protection_enabled?: boolean;
+  openai_ttft_cache_min_context_tokens?: number;
+  openai_ttft_cache_min_hit_rate_percent?: number;
+  openai_ttft_cache_elastic_p90_cap_seconds?: number;
   openai_low_upstream_rate_priority_enabled?: boolean;
   openai_oauth_scheduling_rate_multiplier?: number;
   openai_advanced_scheduler_enabled?: boolean;

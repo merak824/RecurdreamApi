@@ -1,10 +1,183 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+type openAITTFTCacheStateStoreStub struct {
+	state         OpenAITTFTCacheState
+	err           error
+	debounceKeys  []OpenAITTFTSwitchDebounceKey
+	debounces     []OpenAITTFTSwitchDebounce
+	debounceTTLs  []time.Duration
+	debounceError error
+}
+
+func (s *openAITTFTCacheStateStoreStub) GetOpenAITTFTCacheState(context.Context, OpenAITTFTCacheProfileKey) (OpenAITTFTCacheState, error) {
+	return s.state, s.err
+}
+
+func (s *openAITTFTCacheStateStoreStub) PutOpenAITTFTCacheProfile(context.Context, OpenAITTFTCacheProfileKey, OpenAITTFTCacheProfile, time.Duration) error {
+	return nil
+}
+
+func (s *openAITTFTCacheStateStoreStub) PutOpenAITTFTSwitchDebounce(_ context.Context, key OpenAITTFTSwitchDebounceKey, debounce OpenAITTFTSwitchDebounce, ttl time.Duration) error {
+	s.debounceKeys = append(s.debounceKeys, key)
+	s.debounces = append(s.debounces, debounce)
+	s.debounceTTLs = append(s.debounceTTLs, ttl)
+	return s.debounceError
+}
+
+type openAITTFTCacheStateGatewayStub struct {
+	GatewayCache
+	*openAITTFTCacheStateStoreStub
+}
+
+func newOpenAITTFTStickyEvaluationService(store *openAITTFTCacheStateStoreStub, accountID int64, ttftMs int) *OpenAIGatewayService {
+	cfg := &config.Config{}
+	cfg.Gateway.OpenAITTFTOptimizerEnabled = true
+	cfg.Gateway.OpenAITTFTOptimizerRolloutPercent = 100
+	cfg.Gateway.OpenAITTFTStableThresholdMs = 10_000
+	svc := &OpenAIGatewayService{cfg: cfg, openAITTFTWindow: newOpenAITTFTLocalWindow()}
+	if store != nil {
+		svc.cache = &openAITTFTCacheStateGatewayStub{openAITTFTCacheStateStoreStub: store}
+	}
+	now := time.Now().UTC()
+	for i := 0; i < openAITTFTWindowSampleCap; i++ {
+		svc.openAITTFTWindow.AddSample(OpenAITTFTSample{AccountID: accountID, Transport: OpenAITTFTTransportHTTPSSE, ObservedAt: now.Add(-time.Duration(i) * time.Second), TTFTMs: ttftMs})
+	}
+	return svc
+}
+
+func requireDefaultOpenAIAccountScheduler(t *testing.T, svc *OpenAIGatewayService) *defaultOpenAIAccountScheduler {
+	t.Helper()
+	scheduler, ok := newDefaultOpenAIAccountScheduler(svc, nil).(*defaultOpenAIAccountScheduler)
+	require.True(t, ok)
+	return scheduler
+}
+
+func TestEvaluateOpenAITTFTStickyUsesElasticCacheThreshold(t *testing.T) {
+	const accountID int64 = 9
+	now := time.Now().UTC()
+	store := &openAITTFTCacheStateStoreStub{state: OpenAITTFTCacheState{
+		HasImage: true,
+		Profile:  OpenAITTFTCacheProfile{ObservedAt: now, TotalContextTokens: 100_000, CacheReadTokens: 80_000},
+	}}
+	svc := newOpenAITTFTStickyEvaluationService(store, accountID, 12_000)
+	scheduler := requireDefaultOpenAIAccountScheduler(t, svc)
+	groupID := int64(7)
+
+	got := scheduler.evaluateOpenAITTFTSticky(context.Background(), OpenAIAccountScheduleRequest{GroupID: &groupID, Platform: PlatformOpenAI, SessionHash: "session", Streaming: true}, accountID, now)
+	require.False(t, got.ShouldEscape)
+	require.True(t, got.CacheEligible)
+	require.Equal(t, 15_000, got.EffectiveP90Ms)
+	require.Equal(t, 12_000, got.SampleP90Ms)
+}
+
+func TestEvaluateOpenAITTFTStickyEscapesAboveElasticThresholdAndFallsBackOnRedisError(t *testing.T) {
+	const accountID int64 = 9
+	now := time.Now().UTC()
+	groupID := int64(7)
+	req := OpenAIAccountScheduleRequest{GroupID: &groupID, Platform: PlatformOpenAI, SessionHash: "session", Streaming: true}
+
+	eligibleStore := &openAITTFTCacheStateStoreStub{state: OpenAITTFTCacheState{HasImage: true, Profile: OpenAITTFTCacheProfile{ObservedAt: now, TotalContextTokens: 100_000, CacheReadTokens: 80_000}}}
+	eligibleScheduler := requireDefaultOpenAIAccountScheduler(t, newOpenAITTFTStickyEvaluationService(eligibleStore, accountID, 16_000))
+	eligible := eligibleScheduler.evaluateOpenAITTFTSticky(context.Background(), req, accountID, now)
+	require.True(t, eligible.ShouldEscape)
+	require.Equal(t, 15_000, eligible.EffectiveP90Ms)
+
+	errorStore := &openAITTFTCacheStateStoreStub{err: errors.New("redis unavailable")}
+	errorScheduler := requireDefaultOpenAIAccountScheduler(t, newOpenAITTFTStickyEvaluationService(errorStore, accountID, 12_000))
+	fallback := errorScheduler.evaluateOpenAITTFTSticky(context.Background(), req, accountID, now)
+	require.True(t, fallback.ShouldEscape)
+	require.Equal(t, "read_error", fallback.CacheProfileStatus)
+	require.Equal(t, 10_000, fallback.EffectiveP90Ms)
+}
+
+func TestEvaluateOpenAITTFTStickyDebounceKeepsCurrentAccount(t *testing.T) {
+	const accountID int64 = 9
+	now := time.Now().UTC()
+	store := &openAITTFTCacheStateStoreStub{state: OpenAITTFTCacheState{
+		HasDebounce: true,
+		Debounce:    OpenAITTFTSwitchDebounce{FromAccountID: 8, ToAccountID: accountID, SwitchedAt: now.Add(-time.Minute)},
+	}}
+	svc := newOpenAITTFTStickyEvaluationService(store, accountID, 20_000)
+	scheduler := requireDefaultOpenAIAccountScheduler(t, svc)
+	groupID := int64(7)
+
+	got := scheduler.evaluateOpenAITTFTSticky(context.Background(), OpenAIAccountScheduleRequest{GroupID: &groupID, Platform: PlatformOpenAI, SessionHash: "session", Streaming: true}, accountID, now)
+	require.False(t, got.ShouldEscape)
+	require.True(t, got.DebounceKept)
+	require.Equal(t, 10_000, got.EffectiveP90Ms)
+}
+
+func TestRecordOpenAITTFTSwitchDebounceWritesOnlyForSuccessfulTTFTSwitch(t *testing.T) {
+	store := &openAITTFTCacheStateStoreStub{}
+	svc := newOpenAITTFTStickyEvaluationService(store, 9, 20_000)
+	scheduler := requireDefaultOpenAIAccountScheduler(t, svc)
+	groupID := int64(7)
+	req := OpenAIAccountScheduleRequest{GroupID: &groupID, SessionHash: "session"}
+	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+
+	scheduler.recordOpenAITTFTSwitchDebounce(context.Background(), req, openAIStickyEscapeOutcome{
+		Escaped:       true,
+		Reason:        openAIStickyEscapeReasonTTFTP90,
+		FromAccountID: 9,
+	}, 10, now)
+
+	require.Equal(t, []OpenAITTFTSwitchDebounceKey{{GroupID: groupID, SessionHash: "session"}}, store.debounceKeys)
+	require.Equal(t, []OpenAITTFTSwitchDebounce{{FromAccountID: 9, ToAccountID: 10, SwitchedAt: now}}, store.debounces)
+	require.Equal(t, []time.Duration{openAITTFTCacheSwitchDebounceTTL}, store.debounceTTLs)
+
+	scheduler.recordOpenAITTFTSwitchDebounce(context.Background(), req, openAIStickyEscapeOutcome{
+		Escaped:       true,
+		Reason:        openAIStickyEscapeReasonTTFTP90,
+		FromAccountID: 9,
+	}, 9, now)
+	scheduler.recordOpenAITTFTSwitchDebounce(context.Background(), req, openAIStickyEscapeOutcome{
+		Escaped:       true,
+		Reason:        "error_rate",
+		FromAccountID: 9,
+	}, 10, now)
+	require.Len(t, store.debounces, 1)
+}
+
+func TestApplyOpenAITTFTScheduleDecisionCopiesCacheDiagnostics(t *testing.T) {
+	fromAccountID := int64(9)
+	result := &OpenAIForwardResult{Stream: true}
+	service := &OpenAIGatewayService{}
+
+	service.ApplyOpenAITTFTScheduleDecision(result, OpenAIAccountScheduleDecision{
+		TTFTOptimized:             true,
+		TTFTCacheProfileStatus:    "eligible",
+		TTFTCacheEligible:         true,
+		TTFTCacheContextTokens:    150_000,
+		TTFTCacheHitRatePercent:   85,
+		TTFTBaseP90Ms:             10_000,
+		TTFTEffectiveP90Ms:        20_000,
+		TTFTStickySwitched:        true,
+		TTFTDebounceKept:          false,
+		TTFTStickyEscapeReason:    openAIStickyEscapeReasonTTFTP90,
+		TTFTSwitchedFromAccountID: fromAccountID,
+	})
+
+	require.True(t, result.TTFTOptimized)
+	require.Equal(t, "eligible", result.TTFTCacheProfileStatus)
+	require.True(t, result.TTFTCacheEligible)
+	require.Equal(t, 150_000, result.TTFTCacheContextTokens)
+	require.Equal(t, 85.0, result.TTFTCacheHitRatePercent)
+	require.Equal(t, 10_000, result.TTFTBaseP90Ms)
+	require.Equal(t, 20_000, result.TTFTEffectiveP90Ms)
+	require.True(t, result.TTFTStickySwitched)
+	require.Equal(t, openAIStickyEscapeReasonTTFTP90, result.TTFTStickyEscapeReason)
+	require.Equal(t, fromAccountID, result.TTFTSwitchedFromAccountID)
+}
 
 func TestOrderOpenAIAccountCandidatesByTTFTKeepsPriorityAsOuterLayer(t *testing.T) {
 	accounts := []*Account{

@@ -239,6 +239,21 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.upstreamCostWeight": "计费倍率",
     "admin.settings.openaiExperimentalScheduler.previousResponseWeight": "previous_response 粘性",
     "admin.settings.openaiExperimentalScheduler.sessionStickyWeight": "session_hash 粘性",
+    "admin.settings.openaiTTFT.title": "OpenAI 首 Token 优化",
+    "admin.settings.openaiTTFT.description": "全局优化 OpenAI 文本流式请求的首 Token 调度，并在长上下文热缓存会话中限制不必要的换号。",
+    "admin.settings.openaiTTFT.optimizerEnabled": "启用首 Token 优化",
+    "admin.settings.openaiTTFT.optimizerEnabledHint": "作用于全部符合条件的 OpenAI 文本流式请求。",
+    "admin.settings.openaiTTFT.baseP90": "基础稳定 P90",
+    "admin.settings.openaiTTFT.baseP90Hint": "新会话、冷缓存和普通上下文使用，范围 1–30 秒。",
+    "admin.settings.openaiTTFT.cacheProtectionEnabled": "长上下文缓存保护",
+    "admin.settings.openaiTTFT.cacheProtectionEnabledHint": "仅对满足上下文和缓存命中率条件的热缓存会话使用弹性 P90。",
+    "admin.settings.openaiTTFT.cacheMinContextTokens": "缓存保护门槛",
+    "admin.settings.openaiTTFT.cacheMinContextTokensHint": "达到该上下文 Token 数后才评估缓存保护，范围 1,000–10,000,000。",
+    "admin.settings.openaiTTFT.cacheMinHitRate": "最低缓存命中率",
+    "admin.settings.openaiTTFT.cacheMinHitRateHint": "达到该比例后才启用弹性 P90，范围 1%–100%。",
+    "admin.settings.openaiTTFT.elasticP90Cap": "弹性 P90 上限",
+    "admin.settings.openaiTTFT.elasticP90CapHint": "不得低于基础稳定 P90，最大 60 秒。",
+    "admin.settings.openaiTTFT.invalidSettings": "OpenAI 首 Token 配置无效，请检查各项范围以及基础 P90 与弹性上限的关系。",
     "admin.settings.upstreamBillingProbe.title": "上游倍率自动探测",
     "admin.settings.upstreamBillingProbe.description": "定期获取 OpenAI API Key 所连接上游 Sub2API 站点声明的计费倍率。",
     "admin.settings.upstreamBillingProbe.enabled": "启用全局自动探测",
@@ -540,6 +555,12 @@ const baseSettingsResponse = {
   openai_advanced_scheduler_effective_weight_upstream_cost: "0",
   openai_advanced_scheduler_effective_weight_previous_response: "5",
   openai_advanced_scheduler_effective_weight_session_sticky: "3",
+  openai_ttft_optimizer_enabled: true,
+  openai_ttft_base_p90_seconds: 10,
+  openai_ttft_cache_protection_enabled: true,
+  openai_ttft_cache_min_context_tokens: 100000,
+  openai_ttft_cache_min_hit_rate_percent: 80,
+  openai_ttft_cache_elastic_p90_cap_seconds: 30,
   balance_low_notify_enabled: false,
   balance_low_notify_threshold: 0,
   balance_low_notify_recharge_url: "",
@@ -1320,6 +1341,82 @@ describe("admin SettingsView payment visible method controls", () => {
       "默认关闭。开启后仅影响本网关在 OpenAI 账号间的实验性调度选择逻辑",
     );
     expect(wrapper.text()).not.toContain("OpenAI 高级调度器");
+  });
+
+  it("loads, disables, and saves the independent OpenAI first-token settings", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openGatewayTab(wrapper);
+
+    const card = wrapper.get('[data-testid="openai-ttft-settings"]');
+    expect(card.text()).toContain("OpenAI 首 Token 优化");
+
+    const optimizerToggle = card.get('[data-testid="openai-ttft-optimizer-enabled"]');
+    const baseP90Input = card.get('[data-testid="openai-ttft-base-p90"]');
+    const cacheProtectionToggle = card.get(
+      '[data-testid="openai-ttft-cache-protection-enabled"]',
+    );
+    const contextInput = card.get('[data-testid="openai-ttft-cache-min-context"]');
+    const hitRateInput = card.get('[data-testid="openai-ttft-cache-min-hit-rate"]');
+    const elasticCapInput = card.get('[data-testid="openai-ttft-elastic-p90-cap"]');
+
+    expect((optimizerToggle.element as HTMLInputElement).checked).toBe(true);
+    expect((baseP90Input.element as HTMLInputElement).value).toBe("10");
+    expect((cacheProtectionToggle.element as HTMLInputElement).checked).toBe(true);
+    expect((contextInput.element as HTMLInputElement).value).toBe("100000");
+    expect((hitRateInput.element as HTMLInputElement).value).toBe("80");
+    expect((elasticCapInput.element as HTMLInputElement).value).toBe("30");
+
+    await optimizerToggle.setValue(false);
+    expect(baseP90Input.attributes("disabled")).toBeDefined();
+    expect(cacheProtectionToggle.attributes("disabled")).toBeDefined();
+    expect(contextInput.attributes("disabled")).toBeDefined();
+    expect(hitRateInput.attributes("disabled")).toBeDefined();
+    expect(elasticCapInput.attributes("disabled")).toBeDefined();
+
+    await optimizerToggle.setValue(true);
+    await baseP90Input.setValue("8");
+    await contextInput.setValue("150000");
+    await hitRateInput.setValue("85");
+    await elasticCapInput.setValue("35");
+    await cacheProtectionToggle.setValue(false);
+    expect(baseP90Input.attributes("disabled")).toBeUndefined();
+    expect(contextInput.attributes("disabled")).toBeDefined();
+    expect(hitRateInput.attributes("disabled")).toBeDefined();
+    expect(elasticCapInput.attributes("disabled")).toBeDefined();
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        openai_ttft_optimizer_enabled: true,
+        openai_ttft_base_p90_seconds: 8,
+        openai_ttft_cache_protection_enabled: false,
+        openai_ttft_cache_min_context_tokens: 150000,
+        openai_ttft_cache_min_hit_rate_percent: 85,
+        openai_ttft_cache_elastic_p90_cap_seconds: 35,
+      }),
+    );
+  });
+
+  it("rejects invalid OpenAI first-token settings before calling the backend", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openGatewayTab(wrapper);
+
+    const card = wrapper.get('[data-testid="openai-ttft-settings"]');
+    await card.get('[data-testid="openai-ttft-base-p90"]').setValue("25");
+    await card.get('[data-testid="openai-ttft-elastic-p90-cap"]').setValue("20");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalledWith(
+      "OpenAI 首 Token 配置无效，请检查各项范围以及基础 P90 与弹性上限的关系。",
+    );
   });
 
   it("loads and saves upstream billing probe settings from the gateway tab", async () => {

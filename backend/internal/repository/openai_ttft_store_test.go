@@ -65,6 +65,56 @@ func TestOpenAITTFTStoreExplorationQuotaNeverExceedsConfiguredPercent(t *testing
 	require.Equal(t, 2, allowed)
 }
 
+func TestOpenAITTFTCacheProfileStoreIsolatesKeysAndKeepsNewestObservation(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	store := NewOpenAITTFTCacheProfileStore(rdb)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
+	key := service.OpenAITTFTCacheProfileKey{GroupID: 7, SessionHash: "session-hash", AccountID: 9}
+	newer := service.OpenAITTFTCacheProfile{ObservedAt: now, TotalContextTokens: 200_000, CacheReadTokens: 180_000}
+	older := service.OpenAITTFTCacheProfile{ObservedAt: now.Add(-time.Minute), TotalContextTokens: 100_000, CacheReadTokens: 80_000}
+
+	require.NoError(t, store.PutOpenAITTFTCacheProfile(ctx, key, newer, 10*time.Minute))
+	require.NoError(t, store.PutOpenAITTFTCacheProfile(ctx, key, older, 10*time.Minute))
+	state, err := store.GetOpenAITTFTCacheState(ctx, key)
+	require.NoError(t, err)
+	require.True(t, state.HasImage)
+	require.Equal(t, newer.TotalContextTokens, state.Profile.TotalContextTokens)
+
+	other, err := store.GetOpenAITTFTCacheState(ctx, service.OpenAITTFTCacheProfileKey{GroupID: 7, SessionHash: "other-session", AccountID: 9})
+	require.NoError(t, err)
+	require.False(t, other.HasImage)
+
+	mr.FastForward(11 * time.Minute)
+	expired, err := store.GetOpenAITTFTCacheState(ctx, key)
+	require.NoError(t, err)
+	require.False(t, expired.HasImage)
+}
+
+func TestOpenAITTFTCacheProfileStoreKeepsSwitchDebounceIsolated(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	store := NewOpenAITTFTCacheProfileStore(rdb)
+	ctx := context.Background()
+	key := service.OpenAITTFTSwitchDebounceKey{GroupID: 7, SessionHash: "session-hash"}
+
+	require.NoError(t, store.PutOpenAITTFTSwitchDebounce(ctx, key, service.OpenAITTFTSwitchDebounce{FromAccountID: 9, ToAccountID: 10, SwitchedAt: time.Now().UTC()}, 5*time.Minute))
+	state, err := store.GetOpenAITTFTCacheState(ctx, service.OpenAITTFTCacheProfileKey{GroupID: 7, SessionHash: key.SessionHash, AccountID: 10})
+	require.NoError(t, err)
+	require.True(t, state.HasDebounce)
+	require.Equal(t, int64(10), state.Debounce.ToAccountID)
+
+	other, err := store.GetOpenAITTFTCacheState(ctx, service.OpenAITTFTCacheProfileKey{GroupID: 8, SessionHash: key.SessionHash, AccountID: 10})
+	require.NoError(t, err)
+	require.False(t, other.HasDebounce)
+
+	mr.FastForward(6 * time.Minute)
+	expired, err := store.GetOpenAITTFTCacheState(ctx, service.OpenAITTFTCacheProfileKey{GroupID: 7, SessionHash: key.SessionHash, AccountID: 10})
+	require.NoError(t, err)
+	require.False(t, expired.HasDebounce)
+}
+
 func TestListRecentOpenAITTFTSamplesUsesPerAccountTransportHydration(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}

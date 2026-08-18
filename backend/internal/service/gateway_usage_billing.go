@@ -870,9 +870,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
-	usageLogRateMultiplier := usageLogAccountRateMultiplier(account, pricingAt)
+	profitCostSource, usageLogRateMultiplier := usageLogProfitCostSnapshot(account, pricingAt)
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
-		requestedModel, multiplier, imageMultiplier, usageLogRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
+		requestedModel, multiplier, imageMultiplier, profitCostSource, usageLogRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
@@ -1189,7 +1189,8 @@ func (s *GatewayService) buildRecordUsageLog(
 	requestedModel string,
 	multiplier float64,
 	imageMultiplier float64,
-	accountRateMultiplier float64,
+	profitCostSource string,
+	accountRateMultiplier *float64,
 	billingType int8,
 	cacheTTLOverridden bool,
 	cost *CostBreakdown,
@@ -1228,7 +1229,8 @@ func (s *GatewayService) buildRecordUsageLog(
 		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		ImageOutputTokens:     result.Usage.ImageOutputTokens,
 		RateMultiplier:        multiplier,
-		AccountRateMultiplier: &accountRateMultiplier,
+		AccountRateMultiplier: accountRateMultiplier,
+		ProfitCostSource:      profitCostSource,
 		BillingType:           billingType,
 		BillingMode:           resolveBillingMode(result, cost),
 		Stream:                result.Stream,

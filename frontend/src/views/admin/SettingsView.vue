@@ -4861,6 +4861,174 @@
             </div>
           </div>
 
+          <!-- OpenAI First-token Optimization -->
+          <div class="card" data-testid="openai-ttft-settings">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.openaiTTFT.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.openaiTTFT.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between gap-5">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.openaiTTFT.optimizerEnabled") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.optimizerEnabledHint") }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.openai_ttft_optimizer_enabled"
+                  data-testid="openai-ttft-optimizer-enabled"
+                />
+              </div>
+
+              <div
+                class="grid gap-5 border-t border-gray-100 pt-5 dark:border-dark-700 md:grid-cols-2"
+                :class="!form.openai_ttft_optimizer_enabled && 'opacity-60'"
+              >
+                <div>
+                  <label
+                    for="openai-ttft-base-p90"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.baseP90") }}
+                  </label>
+                  <div class="relative mt-2 max-w-48">
+                    <input
+                      id="openai-ttft-base-p90"
+                      v-model.number="form.openai_ttft_base_p90_seconds"
+                      type="number"
+                      min="1"
+                      max="30"
+                      step="1"
+                      required
+                      class="input pr-12"
+                      :disabled="!form.openai_ttft_optimizer_enabled"
+                      data-testid="openai-ttft-base-p90"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.secondsUnit") }}
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.baseP90Hint") }}
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-between gap-5 md:self-start md:pt-1">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.openaiTTFT.cacheProtectionEnabled") }}
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.cacheProtectionEnabledHint") }}
+                    </p>
+                  </div>
+                  <Toggle
+                    v-model="form.openai_ttft_cache_protection_enabled"
+                    :disabled="!form.openai_ttft_optimizer_enabled"
+                    data-testid="openai-ttft-cache-protection-enabled"
+                  />
+                </div>
+              </div>
+
+              <div
+                class="grid gap-5 border-t border-gray-100 pt-5 dark:border-dark-700 md:grid-cols-3"
+                :class="(!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled) && 'opacity-60'"
+              >
+                <div>
+                  <label
+                    for="openai-ttft-cache-min-context"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.cacheMinContextTokens") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-cache-min-context"
+                      v-model.number="form.openai_ttft_cache_min_context_tokens"
+                      type="number"
+                      min="1000"
+                      max="10000000"
+                      step="1000"
+                      required
+                      class="input pr-16"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-cache-min-context"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      Token
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.cacheMinContextTokensHint") }}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    for="openai-ttft-cache-min-hit-rate"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.cacheMinHitRate") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-cache-min-hit-rate"
+                      v-model.number="form.openai_ttft_cache_min_hit_rate_percent"
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      required
+                      class="input pr-10"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-cache-min-hit-rate"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">%</span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.cacheMinHitRateHint") }}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    for="openai-ttft-elastic-p90-cap"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.elasticP90Cap") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-elastic-p90-cap"
+                      v-model.number="form.openai_ttft_cache_elastic_p90_cap_seconds"
+                      type="number"
+                      :min="form.openai_ttft_base_p90_seconds"
+                      max="60"
+                      step="1"
+                      required
+                      class="input pr-12"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-elastic-p90-cap"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.secondsUnit") }}
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.elasticP90CapHint") }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Gateway Scheduling Settings -->
           <div class="card">
             <div
@@ -9296,6 +9464,12 @@ type SettingsForm = Omit<
   github_oauth_client_secret: string;
   google_oauth_client_secret: string;
   force_email_on_third_party_signup: boolean;
+  openai_ttft_optimizer_enabled: boolean;
+  openai_ttft_base_p90_seconds: number;
+  openai_ttft_cache_protection_enabled: boolean;
+  openai_ttft_cache_min_context_tokens: number;
+  openai_ttft_cache_min_hit_rate_percent: number;
+  openai_ttft_cache_elastic_p90_cap_seconds: number;
   openai_low_upstream_rate_priority_enabled: boolean;
   openai_oauth_scheduling_rate_multiplier: number;
   openai_advanced_scheduler_enabled: boolean;
@@ -9534,6 +9708,12 @@ const form = reactive<SettingsForm>({
   max_claude_code_version: "",
   // 分组隔离
   allow_ungrouped_key_scheduling: false,
+  openai_ttft_optimizer_enabled: true,
+  openai_ttft_base_p90_seconds: 10,
+  openai_ttft_cache_protection_enabled: true,
+  openai_ttft_cache_min_context_tokens: 100000,
+  openai_ttft_cache_min_hit_rate_percent: 80,
+  openai_ttft_cache_elastic_p90_cap_seconds: 30,
   openai_low_upstream_rate_priority_enabled: false,
   openai_oauth_scheduling_rate_multiplier: 1,
   openai_advanced_scheduler_enabled: false,
@@ -10786,6 +10966,39 @@ function findDuplicateDefaultSubscription(
   });
 }
 
+function validateAndNormalizeOpenAITTFTSettings(): boolean {
+  const baseP90 = Number(form.openai_ttft_base_p90_seconds);
+  const minContextTokens = Number(form.openai_ttft_cache_min_context_tokens);
+  const minHitRate = Number(form.openai_ttft_cache_min_hit_rate_percent);
+  const elasticP90Cap = Number(
+    form.openai_ttft_cache_elastic_p90_cap_seconds,
+  );
+  const valid =
+    Number.isInteger(baseP90) &&
+    baseP90 >= 1 &&
+    baseP90 <= 30 &&
+    Number.isInteger(minContextTokens) &&
+    minContextTokens >= 1_000 &&
+    minContextTokens <= 10_000_000 &&
+    Number.isInteger(minHitRate) &&
+    minHitRate >= 1 &&
+    minHitRate <= 100 &&
+    Number.isInteger(elasticP90Cap) &&
+    elasticP90Cap >= baseP90 &&
+    elasticP90Cap <= 60;
+
+  if (!valid) {
+    appStore.showError(t("admin.settings.openaiTTFT.invalidSettings"));
+    return false;
+  }
+
+  form.openai_ttft_base_p90_seconds = baseP90;
+  form.openai_ttft_cache_min_context_tokens = minContextTokens;
+  form.openai_ttft_cache_min_hit_rate_percent = minHitRate;
+  form.openai_ttft_cache_elastic_p90_cap_seconds = elasticP90Cap;
+  return true;
+}
+
 async function saveSettings() {
   saving.value = true;
   try {
@@ -10821,6 +11034,9 @@ async function saveSettings() {
 
     form.table_default_page_size = normalizedTableDefaultPageSize;
     form.table_page_size_options = normalizedTablePageSizeOptions;
+    if (!validateAndNormalizeOpenAITTFTSettings()) {
+      return;
+    }
 
     const normalizedLoginAgreementDocuments =
       normalizeLoginAgreementDocumentsForSave();
@@ -11184,6 +11400,19 @@ async function saveSettings() {
       payment_alipay_force_qrcode: form.payment_alipay_force_qrcode,
       payment_alipay_mobile_precreate_deep_link:
         form.payment_alipay_mobile_precreate_deep_link,
+      openai_ttft_optimizer_enabled: form.openai_ttft_optimizer_enabled,
+      openai_ttft_base_p90_seconds: Number(form.openai_ttft_base_p90_seconds),
+      openai_ttft_cache_protection_enabled:
+        form.openai_ttft_cache_protection_enabled,
+      openai_ttft_cache_min_context_tokens: Number(
+        form.openai_ttft_cache_min_context_tokens,
+      ),
+      openai_ttft_cache_min_hit_rate_percent: Number(
+        form.openai_ttft_cache_min_hit_rate_percent,
+      ),
+      openai_ttft_cache_elastic_p90_cap_seconds: Number(
+        form.openai_ttft_cache_elastic_p90_cap_seconds,
+      ),
       openai_low_upstream_rate_priority_enabled:
         form.openai_low_upstream_rate_priority_enabled,
       openai_oauth_scheduling_rate_multiplier:

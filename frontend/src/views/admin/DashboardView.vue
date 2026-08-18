@@ -228,11 +228,11 @@
               </p>
             </div>
             <span
-              class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-              :title="formatProfitSource(profitMonitor.summary.cost_source)"
+              class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
+              :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
             >
               <Icon name="shield" size="xs" :stroke-width="2" />
-              {{ t('admin.dashboard.profitUnverified') }}
+              {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
             </span>
           </div>
 
@@ -245,7 +245,7 @@
             <div class="card border-l-4 border-amber-500 p-4">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitCost') }}</p>
               <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">${{ formatCost(profitMonitor.summary.cost) }}</p>
-              <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ t('admin.dashboard.profitLocalEstimate') }}</p>
+              <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ formatProfitSource(profitMonitor.summary.cost_source) }}</p>
             </div>
             <div class="card border-l-4 p-4" :class="profitMonitor.summary.profit < 0 ? 'border-red-500' : 'border-blue-500'">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profit') }}</p>
@@ -257,14 +257,19 @@
             <div class="card border-l-4 border-violet-500 p-4">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitMargin') }}</p>
               <p class="mt-1 text-xl font-bold text-violet-600 dark:text-violet-400">{{ formatMargin(profitMonitor.summary.margin_percent) }}</p>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitUnknownCount') }}: {{ formatNumber(profitMonitor.summary.unknown_cost_count) }}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitPendingCostCount') }}: {{ formatNumber(profitMonitor.summary.unknown_cost_count) }}</p>
             </div>
           </div>
 
           <div class="card p-4">
             <div class="mb-3 flex items-center justify-between">
               <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.profitTrend') }}</h3>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitStatus') }}: {{ t('admin.dashboard.profitUnverified') }}</span>
+              <div v-if="profitMonitor.summary.upstream_actual_cost !== undefined && profitMonitor.summary.upstream_actual_cost !== null" class="text-right text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ t('admin.dashboard.profitUpstreamActualCost') }}: ${{ formatCost(profitMonitor.summary.upstream_actual_cost) }}</span>
+                <span v-if="profitMonitor.summary.reconciliation_difference !== undefined && profitMonitor.summary.reconciliation_difference !== null" class="ml-3" :class="profitMonitor.summary.reconciliation_status === 'difference' ? 'text-red-600 dark:text-red-400' : ''">
+                  {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }}: {{ formatSignedCost(profitMonitor.summary.reconciliation_difference) }}
+                </span>
+              </div>
             </div>
             <div class="h-64">
               <Line v-if="profitTrendChartData" :data="profitTrendChartData" :options="profitLineOptions" />
@@ -299,7 +304,7 @@
                     <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profit') }}</th>
                     <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitMargin') }}</th>
                     <th class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitSource') }}</th>
-                    <th class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitStatus') }}</th>
+                    <th v-if="profitDimension === 'accounts'" class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitReconciliationStatus') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
@@ -311,11 +316,32 @@
                     <td class="px-4 py-2 text-right">${{ formatCost(row.cost) }}</td>
                     <td class="px-4 py-2 text-right font-semibold" :class="row.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'">${{ formatCost(row.profit) }}</td>
                     <td class="px-4 py-2 text-right">{{ formatMargin(row.margin_percent) }}</td>
-                    <td class="whitespace-nowrap px-4 py-2 text-amber-600 dark:text-amber-400">{{ formatProfitSource(row.cost_source) }}</td>
-                    <td class="whitespace-nowrap px-4 py-2 text-amber-600 dark:text-amber-400">{{ formatProfitStatus(row.verification_status) }}</td>
+                    <td
+                      class="whitespace-nowrap px-4 py-2"
+                      :class="row.cost_source === 'upstream_probe' || row.cost_source === 'official_upstream' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'"
+                    >
+                      {{ formatProfitSource(row.cost_source) }}
+                    </td>
+                    <td v-if="profitDimension === 'accounts'" class="min-w-[180px] px-4 py-2">
+                      <span
+                        class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                        :class="profitReconciliationClass(row.reconciliation_status)"
+                      >
+                        {{ formatProfitReconciliationStatus(row.reconciliation_status) }}
+                      </span>
+                      <div v-if="row.upstream_actual_cost !== undefined && row.upstream_actual_cost !== null" class="mt-1 space-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                        <p>{{ t('admin.dashboard.profitUpstreamActualCost') }} ${{ formatCost(row.upstream_actual_cost) }}</p>
+                        <p
+                          v-if="row.reconciliation_difference !== undefined && row.reconciliation_difference !== null"
+                          :class="row.reconciliation_status === 'difference' ? 'font-medium text-red-600 dark:text-red-400' : ''"
+                        >
+                          {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }} {{ formatSignedCost(row.reconciliation_difference) }}<template v-if="row.reconciliation_difference_percent !== undefined && row.reconciliation_difference_percent !== null"> ({{ formatSignedPercent(row.reconciliation_difference_percent) }})</template>
+                        </p>
+                      </div>
+                    </td>
                   </tr>
                   <tr v-if="profitRows.length === 0">
-                    <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitNoData') }}</td>
+                    <td :colspan="profitDimension === 'accounts' ? 9 : 8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitNoData') }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -788,6 +814,14 @@ const formatMargin = (value: number | null | undefined): string => {
 
 const formatProfitSource = (value: string): string => {
   switch (value) {
+    case 'upstream_probe':
+      return t('admin.dashboard.profitUpstreamProbe')
+    case 'group_break_even_estimate':
+      return t('admin.dashboard.profitGroupEstimate')
+    case 'official_upstream':
+      return t('admin.dashboard.profitOfficialUpstream')
+    case 'unknown':
+      return t('admin.dashboard.profitCostUnknown')
     case 'usage_record_upstream_rate':
       return t('admin.dashboard.profitLocalEstimate')
     case 'channel_pricing':
@@ -797,13 +831,58 @@ const formatProfitSource = (value: string): string => {
     case 'legacy_formula':
       return t('admin.dashboard.profitLegacyFormula')
     default:
-      return value || t('admin.dashboard.profitLocalEstimate')
+      return value || t('admin.dashboard.profitCostUnknown')
   }
 }
 
-const formatProfitStatus = (value: string): string => {
-  if (value === 'unverified') return t('admin.dashboard.profitUnverified')
-  return value || t('admin.dashboard.profitUnverified')
+const formatProfitReconciliationStatus = (value: string | undefined): string => {
+  switch (value) {
+    case 'matched':
+      return t('admin.dashboard.profitReconciliationMatched')
+    case 'difference':
+      return t('admin.dashboard.profitReconciliationDifference')
+    case 'pending':
+      return t('admin.dashboard.profitReconciliationPending')
+    case 'estimated':
+      return t('admin.dashboard.profitReconciliationEstimated')
+    case 'official_zero':
+      return t('admin.dashboard.profitReconciliationOfficialZero')
+    case 'unavailable':
+    default:
+      return t('admin.dashboard.profitReconciliationUnavailable')
+  }
+}
+
+const profitReconciliationClass = (value: string | undefined): string => {
+  switch (value) {
+    case 'matched':
+      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800'
+    case 'difference':
+      return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800'
+    case 'pending':
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800'
+    case 'estimated':
+      return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800'
+    case 'official_zero':
+      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800'
+    case 'unavailable':
+    default:
+      return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-dark-800 dark:text-gray-300 dark:ring-dark-700'
+  }
+}
+
+const formatSignedCost = (value: number | null | undefined): string => {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '-'
+  const numericValue = Number(value)
+  const sign = numericValue >= 0 ? '+' : '-'
+  return `${sign}$${formatCost(Math.abs(numericValue))}`
+}
+
+const formatSignedPercent = (value: number | null | undefined): string => {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '-'
+  const numericValue = Number(value)
+  const sign = numericValue >= 0 ? '+' : '-'
+  return `${sign}${Math.abs(numericValue).toFixed(1)}%`
 }
 
 const formatDuration = (ms: number): string => {

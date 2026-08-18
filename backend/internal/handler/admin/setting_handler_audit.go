@@ -536,6 +536,24 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.OpenAIAdvancedSchedulerWeightSessionSticky != after.OpenAIAdvancedSchedulerWeightSessionSticky {
 		changed = append(changed, "openai_advanced_scheduler_weight_session_sticky")
 	}
+	if before.OpenAITTFTOptimizerEnabled != after.OpenAITTFTOptimizerEnabled {
+		changed = append(changed, "openai_ttft_optimizer_enabled")
+	}
+	if before.OpenAITTFTBaseP90Seconds != after.OpenAITTFTBaseP90Seconds {
+		changed = append(changed, "openai_ttft_base_p90_seconds")
+	}
+	if before.OpenAITTFTCacheProtectionEnabled != after.OpenAITTFTCacheProtectionEnabled {
+		changed = append(changed, "openai_ttft_cache_protection_enabled")
+	}
+	if before.OpenAITTFTCacheMinContextTokens != after.OpenAITTFTCacheMinContextTokens {
+		changed = append(changed, "openai_ttft_cache_min_context_tokens")
+	}
+	if before.OpenAITTFTCacheMinHitRatePercent != after.OpenAITTFTCacheMinHitRatePercent {
+		changed = append(changed, "openai_ttft_cache_min_hit_rate_percent")
+	}
+	if before.OpenAITTFTCacheElasticP90CapSeconds != after.OpenAITTFTCacheElasticP90CapSeconds {
+		changed = append(changed, "openai_ttft_cache_elastic_p90_cap_seconds")
+	}
 	// 余额、订阅到期与账号限额通知
 	if before.BalanceLowNotifyEnabled != after.BalanceLowNotifyEnabled {
 		changed = append(changed, "balance_low_notify_enabled")
@@ -844,6 +862,20 @@ func equalPlatformQuotaSettings(before, after map[string]*service.DefaultPlatfor
 }
 
 func stringSetting(value *string, fallback string) string {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func boolSetting(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func intSetting(value *int, fallback int) int {
 	if value == nil {
 		return fallback
 	}
