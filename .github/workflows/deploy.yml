@@ -160,6 +160,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           scp -P "$SERVER_PORT" -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             "${{ steps.meta.outputs.archive_path }}" \
             "${{ steps.meta.outputs.runtime_bundle_path }}" \
             "${SERVER_USER}@${SERVER_HOST}:/tmp/"
@@ -169,7 +170,9 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key "${SERVER_USER}@${SERVER_HOST}" \
+          ssh -p "$SERVER_PORT" -i ~/.ssh/deploy_key \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            "${SERVER_USER}@${SERVER_HOST}" \
             DEPLOY_PATH="$DEPLOY_PATH" \
             REMOTE_ARCHIVE="${{ steps.meta.outputs.remote_archive }}" \
             REMOTE_RUNTIME_BUNDLE="${{ steps.meta.outputs.remote_runtime_bundle }}" \

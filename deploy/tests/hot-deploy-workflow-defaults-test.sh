@@ -23,4 +23,12 @@ if grep -Fq 'bash hot-deploy.sh --load-image /tmp/sub2api-hot-<sha>.tar.gz --kee
   fail 'README routine workflow command must not force --keep-old'
 fi
 
+if [ "$(grep -Fc -- '-o ServerAliveInterval=30' .github/workflows/deploy.yml)" -lt 2 ]; then
+  fail 'workflow SSH and SCP commands must send keepalive packets during the drain window'
+fi
+
+if [ "$(grep -Fc -- '-o ServerAliveCountMax=20' .github/workflows/deploy.yml)" -lt 2 ]; then
+  fail 'workflow SSH and SCP commands must tolerate transient keepalive failures'
+fi
+
 printf 'hot deploy workflow defaults test passed\n'
