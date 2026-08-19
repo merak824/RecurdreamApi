@@ -178,10 +178,14 @@ export interface ProfitMonitorDimensionStat {
   reconciliation_difference?: number | null
   reconciliation_difference_percent?: number | null
   reconciliation_observed_at?: string
+  last_sample_at?: string
+  next_sample_at?: string
 }
 
 export interface ProfitMonitorResponse {
   generated_at: string
+  last_sample_at?: string
+  next_sample_at?: string
   summary: ProfitMonitorSummary
   trend: ProfitMonitorTrendPoint[]
   groups: ProfitMonitorDimensionStat[]

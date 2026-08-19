@@ -12,13 +12,42 @@ import (
 )
 
 const profitMonitorReconciliationFreshness = 20 * time.Minute
+const profitMonitorSamplingInterval = 10 * time.Minute
 
 type upstreamUsageBoundary struct {
-	StartCost       *float64
-	StartObservedAt *time.Time
-	EndCost         *float64
-	EndObservedAt   *time.Time
-	HasReset        bool
+	StartCost         *float64
+	StartObservedAt   *time.Time
+	EndCost           *float64
+	EndObservedAt     *time.Time
+	FirstOKObservedAt *time.Time
+	LastAttemptAt     *time.Time
+	LastAttemptStatus string
+	LastAttemptError  string
+	HasReset          bool
+}
+
+func nextUpstreamUsageSampleAt(now time.Time) time.Time {
+	return now.UTC().Truncate(profitMonitorSamplingInterval).Add(profitMonitorSamplingInterval)
+}
+
+func profitMonitorSamplingTimes(now time.Time, boundaries map[int64]*upstreamUsageBoundary) (string, string) {
+	var lastSampleAt time.Time
+	for _, boundary := range boundaries {
+		if boundary != nil && boundary.LastAttemptAt != nil && boundary.LastAttemptAt.After(lastSampleAt) {
+			lastSampleAt = boundary.LastAttemptAt.UTC()
+		}
+	}
+
+	lastSample := ""
+	nextSampleAt := nextUpstreamUsageSampleAt(now)
+	if !lastSampleAt.IsZero() {
+		lastSample = lastSampleAt.Format(time.RFC3339)
+		nextSampleAt = lastSampleAt.Add(profitMonitorSamplingInterval)
+		for !nextSampleAt.After(now) {
+			nextSampleAt = nextSampleAt.Add(profitMonitorSamplingInterval)
+		}
+	}
+	return lastSample, nextSampleAt.Format(time.RFC3339)
 }
 
 // profitMonitorCostExpr only returns a cost for a source whose evidence is
@@ -258,12 +287,22 @@ func (r *usageLogRepository) attachProfitReconciliation(
 			return err
 		}
 	}
+	if len(accountIDs) > 0 {
+		result.LastSampleAt, result.NextSampleAt = profitMonitorSamplingTimes(time.Now().UTC(), boundaries)
+	}
 	for i := range result.Accounts {
 		row := &result.Accounts[i]
 		if row.ReconciliationStatus != "" {
 			continue
 		}
-		applyProfitAccountReconciliation(row, boundaries[row.ID], startTime, endTime)
+		boundary := boundaries[row.ID]
+		if boundary != nil {
+			if boundary.LastAttemptAt != nil {
+				row.LastSampleAt = boundary.LastAttemptAt.UTC().Format(time.RFC3339)
+			}
+			row.NextSampleAt = result.NextSampleAt
+		}
+		applyProfitAccountReconciliation(row, boundary, startTime, endTime)
 	}
 	summarizeProfitReconciliation(&result.Summary, result.Accounts)
 	return nil
@@ -286,6 +325,10 @@ func (r *usageLogRepository) getUpstreamUsageBoundaries(
 		       start_snapshot.observed_at,
 		       end_snapshot.cumulative_actual_cost,
 		       end_snapshot.observed_at,
+		       first_ok_snapshot.observed_at,
+		       latest_attempt.observed_at,
+		       latest_attempt.status,
+		       latest_attempt.error_code,
 		       EXISTS (
 			       SELECT 1
 			       FROM upstream_usage_snapshots reset_snapshot
@@ -313,6 +356,21 @@ func (r *usageLogRepository) getUpstreamUsageBoundaries(
 			ORDER BY observed_at DESC, id DESC
 			LIMIT 1
 		) end_snapshot ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT observed_at
+			FROM upstream_usage_snapshots
+			WHERE account_id = requested_accounts.account_id
+			  AND status = 'ok'
+			ORDER BY observed_at ASC, id ASC
+			LIMIT 1
+		) first_ok_snapshot ON TRUE
+		LEFT JOIN LATERAL (
+			SELECT observed_at, status, error_code
+			FROM upstream_usage_snapshots
+			WHERE account_id = requested_accounts.account_id
+			ORDER BY observed_at DESC, id DESC
+			LIMIT 1
+		) latest_attempt ON TRUE
 	`, pq.Array(accountIDs), startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("query upstream usage reconciliation boundaries: %w", err)
@@ -323,9 +381,21 @@ func (r *usageLogRepository) getUpstreamUsageBoundaries(
 	for rows.Next() {
 		var accountID int64
 		var startCost, endCost sql.NullFloat64
-		var startObservedAt, endObservedAt sql.NullTime
+		var startObservedAt, endObservedAt, firstOKObservedAt, lastAttemptAt sql.NullTime
+		var lastAttemptStatus, lastAttemptError sql.NullString
 		var hasReset bool
-		if err := rows.Scan(&accountID, &startCost, &startObservedAt, &endCost, &endObservedAt, &hasReset); err != nil {
+		if err := rows.Scan(
+			&accountID,
+			&startCost,
+			&startObservedAt,
+			&endCost,
+			&endObservedAt,
+			&firstOKObservedAt,
+			&lastAttemptAt,
+			&lastAttemptStatus,
+			&lastAttemptError,
+			&hasReset,
+		); err != nil {
 			return nil, err
 		}
 		boundary := &upstreamUsageBoundary{HasReset: hasReset}
@@ -344,6 +414,20 @@ func (r *usageLogRepository) getUpstreamUsageBoundaries(
 		if endObservedAt.Valid {
 			value := endObservedAt.Time
 			boundary.EndObservedAt = &value
+		}
+		if firstOKObservedAt.Valid {
+			value := firstOKObservedAt.Time
+			boundary.FirstOKObservedAt = &value
+		}
+		if lastAttemptAt.Valid {
+			value := lastAttemptAt.Time
+			boundary.LastAttemptAt = &value
+		}
+		if lastAttemptStatus.Valid {
+			boundary.LastAttemptStatus = lastAttemptStatus.String
+		}
+		if lastAttemptError.Valid {
+			boundary.LastAttemptError = lastAttemptError.String
 		}
 		result[accountID] = boundary
 	}
@@ -369,8 +453,28 @@ func applyProfitAccountReconciliation(
 		row.ReconciliationStatus = "estimated"
 		return
 	}
-	if boundary == nil || boundary.StartCost == nil || boundary.EndCost == nil ||
-		boundary.StartObservedAt == nil || boundary.EndObservedAt == nil || !endTime.After(startTime) {
+	if boundary == nil || !endTime.After(startTime) {
+		row.ReconciliationStatus = "pending"
+		return
+	}
+	if boundary.StartCost == nil || boundary.StartObservedAt == nil {
+		if boundary.FirstOKObservedAt != nil && boundary.FirstOKObservedAt.After(startTime) {
+			row.ReconciliationStatus = "missing_start"
+			return
+		}
+		switch boundary.LastAttemptStatus {
+		case "unauthorized":
+			row.ReconciliationStatus = "sample_unauthorized"
+		case "unsupported":
+			row.ReconciliationStatus = "sample_unsupported"
+		case "failed", "invalid_response":
+			row.ReconciliationStatus = "sample_failed"
+		default:
+			row.ReconciliationStatus = "pending"
+		}
+		return
+	}
+	if boundary.EndCost == nil || boundary.EndObservedAt == nil {
 		row.ReconciliationStatus = "pending"
 		return
 	}
@@ -436,6 +540,10 @@ func summarizeProfitReconciliation(summary *usagestats.ProfitMonitorSummary, acc
 	switch {
 	case statusCounts["difference"] > 0:
 		summary.ReconciliationStatus = "difference"
+	case statusCounts["missing_start"] > 0:
+		summary.ReconciliationStatus = "missing_start"
+	case statusCounts["sample_unauthorized"] > 0 || statusCounts["sample_failed"] > 0 || statusCounts["sample_unsupported"] > 0:
+		summary.ReconciliationStatus = "sample_failed"
 	case statusCounts["pending"] > 0:
 		summary.ReconciliationStatus = "pending"
 	case statusCounts["unavailable"] > 0:

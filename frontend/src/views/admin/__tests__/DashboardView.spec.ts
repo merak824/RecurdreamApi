@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -113,6 +113,10 @@ describe('admin DashboardView', () => {
       start_date: '',
       end_date: ''
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
@@ -266,5 +270,79 @@ describe('admin DashboardView', () => {
     expect(monitor.text()).toContain('admin.dashboard.profitReconciliationEstimated')
     expect(monitor.text()).toContain('+$2.00')
     expect(monitor.text()).not.toContain('admin.dashboard.profitUnverified')
+  })
+
+  it('explains a missing start sample and refreshes after the next sampling time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-19T07:26:00Z'))
+    getSnapshotV2.mockResolvedValue({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-19T07:26:00Z',
+        last_sample_at: '2026-08-19T07:20:13Z',
+        next_sample_at: '2026-08-19T07:30:00Z',
+        summary: {
+          sales: 10,
+          cost: 8,
+          profit: 2,
+          margin_percent: 20,
+          requests: 1,
+          tokens: 100,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'missing_start'
+        },
+        trend: [],
+        groups: [],
+        models: [],
+        accounts: [{
+          id: 7,
+          name: 'upstream-7',
+          requests: 1,
+          tokens: 100,
+          sales: 10,
+          cost: 8,
+          profit: 2,
+          margin_percent: 20,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'missing_start',
+          last_sample_at: '2026-08-19T07:20:13Z',
+          next_sample_at: '2026-08-19T07:30:00Z'
+        }]
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationMissingStart')
+    expect(monitor.text()).toContain('admin.dashboard.profitLastSample')
+    expect(monitor.text()).toContain('admin.dashboard.profitNextSample')
+
+    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(4 * 60 * 1000 + 21 * 1000)
+    await flushPromises()
+    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
   })
 })

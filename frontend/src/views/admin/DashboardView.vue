@@ -227,13 +227,20 @@
                 {{ t('admin.dashboard.profitMonitorHint') }}
               </p>
             </div>
-            <span
-              class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
-              :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
-            >
-              <Icon name="shield" size="xs" :stroke-width="2" />
-              {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
-            </span>
+            <div class="text-right">
+              <span
+                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
+                :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
+              >
+                <Icon name="shield" size="xs" :stroke-width="2" />
+                {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
+              </span>
+              <p v-if="profitMonitor.last_sample_at || profitMonitor.next_sample_at" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="profitMonitor.last_sample_at">{{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(profitMonitor.last_sample_at) }}</span>
+                <span v-if="profitMonitor.last_sample_at && profitMonitor.next_sample_at"> · </span>
+                <span v-if="profitMonitor.next_sample_at">{{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(profitMonitor.next_sample_at) }}</span>
+              </p>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -338,6 +345,11 @@
                           {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }} {{ formatSignedCost(row.reconciliation_difference) }}<template v-if="row.reconciliation_difference_percent !== undefined && row.reconciliation_difference_percent !== null"> ({{ formatSignedPercent(row.reconciliation_difference_percent) }})</template>
                         </p>
                       </div>
+                      <p v-if="row.last_sample_at || row.next_sample_at" class="mt-1 whitespace-nowrap text-[11px] text-gray-500 dark:text-gray-400">
+                        <span v-if="row.last_sample_at">{{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(row.last_sample_at) }}</span>
+                        <span v-if="row.last_sample_at && row.next_sample_at"> · </span>
+                        <span v-if="row.next_sample_at">{{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(row.next_sample_at) }}</span>
+                      </p>
                     </td>
                   </tr>
                   <tr v-if="profitRows.length === 0">
@@ -474,7 +486,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -544,6 +556,7 @@ const profitDimension = ref<'groups' | 'models' | 'accounts'>('groups')
 let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
+let profitRefreshTimer: ReturnType<typeof setTimeout> | undefined
 const rankingLimit = 12
 
 const profitTabs = computed(() => [
@@ -812,6 +825,17 @@ const formatMargin = (value: number | null | undefined): string => {
   return `${Number(value).toFixed(1)}%`
 }
 
+const formatSampleTime = (value: string): string => {
+  const sampleTime = new Date(value)
+  if (Number.isNaN(sampleTime.getTime())) return '-'
+  return sampleTime.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
+}
+
 const formatProfitSource = (value: string): string => {
   switch (value) {
     case 'upstream_probe':
@@ -843,6 +867,14 @@ const formatProfitReconciliationStatus = (value: string | undefined): string => 
       return t('admin.dashboard.profitReconciliationDifference')
     case 'pending':
       return t('admin.dashboard.profitReconciliationPending')
+    case 'missing_start':
+      return t('admin.dashboard.profitReconciliationMissingStart')
+    case 'sample_unauthorized':
+      return t('admin.dashboard.profitReconciliationSampleUnauthorized')
+    case 'sample_failed':
+      return t('admin.dashboard.profitReconciliationSampleFailed')
+    case 'sample_unsupported':
+      return t('admin.dashboard.profitReconciliationSampleUnsupported')
     case 'estimated':
       return t('admin.dashboard.profitReconciliationEstimated')
     case 'official_zero':
@@ -861,6 +893,13 @@ const profitReconciliationClass = (value: string | undefined): string => {
       return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800'
     case 'pending':
       return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800'
+    case 'missing_start':
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800'
+    case 'sample_unauthorized':
+    case 'sample_failed':
+      return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800'
+    case 'sample_unsupported':
+      return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-dark-800 dark:text-gray-300 dark:ring-dark-700'
     case 'estimated':
       return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800'
     case 'official_zero':
@@ -924,8 +963,25 @@ const onDateRangeChange = (range: {
   loadChartData()
 }
 
+const scheduleProfitRefresh = (nextSampleAt?: string) => {
+  if (profitRefreshTimer !== undefined) {
+    clearTimeout(profitRefreshTimer)
+    profitRefreshTimer = undefined
+  }
+  if (!nextSampleAt) return
+
+  const target = new Date(nextSampleAt).getTime() + 20_000
+  const delay = target - Date.now()
+  if (!Number.isFinite(target) || delay <= 0) return
+
+  profitRefreshTimer = setTimeout(() => {
+    profitRefreshTimer = undefined
+    void loadDashboardSnapshot(false)
+  }, delay)
+}
+
 // Load data
-const loadDashboardSnapshot = async (includeStats: boolean) => {
+async function loadDashboardSnapshot(includeStats: boolean) {
   const currentSeq = ++chartLoadSeq
   if (includeStats && !stats.value) {
     loading.value = true
@@ -950,6 +1006,7 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
     trendData.value = response.trend || []
     modelStats.value = response.models || []
     profitMonitor.value = response.profit || null
+    scheduleProfitRefresh(response.profit?.next_sample_at)
   } catch (error) {
     if (currentSeq !== chartLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
@@ -1034,6 +1091,12 @@ const loadChartData = async () => {
 onMounted(() => {
   void refreshBatchImageAccess()
   loadDashboardStats()
+})
+
+onUnmounted(() => {
+  if (profitRefreshTimer !== undefined) {
+    clearTimeout(profitRefreshTimer)
+  }
 })
 </script>
 

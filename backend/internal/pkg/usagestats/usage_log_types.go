@@ -142,16 +142,20 @@ type ProfitMonitorDimensionStat struct {
 	ReconciliationDifference        *float64 `json:"reconciliation_difference,omitempty"`
 	ReconciliationDifferencePercent *float64 `json:"reconciliation_difference_percent,omitempty"`
 	ReconciliationObservedAt        string   `json:"reconciliation_observed_at,omitempty"`
+	LastSampleAt                    string   `json:"last_sample_at,omitempty"`
+	NextSampleAt                    string   `json:"next_sample_at,omitempty"`
 }
 
 // ProfitMonitorResponse contains all data rendered inside the admin dashboard.
 type ProfitMonitorResponse struct {
-	Summary     ProfitMonitorSummary         `json:"summary"`
-	Trend       []ProfitMonitorTrendPoint    `json:"trend"`
-	Groups      []ProfitMonitorDimensionStat `json:"groups"`
-	Models      []ProfitMonitorDimensionStat `json:"models"`
-	Accounts    []ProfitMonitorDimensionStat `json:"accounts"`
-	GeneratedAt string                       `json:"generated_at"`
+	Summary      ProfitMonitorSummary         `json:"summary"`
+	Trend        []ProfitMonitorTrendPoint    `json:"trend"`
+	Groups       []ProfitMonitorDimensionStat `json:"groups"`
+	Models       []ProfitMonitorDimensionStat `json:"models"`
+	Accounts     []ProfitMonitorDimensionStat `json:"accounts"`
+	GeneratedAt  string                       `json:"generated_at"`
+	LastSampleAt string                       `json:"last_sample_at,omitempty"`
+	NextSampleAt string                       `json:"next_sample_at,omitempty"`
 }
 
 // ModelStat represents usage statistics for a single model
