@@ -2,7 +2,7 @@
 
 ## 状态
 
-动态倍率设计已于 2026-07-30 完成书面复核；全局首 Token 优化设计已于 2026-07-31 在对话中确认并合并修订。核心实现已落地。v0.1.172 已将全局首 Token 排序默认发布比例调整为 100%；本地补丁将全局稳定门槛调整为 10 秒，并修正 P90 nearest-rank、成熟度兜底和旧 EWMA 粘性逃逸重复判定。主动探索保持关闭；仍可通过部署配置将发布比例设为 0% 紧急回滚。
+动态倍率设计已于 2026-07-30 完成书面复核；全局首 Token 优化设计已于 2026-07-31 在对话中确认并合并修订。核心实现已落地。v0.1.172 已将全局首 Token 排序默认发布比例调整为 100%；本地补丁将全局稳定门槛调整为 10 秒，并修正 P90 nearest-rank、成熟度兜底和旧 EWMA 粘性逃逸重复判定。主动探索默认启用上限 5%，仍可通过部署配置将探索比例设为 0% 紧急回滚。
 
 ### 当前实现状态
 
@@ -102,7 +102,7 @@
 - `gateway.openai_ttft_optimizer_enabled`：内部发布门，最终目标为默认开启；关闭时恢复现有调度但继续记录指标。
 - `gateway.openai_ttft_optimizer_rollout_percent`：按稳定请求哈希灰度全局 P90/P50 排序，范围 `0-100`，不允许各实例独立随机决定。
 - `gateway.openai_ttft_stable_threshold_ms`：普通分组的全局稳定门槛，默认 `10000` 毫秒。
-- `gateway.openai_ttft_exploration_percent`：探索上限，范围 `0-5`，上线时按 `0 -> 1 -> 5` 调整；多实例由 Redis 原子累计配额执行精确上限。
+- `gateway.openai_ttft_exploration_percent`：探索上限，范围 `0-5`，默认 `5`；需要保守灰度或紧急回滚时可设为 `1` 或 `0`。多实例由 Redis 原子累计配额执行精确上限。
 - `gateway.openai_first_output_timeout_seconds`：普通推理首输出长尾阈值，安全灰度后的目标默认值为 `30` 秒；显式配置 `0` 可紧急关闭。
 - `gateway.openai_high_effort_first_output_timeout_seconds`：`high/xhigh/max` 的阈值，目标默认值为 `120` 秒。
 
@@ -221,7 +221,7 @@ RT JSON 导入流程已将账号创建为 `OpenAI + OAuth`，因此不会被误�
 
 共同规则如下：
 
-- 只使用无粘性的新流式会话探索。
+- 只使用无实际粘性绑定的新流式会话探索；仅有 `SessionHash` 不代表已绑定账号，`StickyAccountID` 或 `StickyPreviousAccountID` 存在时才视为已有粘性绑定并跳过探索。
 - 每个 `group_id + 调度模式 + 当前优先级层 + 上游传输` 使用 Redis 原子累计配额控制探索资格；动态倍率模式将被忽略的手工优先级归一为固定层。5% 配置最多允许累计 1/20 的符合探索前置条件请求，不使用各实例独立随机数。
 - 待观察账号之间轮转获得探索机会。
 - 探索并发锁和冷却状态按 `group_id + account_id + 上游传输` 隔离，因为不同分组阈值可能不同。同一目标最多同时承接 1 个探索请求。

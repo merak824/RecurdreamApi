@@ -909,9 +909,11 @@ func orderOpenAIAccountCandidatesByTTFT(
 
 // promoteOpenAITTFTExplorationCandidate selects a small, explicitly bounded
 // sample of immature accounts so their first-token window can become mature.
-// It never crosses the manual priority boundary and is disabled for sticky or
-// non-streaming requests. The returned candidate is marked for diagnostics and
-// lease accounting by the caller.
+// It never crosses the manual priority boundary and is disabled for requests
+// with an actual sticky binding, continuation requests, or non-streaming
+// requests. A session hash alone is not a binding: new sessions may carry one
+// before Redis has associated an account with it. The returned candidate is
+// marked for diagnostics and lease accounting by the caller.
 func promoteOpenAITTFTExplorationCandidate(
 	candidates []openAIAccountCandidateScore,
 	snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot,
@@ -922,7 +924,8 @@ func promoteOpenAITTFTExplorationCandidate(
 ) ([]openAIAccountCandidateScore, int64, bool) {
 	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
 	if len(ordered) == 0 || percent <= 0 || !req.Streaming ||
-		strings.TrimSpace(req.SessionHash) != "" || strings.TrimSpace(req.PreviousResponseID) != "" {
+		req.StickyAccountID > 0 || req.StickyPreviousAccountID > 0 ||
+		strings.TrimSpace(req.PreviousResponseID) != "" {
 		return ordered, 0, false
 	}
 	minPriority := 0

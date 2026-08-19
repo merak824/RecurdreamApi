@@ -218,9 +218,9 @@ gateway:
   openai_ttft_optimizer_enabled: true
   openai_ttft_optimizer_rollout_percent: 100
   openai_ttft_stable_threshold_ms: 10000
-  # Active exploration stays disabled by default; passive requests still collect samples.
-  # 默认不主动探索；正常流式请求仍会被动积累样本。
-  openai_ttft_exploration_percent: 0
+  # Explore at most 5% of eligible streaming traffic for immature accounts; passive requests still collect samples.
+  # 最多抽取 5% 的符合条件的流式请求探索样本账号；正常流式请求仍会被动积累样本。
+  openai_ttft_exploration_percent: 5
   # Max request body size in bytes (default: 256MB)
   # 请求体最大字节数（默认 256MB）
   max_body_size: 268435456

@@ -285,17 +285,46 @@ func TestPromoteOpenAITTFTExplorationCandidateStaysWithinManualPriority(t *testi
 	}
 }
 
-func TestPromoteOpenAITTFTExplorationCandidateSkipsStickyAndMatureRequests(t *testing.T) {
+func TestPromoteOpenAITTFTExplorationCandidateAllowsUnboundSessionHash(t *testing.T) {
 	candidates := []openAIAccountCandidateScore{{account: &Account{ID: 1, Priority: 1}}}
 	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 1, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 1, P50Ms: 100, P90Ms: 100},
+	}
+
+	_, explorationID, ok := promoteOpenAITTFTExplorationCandidate(
+		candidates,
+		snapshots,
+		OpenAITTFTTransportHTTPSSE,
+		OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "new-session"},
+		5,
+		1,
+	)
+	require.True(t, ok)
+	require.Equal(t, int64(1), explorationID)
+}
+
+func TestPromoteOpenAITTFTExplorationCandidateSkipsStickyAndMatureRequests(t *testing.T) {
+	candidates := []openAIAccountCandidateScore{{account: &Account{ID: 1, Priority: 1}}}
+	immatureSnapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 1, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 1, P50Ms: 100, P90Ms: 100},
+	}
+	matureSnapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
 		{AccountID: 1, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 10, P50Ms: 100, P90Ms: 100},
 	}
-	for _, req := range []OpenAIAccountScheduleRequest{
-		{Streaming: false},
-		{Streaming: true, SessionHash: "sticky"},
-		{Streaming: true, PreviousResponseID: "resp_1"},
+	for _, testCase := range []struct {
+		name      string
+		req       OpenAIAccountScheduleRequest
+		snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot
+	}{
+		{name: "non-streaming", req: OpenAIAccountScheduleRequest{Streaming: false}, snapshots: immatureSnapshots},
+		{name: "sticky session", req: OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "sticky", StickyAccountID: 1}, snapshots: immatureSnapshots},
+		{name: "sticky previous account", req: OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "sticky", StickyPreviousAccountID: 1}, snapshots: immatureSnapshots},
+		{name: "previous response", req: OpenAIAccountScheduleRequest{Streaming: true, PreviousResponseID: "resp_1"}, snapshots: immatureSnapshots},
+		{name: "mature", req: OpenAIAccountScheduleRequest{Streaming: true}, snapshots: matureSnapshots},
 	} {
-		_, _, ok := promoteOpenAITTFTExplorationCandidate(candidates, snapshots, OpenAITTFTTransportHTTPSSE, req, 5, 1)
-		require.False(t, ok)
+		t.Run(testCase.name, func(t *testing.T) {
+			_, _, ok := promoteOpenAITTFTExplorationCandidate(candidates, testCase.snapshots, OpenAITTFTTransportHTTPSSE, testCase.req, 5, 1)
+			require.False(t, ok)
+		})
 	}
 }
