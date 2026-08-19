@@ -9,10 +9,10 @@ on:
         type: string
         default: "/data/sub2api"
       keep_old:
-        description: "Keep the previous blue/green slot running after traffic switches"
+        description: "Keep the previous blue/green slot running after traffic switches (explicit opt-in)"
         required: true
         type: boolean
-        default: true
+        default: false
       drain_seconds:
         description: "Drain window before stopping the old slot when keep_old is false"
         required: true
@@ -61,6 +61,10 @@ jobs:
       - name: Validate Docker Go version
         shell: bash
         run: bash deploy/tests/docker-go-version-test.sh
+
+      - name: Validate hot deploy workflow defaults
+        shell: bash
+        run: sh deploy/tests/hot-deploy-workflow-defaults-test.sh
 
       - name: Validate deployment inputs
         shell: bash

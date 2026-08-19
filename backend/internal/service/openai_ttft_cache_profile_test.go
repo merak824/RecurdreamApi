@@ -141,6 +141,8 @@ func TestBuildOpenAITTFTCacheProfileObservationRejectsUnsafeRequests(t *testing.
 }
 
 func TestRecordOpenAITTFTCacheProfileEnqueuesSuccessfulStream(t *testing.T) {
+	resetOpenAITTFTRuntimeSettingsCacheForTest()
+	t.Cleanup(resetOpenAITTFTRuntimeSettingsCacheForTest)
 	groupID := int64(7)
 	store := &recordingOpenAITTFTCacheProfileStore{written: make(chan OpenAITTFTCacheProfileObservation, 1)}
 	svc := &OpenAIGatewayService{cache: &recordingOpenAITTFTCacheGateway{recordingOpenAITTFTCacheProfileStore: store}}

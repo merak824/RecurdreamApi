@@ -41,6 +41,7 @@ const (
 	openAIUpstreamCostNeutralFactor            = 0.5
 	defaultOpenAIOAuthSchedulingRateMultiplier = 1.0
 	defaultOpenAITTFTStableThresholdMs         = 10_000
+	openAITTFTStickyEscapeReplacementP90MaxMs  = 30_000
 	openAIStickyEscapeReasonTTFTP90            = "ttft_p90"
 )
 
@@ -89,6 +90,9 @@ type OpenAIAccountScheduleRequest struct {
 	RequireCompact bool
 	ExcludedIDs    map[int64]struct{}
 	Streaming      bool
+
+	// Set only after an existing sticky account escapes on mature P90 history.
+	ttftStickyEscapeFromAccountID int64
 }
 
 type openAIStreamingScheduleContextKey struct{}
@@ -476,8 +480,7 @@ func (s *defaultOpenAIAccountScheduler) Select(
 			req.PreserveStickyBinding = true
 		}
 		if stickyEscape.Escaped && stickyEscape.Reason == openAIStickyEscapeReasonTTFTP90 {
-			decision.TTFTStickyEscapeReason = stickyEscape.Reason
-			decision.TTFTSwitchedFromAccountID = stickyEscape.FromAccountID
+			req.ttftStickyEscapeFromAccountID = stickyEscape.FromAccountID
 		}
 	}
 
@@ -512,6 +515,7 @@ func (s *defaultOpenAIAccountScheduler) Select(
 		s.recordOpenAITTFTSwitchDebounce(ctx, req, stickyEscape, selection.Account.ID, time.Now().UTC())
 		if stickyEscape.Reason == openAIStickyEscapeReasonTTFTP90 && stickyEscape.FromAccountID > 0 && stickyEscape.FromAccountID != selection.Account.ID {
 			decision.TTFTStickySwitched = true
+			decision.TTFTStickyEscapeReason = stickyEscape.Reason
 			decision.TTFTSwitchedFromAccountID = stickyEscape.FromAccountID
 		}
 	}
@@ -907,6 +911,66 @@ func orderOpenAIAccountCandidatesByTTFT(
 	return ordered
 }
 
+// orderOpenAITTFTStickyEscapeCandidates keeps a P90-driven sticky escape from
+// trading one slow account for another. Only mature replacements no slower
+// than the hard ceiling and faster than the current account may precede it.
+// Remaining candidates stay available after the current account for ordinary
+// concurrency or availability fallback.
+func orderOpenAITTFTStickyEscapeCandidates(
+	candidates []openAIAccountCandidateScore,
+	snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot,
+	transport OpenAITTFTTransport,
+	fromAccountID int64,
+	maxReplacementP90Ms int,
+) []openAIAccountCandidateScore {
+	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
+	if len(ordered) == 0 || fromAccountID <= 0 || maxReplacementP90Ms <= 0 {
+		return ordered
+	}
+
+	fromIndex := -1
+	preferredPriority := 0
+	for i, candidate := range ordered {
+		if candidate.account == nil {
+			continue
+		}
+		if candidate.account.ID == fromAccountID {
+			fromIndex = i
+			preferredPriority = openAIAccountSchedulingPriority(candidate.account)
+		}
+	}
+	if fromIndex < 0 {
+		return ordered
+	}
+
+	fromCandidate := ordered[fromIndex]
+	fromSnapshot := snapshots[OpenAITTFTWindowKey{AccountID: fromAccountID, Transport: transport}]
+	replacements := make([]openAIAccountCandidateScore, 0, len(ordered))
+	remaining := make([]openAIAccountCandidateScore, 0, len(ordered))
+	for i, candidate := range ordered {
+		if i == fromIndex {
+			continue
+		}
+		if candidate.account != nil &&
+			openAIAccountSchedulingPriority(candidate.account) == preferredPriority {
+			snapshot := snapshots[OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport}]
+			if snapshot.Count >= openAITTFTWindowSampleCap &&
+				snapshot.P90Ms > 0 && snapshot.P90Ms <= maxReplacementP90Ms &&
+				fromSnapshot.P90Ms > snapshot.P90Ms {
+				replacements = append(replacements, candidate)
+				continue
+			}
+		}
+		remaining = append(remaining, candidate)
+	}
+
+	result := make([]openAIAccountCandidateScore, 0, len(ordered))
+	result = append(result, replacements...)
+	result = append(result, fromCandidate)
+	result = append(result, remaining...)
+	return result
+}
+
 // promoteOpenAITTFTExplorationCandidate selects a small, explicitly bounded
 // sample of immature accounts so their first-token window can become mature.
 // It never crosses the manual priority boundary and is disabled for requests
@@ -925,6 +989,7 @@ func promoteOpenAITTFTExplorationCandidate(
 	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
 	if len(ordered) == 0 || percent <= 0 || !req.Streaming ||
 		req.StickyAccountID > 0 || req.StickyPreviousAccountID > 0 ||
+		req.ttftStickyEscapeFromAccountID > 0 ||
 		strings.TrimSpace(req.PreviousResponseID) != "" {
 		return ordered, 0, false
 	}
@@ -1169,6 +1234,15 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 		threshold := s.service.openAITTFTRuntimeSettings(ctx).BaseP90Ms
 		snapshots := s.service.openAITTFTSnapshots(ctx, keys, time.Now().UTC())
 		plan.selectionOrder = orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, transport, threshold)
+		if req.ttftStickyEscapeFromAccountID > 0 {
+			plan.selectionOrder = orderOpenAITTFTStickyEscapeCandidates(
+				plan.selectionOrder,
+				snapshots,
+				transport,
+				req.ttftStickyEscapeFromAccountID,
+				openAITTFTStickyEscapeReplacementP90MaxMs,
+			)
+		}
 		if s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTExplorationPercent > 0 {
 			seed := deriveOpenAISelectionSeed(req) ^ uint64(time.Now().UnixNano())
 			candidateOrder, explorationID, ok := promoteOpenAITTFTExplorationCandidate(

@@ -224,10 +224,10 @@ Before running it, configure these repository secrets in **Settings -> Secrets a
 The workflow builds the Docker image on GitHub's runner, saves it as a compressed archive, uploads it to the server, copies the latest hot-deploy runtime files into `deploy_path`, then runs:
 
 ```bash
-bash hot-deploy.sh --load-image /tmp/sub2api-hot-<sha>.tar.gz --keep-old
+bash hot-deploy.sh --load-image /tmp/sub2api-hot-<sha>.tar.gz
 ```
 
-By default `keep_old` is enabled, so the previous blue/green app slot remains running after the new slot passes health checks and traffic switches. Stop the old slot manually after observing production traffic if you want to free memory.
+By default `keep_old` is disabled. After the new slot passes health checks and traffic switches, the workflow waits for the default 300-second drain window and then stops the previous blue/green app slot. Enable `keep_old` explicitly only when extended observation or unusually long-lived streams require the previous slot to remain running, and stop it manually afterward.
 
 ### How Auto-Setup Works
 

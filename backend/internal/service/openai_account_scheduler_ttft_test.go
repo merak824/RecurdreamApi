@@ -117,6 +117,50 @@ func TestEvaluateOpenAITTFTStickyDebounceKeepsCurrentAccount(t *testing.T) {
 	require.Equal(t, 10_000, got.EffectiveP90Ms)
 }
 
+func TestOpenAITTFTStickyEscapeKeepsCurrentWithoutQualifiedReplacement(t *testing.T) {
+	resetOpenAIAdvancedSchedulerSettingCacheForTest()
+	t.Cleanup(resetOpenAIAdvancedSchedulerSettingCacheForTest)
+
+	groupID := int64(13)
+	accounts := []Account{
+		{ID: 274, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, GroupIDs: []int64{groupID}},
+		{ID: 500, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, GroupIDs: []int64{groupID}},
+	}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:sticky-slow": 274}}
+	cfg := &config.Config{}
+	cfg.Gateway.OpenAITTFTOptimizerEnabled = true
+	cfg.Gateway.OpenAITTFTOptimizerRolloutPercent = 100
+	cfg.Gateway.OpenAITTFTStableThresholdMs = 10_000
+	storeOpenAITTFTRuntimeSettings(defaultOpenAITTFTRuntimeSettings(cfg), time.Minute)
+	window := newOpenAITTFTLocalWindow()
+	now := time.Now().UTC()
+	for i := 0; i < openAITTFTWindowSampleCap; i++ {
+		observedAt := now.Add(-time.Duration(i) * time.Second)
+		window.AddSample(OpenAITTFTSample{AccountID: 274, Transport: OpenAITTFTTransportHTTPSSE, ObservedAt: observedAt, TTFTMs: 85_000})
+		window.AddSample(OpenAITTFTSample{AccountID: 500, Transport: OpenAITTFTTransportHTTPSSE, ObservedAt: observedAt, TTFTMs: 61_000})
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: accounts},
+		cache:              cache,
+		cfg:                cfg,
+		rateLimitService:   newOpenAIAdvancedSchedulerRateLimitService("false"),
+		concurrencyService: NewConcurrencyService(schedulerTestConcurrencyCache{acquireResults: map[int64]bool{274: true, 500: true}}),
+		openAITTFTWindow:   window,
+	}
+
+	ctx := WithOpenAIStreamingSchedule(context.Background(), true)
+	selection, decision, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "sticky-slow", "gpt-5.1", nil, OpenAIUpstreamTransportHTTPSSE, false)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.Equal(t, int64(274), selection.Account.ID)
+	require.False(t, decision.TTFTStickySwitched)
+	require.Empty(t, decision.TTFTStickyEscapeReason)
+	require.Zero(t, decision.TTFTSwitchedFromAccountID)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
 func TestRecordOpenAITTFTSwitchDebounceWritesOnlyForSuccessfulTTFTSwitch(t *testing.T) {
 	store := &openAITTFTCacheStateStoreStub{}
 	svc := newOpenAITTFTStickyEvaluationService(store, 9, 20_000)
@@ -222,6 +266,62 @@ func TestOrderOpenAIAccountCandidatesByTTFTUsesP90ThenP50AndFallsBackToLoad(t *t
 	require.Equal(t, int64(2), ordered[2].account.ID)
 }
 
+func TestOrderOpenAITTFTStickyEscapeRequiresMatureReplacementUnderThirtySeconds(t *testing.T) {
+	accounts := []*Account{
+		{ID: 274, Priority: 1},
+		{ID: 500, Priority: 1},
+		{ID: 783, Priority: 1},
+		{ID: 784, Priority: 1},
+	}
+	candidates := make([]openAIAccountCandidateScore, 0, len(accounts))
+	for _, account := range accounts {
+		candidates = append(candidates, openAIAccountCandidateScore{
+			account:  account,
+			loadInfo: &AccountLoadInfo{AccountID: account.ID},
+		})
+	}
+	transport := OpenAITTFTTransportHTTPSSE
+	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 274, Transport: transport}: {Count: 10, P50Ms: 70_000, P90Ms: 85_000},
+		{AccountID: 500, Transport: transport}: {Count: 10, P50Ms: 50_000, P90Ms: 61_000},
+		{AccountID: 783, Transport: transport}: {Count: 10, P50Ms: 20_000, P90Ms: 30_000},
+		{AccountID: 784, Transport: transport}: {Count: 10, P50Ms: 10_000, P90Ms: 20_000},
+	}
+	baseOrder := orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, transport, 10_000)
+	ordered := orderOpenAITTFTStickyEscapeCandidates(baseOrder, snapshots, transport, 274, 30_000)
+
+	require.Equal(t, []int64{784, 783, 274, 500}, openAITTFTCandidateIDs(ordered))
+}
+
+func TestOrderOpenAITTFTStickyEscapeKeepsCurrentWhenNoMatureReplacementExists(t *testing.T) {
+	accounts := []*Account{{ID: 274, Priority: 1}, {ID: 500, Priority: 1}, {ID: 783, Priority: 1}, {ID: 784, Priority: 1}}
+	candidates := make([]openAIAccountCandidateScore, 0, len(accounts))
+	for _, account := range accounts {
+		candidates = append(candidates, openAIAccountCandidateScore{account: account, loadInfo: &AccountLoadInfo{AccountID: account.ID}})
+	}
+	transport := OpenAITTFTTransportHTTPSSE
+	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 274, Transport: transport}: {Count: 10, P50Ms: 70_000, P90Ms: 85_000},
+		{AccountID: 500, Transport: transport}: {Count: 10, P50Ms: 50_000, P90Ms: 61_000},
+		{AccountID: 783, Transport: transport}: {Count: 1, P50Ms: 200, P90Ms: 200},
+		{AccountID: 784, Transport: transport}: {Count: 10, P50Ms: 40_000, P90Ms: 30_001},
+	}
+	baseOrder := orderOpenAIAccountCandidatesByTTFT(candidates, snapshots, transport, 10_000)
+	ordered := orderOpenAITTFTStickyEscapeCandidates(baseOrder, snapshots, transport, 274, 30_000)
+
+	require.Equal(t, int64(274), ordered[0].account.ID)
+}
+
+func openAITTFTCandidateIDs(candidates []openAIAccountCandidateScore) []int64 {
+	ids := make([]int64, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.account != nil {
+			ids = append(ids, candidate.account.ID)
+		}
+	}
+	return ids
+}
+
 func TestOrderOpenAIAccountCandidatesByTTFTPrefersMatureAccountsWhenNoStableAccountExists(t *testing.T) {
 	accounts := []*Account{{ID: 11, Priority: 1}, {ID: 12, Priority: 1}}
 	candidates := []openAIAccountCandidateScore{
@@ -319,6 +419,7 @@ func TestPromoteOpenAITTFTExplorationCandidateSkipsStickyAndMatureRequests(t *te
 		{name: "non-streaming", req: OpenAIAccountScheduleRequest{Streaming: false}, snapshots: immatureSnapshots},
 		{name: "sticky session", req: OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "sticky", StickyAccountID: 1}, snapshots: immatureSnapshots},
 		{name: "sticky previous account", req: OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "sticky", StickyPreviousAccountID: 1}, snapshots: immatureSnapshots},
+		{name: "ttft sticky escape", req: OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "sticky", ttftStickyEscapeFromAccountID: 1}, snapshots: immatureSnapshots},
 		{name: "previous response", req: OpenAIAccountScheduleRequest{Streaming: true, PreviousResponseID: "resp_1"}, snapshots: immatureSnapshots},
 		{name: "mature", req: OpenAIAccountScheduleRequest{Streaming: true}, snapshots: matureSnapshots},
 	} {

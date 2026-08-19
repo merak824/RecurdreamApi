@@ -103,13 +103,13 @@ tail -f /tmp/sub2api-hotdeploy.log
 
 ## 长连接和流式请求
 
-默认切流后会等待 15 秒再停旧槽位：
+直接运行脚本时，默认切流后会等待 15 秒再停旧槽位；GitHub Actions 日常部署使用 300 秒排空窗口：
 
 ```bash
-DRAIN_SECONDS=120 bash hot-deploy.sh --build
+DRAIN_SECONDS=300 bash hot-deploy.sh --build
 ```
 
-如果你想让旧槽位继续跑，等长连接自然结束后手动停：
+只有需要延长观察或处理超长流式请求时，才让旧槽位继续运行，并在确认后手动停止：
 
 ```bash
 KEEP_OLD=true bash hot-deploy.sh --build
@@ -143,7 +143,7 @@ docker compose -f docker-compose.hot.yml --profile green logs -f sub2api-green
 - 项目已有 PostgreSQL advisory lock，会避免多实例同时执行迁移。
 - 从旧 `docker-compose.local.yml` 迁移到热部署时，默认继续复用 `./data/config.yaml`；不要临时升级 PostgreSQL/Redis 镜像或移动数据目录。
 - 如果运行目录里同时存在 `./config.yaml` 和 `./data/config.yaml`，脚本会要求两者一致。旧版本曾经显式挂载 `./config.yaml`，新热部署只挂载 `./data`，两者不一致会导致升级后读错配置。
-- 长连接或流式请求较多时，建议首轮使用 `KEEP_OLD=true` 或把 `DRAIN_SECONDS` 调到 120-300 秒，再手动确认旧槽位可以停。
+- GitHub Actions 日常部署默认使用 300 秒排空窗口并自动停止旧槽位。只有长连接或流式请求可能超过 300 秒时，才显式使用 `KEEP_OLD=true`，并在观察完成后手动停止旧槽位。
 - 日常热部署只会拉取和替换应用镜像，不会顺手升级 PostgreSQL/Redis。
 - 默认不长期保留两个应用实例，主要是为了避免后台任务重复执行。
 - 运行时生成的 nginx 配置和活动槽位状态不会提交到 Git。
@@ -154,4 +154,4 @@ docker compose -f docker-compose.hot.yml --profile green logs -f sub2api-green
 - 线上机器内存较小，现场 `docker build` 编译 Go 大包耗时很长，并给当前服务带来压力。推荐改成本机/CI 构建镜像再上传。
 - 旧 compose 曾把 `./config.yaml` 绑定到容器内，新的 blue/green compose 只绑定 `./data`。迁移前必须确认 `./data/config.yaml` 是当前生效配置。
 - nginx 出现过一次 `upstream sent too big header`，已在模板中加大 `proxy_buffer_size` 和 `proxy_buffers` 默认值，减少登录/登出响应头过大导致的 502。
-- 首轮线上升级使用 `KEEP_OLD=true DRAIN_SECONDS=300` 是正确的：切到新槽位后旧槽位保留，观察正常后再手动停止旧槽位。
+- 首轮线上升级如需延长观察，可显式使用 `KEEP_OLD=true`：切到新槽位后旧槽位会保留，确认正常后必须手动停止；常规升级仍使用 300 秒排空后自动停止。
