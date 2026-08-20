@@ -373,7 +373,6 @@ func TestPromoteOpenAITTFTExplorationCandidateStaysWithinManualPriority(t *testi
 		OpenAITTFTTransportHTTPSSE,
 		OpenAIAccountScheduleRequest{Streaming: true},
 		5,
-		1,
 	)
 	require.True(t, ok)
 	require.Equal(t, int64(1), explorationID)
@@ -397,10 +396,32 @@ func TestPromoteOpenAITTFTExplorationCandidateAllowsUnboundSessionHash(t *testin
 		OpenAITTFTTransportHTTPSSE,
 		OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "new-session"},
 		5,
-		1,
 	)
 	require.True(t, ok)
 	require.Equal(t, int64(1), explorationID)
+}
+
+func TestPromoteOpenAITTFTExplorationCandidatePrefersFewestSamples(t *testing.T) {
+	candidates := []openAIAccountCandidateScore{
+		{account: &Account{ID: 783, Priority: 1}},
+		{account: &Account{ID: 784, Priority: 1}},
+	}
+	snapshots := map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot{
+		{AccountID: 783, Transport: OpenAITTFTTransportHTTPSSE}: {Count: 1, P50Ms: 28_188, P90Ms: 28_188},
+		{AccountID: 784, Transport: OpenAITTFTTransportHTTPSSE}: {},
+	}
+
+	ordered, explorationID, ok := promoteOpenAITTFTExplorationCandidate(
+		candidates,
+		snapshots,
+		OpenAITTFTTransportHTTPSSE,
+		OpenAIAccountScheduleRequest{Streaming: true, SessionHash: "new-session"},
+		5,
+	)
+
+	require.True(t, ok)
+	require.Equal(t, int64(784), explorationID)
+	require.Equal(t, int64(784), ordered[0].account.ID)
 }
 
 func TestPromoteOpenAITTFTExplorationCandidateSkipsStickyAndMatureRequests(t *testing.T) {
@@ -424,7 +445,7 @@ func TestPromoteOpenAITTFTExplorationCandidateSkipsStickyAndMatureRequests(t *te
 		{name: "mature", req: OpenAIAccountScheduleRequest{Streaming: true}, snapshots: matureSnapshots},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, _, ok := promoteOpenAITTFTExplorationCandidate(candidates, testCase.snapshots, OpenAITTFTTransportHTTPSSE, testCase.req, 5, 1)
+			_, _, ok := promoteOpenAITTFTExplorationCandidate(candidates, testCase.snapshots, OpenAITTFTTransportHTTPSSE, testCase.req, 5)
 			require.False(t, ok)
 		})
 	}

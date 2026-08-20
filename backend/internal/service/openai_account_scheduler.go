@@ -976,15 +976,16 @@ func orderOpenAITTFTStickyEscapeCandidates(
 // It never crosses the manual priority boundary and is disabled for requests
 // with an actual sticky binding, continuation requests, or non-streaming
 // requests. A session hash alone is not a binding: new sessions may carry one
-// before Redis has associated an account with it. The returned candidate is
-// marked for diagnostics and lease accounting by the caller.
+// before Redis has associated an account with it. Among eligible accounts the
+// least-sampled window wins, with account ID as a stable tie-breaker, so a
+// random choice cannot starve another immature account. The returned candidate
+// is marked for diagnostics and lease accounting by the caller.
 func promoteOpenAITTFTExplorationCandidate(
 	candidates []openAIAccountCandidateScore,
 	snapshots map[OpenAITTFTWindowKey]OpenAITTFTWindowSnapshot,
 	transport OpenAITTFTTransport,
 	req OpenAIAccountScheduleRequest,
 	percent int,
-	seed uint64,
 ) ([]openAIAccountCandidateScore, int64, bool) {
 	ordered := append([]openAIAccountCandidateScore(nil), candidates...)
 	if len(ordered) == 0 || percent <= 0 || !req.Streaming ||
@@ -995,7 +996,9 @@ func promoteOpenAITTFTExplorationCandidate(
 	}
 	minPriority := 0
 	hasPriority := false
-	eligible := make([]int, 0, len(ordered))
+	eligibleIndex := -1
+	eligibleSampleCount := openAITTFTWindowSampleCap
+	eligibleAccountID := int64(0)
 	for _, candidate := range ordered {
 		if candidate.account == nil {
 			continue
@@ -1014,17 +1017,22 @@ func promoteOpenAITTFTExplorationCandidate(
 			continue
 		}
 		snapshot := snapshots[OpenAITTFTWindowKey{AccountID: candidate.account.ID, Transport: transport}]
-		if snapshot.Count < openAITTFTWindowSampleCap {
-			eligible = append(eligible, i)
+		if snapshot.Count >= openAITTFTWindowSampleCap {
+			continue
+		}
+		if eligibleIndex < 0 || snapshot.Count < eligibleSampleCount ||
+			(snapshot.Count == eligibleSampleCount && candidate.account.ID < eligibleAccountID) {
+			eligibleIndex = i
+			eligibleSampleCount = snapshot.Count
+			eligibleAccountID = candidate.account.ID
 		}
 	}
-	if len(eligible) == 0 {
+	if eligibleIndex < 0 {
 		return ordered, 0, false
 	}
-	index := eligible[int(seed%uint64(len(eligible)))]
-	chosen := ordered[index]
+	chosen := ordered[eligibleIndex]
 	chosen.exploration = true
-	ordered = append([]openAIAccountCandidateScore{chosen}, append(ordered[:index:index], ordered[index+1:]...)...)
+	ordered = append([]openAIAccountCandidateScore{chosen}, append(ordered[:eligibleIndex:eligibleIndex], ordered[eligibleIndex+1:]...)...)
 	return ordered, chosen.account.ID, true
 }
 
@@ -1244,14 +1252,12 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 			)
 		}
 		if s.service.cfg != nil && s.service.cfg.Gateway.OpenAITTFTExplorationPercent > 0 {
-			seed := deriveOpenAISelectionSeed(req) ^ uint64(time.Now().UnixNano())
 			candidateOrder, explorationID, ok := promoteOpenAITTFTExplorationCandidate(
 				plan.selectionOrder,
 				snapshots,
 				transport,
 				req,
 				s.service.cfg.Gateway.OpenAITTFTExplorationPercent,
-				seed,
 			)
 			if ok && s.acquireOpenAITTFTExplorationQuota(ctx, req, candidateOrder, explorationID, transport, s.service.cfg.Gateway.OpenAITTFTExplorationPercent) && s.beginOpenAITTFTExploration(ctx, OpenAITTFTWindowKey{AccountID: explorationID, Transport: transport}) {
 				plan.selectionOrder = candidateOrder
