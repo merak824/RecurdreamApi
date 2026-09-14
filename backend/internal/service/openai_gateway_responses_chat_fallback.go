@@ -225,6 +225,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 		s.cacheReasoningItemsFromEvents(events)
 		writeEvents(events)
 	})
+	upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 
 	if scan.Err != nil {
 		return &OpenAIForwardResult{
@@ -240,6 +241,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 			Stream:                      true,
 			Duration:                    time.Since(startTime),
 			FirstTokenMs:                scan.FirstTokenMs,
+			UpstreamFirstTokenMs:        upstreamFirstTokenMs,
+			TTFTTransport:               OpenAITTFTTransportHTTPSSE,
+			FirstSemanticEvent:          firstSemanticEvent,
 		}, fmt.Errorf("stream usage incomplete: %w", scan.Err)
 	}
 	if err := state.ValidateToolCallArguments(); err != nil {
@@ -288,6 +292,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsResponses(
 		Stream:                      true,
 		Duration:                    time.Since(startTime),
 		FirstTokenMs:                scan.FirstTokenMs,
+		UpstreamFirstTokenMs:        upstreamFirstTokenMs,
+		TTFTTransport:               OpenAITTFTTransportHTTPSSE,
+		FirstSemanticEvent:          firstSemanticEvent,
 	}, nil
 }
 

@@ -1,7 +1,6 @@
 import { getConfiguredTableDefaultPageSize, normalizeTablePageSize } from '@/utils/tablePreferences'
 
 const STORAGE_KEY = 'table-page-size'
-
 export function getPersistedPageSize(fallback = getConfiguredTableDefaultPageSize()): number {
   if (typeof window !== 'undefined' && window.__APP_CONFIG__?.table_default_page_size !== undefined) {
     return normalizeTablePageSize(getConfiguredTableDefaultPageSize())
@@ -9,6 +8,9 @@ export function getPersistedPageSize(fallback = getConfiguredTableDefaultPageSiz
 
   if (typeof window !== 'undefined') {
     try {
+      if (window.__APP_CONFIG__?.table_default_page_size != null) {
+        return normalizeTablePageSize(getConfiguredTableDefaultPageSize() || fallback)
+      }
       const stored = window.localStorage.getItem(STORAGE_KEY)
       if (stored !== null) {
         const parsed = Number(stored)

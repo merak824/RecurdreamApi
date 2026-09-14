@@ -392,6 +392,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				return nil, fmt.Errorf("build grok retry request: %w", err)
 			}
 		}
+		setOpenAIUpstreamTTFTStart(c, time.Now())
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 		if err != nil {
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
@@ -955,6 +956,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 
 	// resultWithUsage builds the final result snapshot.
 	resultWithUsage := func() *OpenAIForwardResult {
+		upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 		out := &OpenAIForwardResult{
 			RequestID:                     requestID,
 			UpstreamHeaders:               resp.Header,
@@ -969,6 +971,9 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			Stream:                        true,
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
+			UpstreamFirstTokenMs:          upstreamFirstTokenMs,
+			TTFTTransport:                 OpenAITTFTTransportHTTPSSE,
+			FirstSemanticEvent:            firstSemanticEvent,
 			ClientDisconnect:              clientDisconnected,
 		}
 		if searchCount > 0 {
@@ -988,7 +993,6 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		if countSearch {
 			searchCount += countGrokNativeSearchCallsInSSEDataDedup([]byte(payload), streamSearchSeen)
 		}
-
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			logger.L().Warn("openai messages stream: failed to parse event",
@@ -996,6 +1000,11 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 				zap.String("request_id", requestID),
 			)
 			return false
+		}
+		if responsesStreamEventHasSemanticOutput(event) && firstTokenMs == nil {
+			markOpenAIUpstreamSemanticOutput(c, event.Type)
+			ms := int(time.Since(startTime).Milliseconds())
+			firstTokenMs = &ms
 		}
 		observer.ObserveOpenAI([]byte(payload), event.Type)
 		s.parseSSEUsageBytesWithType([]byte(payload), event.Type, &usage)

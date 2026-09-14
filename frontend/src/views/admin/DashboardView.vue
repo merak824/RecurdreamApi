@@ -216,6 +216,151 @@
           </div>
         </div>
 
+        <!-- Profit monitor is part of the dashboard, using the same date range. -->
+        <section v-if="profitMonitor" class="space-y-4" data-testid="profit-monitor">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.dashboard.profitMonitor') }}
+              </h2>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.dashboard.profitMonitorHint') }}
+              </p>
+            </div>
+            <div class="text-right">
+              <span
+                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
+                :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
+              >
+                <Icon name="shield" size="xs" :stroke-width="2" />
+                {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
+              </span>
+              <p v-if="profitMonitor.last_sample_at || profitMonitor.next_sample_at" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="profitMonitor.last_sample_at">{{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(profitMonitor.last_sample_at) }}</span>
+                <span v-if="profitMonitor.last_sample_at && profitMonitor.next_sample_at"> · </span>
+                <span v-if="profitMonitor.next_sample_at">{{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(profitMonitor.next_sample_at) }}</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div class="card border-l-4 border-emerald-500 p-4">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitSales') }}</p>
+              <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">${{ formatCost(profitMonitor.summary.sales) }}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ formatNumber(profitMonitor.summary.requests) }} {{ t('admin.dashboard.requests') }}</p>
+            </div>
+            <div class="card border-l-4 border-amber-500 p-4">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitCost') }}</p>
+              <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">${{ formatCost(profitMonitor.summary.cost) }}</p>
+              <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ formatProfitSource(profitMonitor.summary.cost_source) }}</p>
+            </div>
+            <div class="card border-l-4 p-4" :class="profitMonitor.summary.profit < 0 ? 'border-red-500' : 'border-blue-500'">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profit') }}</p>
+              <p class="mt-1 text-xl font-bold" :class="profitMonitor.summary.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">
+                ${{ formatCost(profitMonitor.summary.profit) }}
+              </p>
+              <p v-if="profitMonitor.summary.profit < 0" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ t('admin.dashboard.profitNegative') }}</p>
+            </div>
+            <div class="card border-l-4 border-violet-500 p-4">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitMargin') }}</p>
+              <p class="mt-1 text-xl font-bold text-violet-600 dark:text-violet-400">{{ formatMargin(profitMonitor.summary.margin_percent) }}</p>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitPendingCostCount') }}: {{ formatNumber(profitMonitor.summary.unknown_cost_count) }}</p>
+            </div>
+          </div>
+
+          <div class="card p-4">
+            <div class="mb-3 flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.profitTrend') }}</h3>
+              <div v-if="profitMonitor.summary.upstream_actual_cost !== undefined && profitMonitor.summary.upstream_actual_cost !== null" class="text-right text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ t('admin.dashboard.profitUpstreamActualCost') }}: ${{ formatCost(profitMonitor.summary.upstream_actual_cost) }}</span>
+                <span v-if="profitMonitor.summary.reconciliation_difference !== undefined && profitMonitor.summary.reconciliation_difference !== null" class="ml-3" :class="profitMonitor.summary.reconciliation_status === 'difference' ? 'text-red-600 dark:text-red-400' : ''">
+                  {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }}: {{ formatSignedCost(profitMonitor.summary.reconciliation_difference) }}
+                </span>
+              </div>
+            </div>
+            <div class="h-64">
+              <Line v-if="profitTrendChartData" :data="profitTrendChartData" :options="profitLineOptions" />
+              <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.dashboard.profitNoData') }}
+              </div>
+            </div>
+          </div>
+
+          <div class="card overflow-hidden">
+            <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+              <button
+                v-for="tab in profitTabs"
+                :key="tab.value"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="profitDimension === tab.value ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-dark-800'"
+                @click="profitDimension = tab.value"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200 text-left text-xs dark:divide-dark-700">
+                <thead class="bg-gray-50 text-gray-500 dark:bg-dark-800/50 dark:text-gray-400">
+                  <tr>
+                    <th class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitDimension') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitRequests') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitTokens') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitSales') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitCost') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profit') }}</th>
+                    <th class="px-4 py-2 text-right font-medium">{{ t('admin.dashboard.profitMargin') }}</th>
+                    <th class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitSource') }}</th>
+                    <th v-if="profitDimension === 'accounts'" class="px-4 py-2 font-medium">{{ t('admin.dashboard.profitReconciliationStatus') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-dark-800">
+                  <tr v-for="row in profitRows" :key="`${profitDimension}-${row.id ?? row.name}`" class="text-gray-700 dark:text-gray-300">
+                    <td class="max-w-[220px] truncate px-4 py-2 font-medium text-gray-900 dark:text-white" :title="row.name">{{ row.name }}</td>
+                    <td class="px-4 py-2 text-right">{{ formatNumber(row.requests) }}</td>
+                    <td class="px-4 py-2 text-right">{{ formatTokens(row.tokens) }}</td>
+                    <td class="px-4 py-2 text-right">${{ formatCost(row.sales) }}</td>
+                    <td class="px-4 py-2 text-right">${{ formatCost(row.cost) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold" :class="row.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'">${{ formatCost(row.profit) }}</td>
+                    <td class="px-4 py-2 text-right">{{ formatMargin(row.margin_percent) }}</td>
+                    <td
+                      class="whitespace-nowrap px-4 py-2"
+                      :class="row.cost_source === 'upstream_probe' || row.cost_source === 'official_upstream' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'"
+                    >
+                      {{ formatProfitSource(row.cost_source) }}
+                    </td>
+                    <td v-if="profitDimension === 'accounts'" class="min-w-[180px] px-4 py-2">
+                      <span
+                        class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
+                        :class="profitReconciliationClass(row.reconciliation_status)"
+                      >
+                        {{ formatProfitReconciliationStatus(row.reconciliation_status) }}
+                      </span>
+                      <div v-if="row.upstream_actual_cost !== undefined && row.upstream_actual_cost !== null" class="mt-1 space-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                        <p>{{ t('admin.dashboard.profitUpstreamActualCost') }} ${{ formatCost(row.upstream_actual_cost) }}</p>
+                        <p
+                          v-if="row.reconciliation_difference !== undefined && row.reconciliation_difference !== null"
+                          :class="row.reconciliation_status === 'difference' ? 'font-medium text-red-600 dark:text-red-400' : ''"
+                        >
+                          {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }} {{ formatSignedCost(row.reconciliation_difference) }}<template v-if="row.reconciliation_difference_percent !== undefined && row.reconciliation_difference_percent !== null"> ({{ formatSignedPercent(row.reconciliation_difference_percent) }})</template>
+                        </p>
+                      </div>
+                      <p v-if="row.last_sample_at || row.next_sample_at" class="mt-1 whitespace-nowrap text-[11px] text-gray-500 dark:text-gray-400">
+                        <span v-if="row.last_sample_at">{{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(row.last_sample_at) }}</span>
+                        <span v-if="row.last_sample_at && row.next_sample_at"> · </span>
+                        <span v-if="row.next_sample_at">{{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(row.next_sample_at) }}</span>
+                      </p>
+                    </td>
+                  </tr>
+                  <tr v-if="profitRows.length === 0">
+                    <td :colspan="profitDimension === 'accounts' ? 9 : 8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitNoData') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- Quick Actions -->
         <div class="card p-4">
           <div class="mb-3 flex items-center justify-between">
@@ -341,13 +486,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 import { adminAPI } from '@/api/admin'
+import type { ProfitMonitorDimensionStat, ProfitMonitorResponse } from '@/api/admin/dashboard'
 import type {
   DashboardStats,
   TrendDataPoint,
@@ -405,10 +551,24 @@ const rankingItems = ref<UserSpendingRankingItem[]>([])
 const rankingTotalActualCost = ref(0)
 const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
+const profitMonitor = ref<ProfitMonitorResponse | null>(null)
+const profitDimension = ref<'groups' | 'models' | 'accounts'>('groups')
 let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
+let profitRefreshTimer: ReturnType<typeof setTimeout> | undefined
 const rankingLimit = 12
+
+const profitTabs = computed(() => [
+  { value: 'groups' as const, label: t('admin.dashboard.profitGroups') },
+  { value: 'models' as const, label: t('admin.dashboard.profitModels') },
+  { value: 'accounts' as const, label: t('admin.dashboard.profitAccounts') }
+])
+
+const profitRows = computed<ProfitMonitorDimensionStat[]>(() => {
+  if (!profitMonitor.value) return []
+  return profitMonitor.value[profitDimension.value] || []
+})
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
@@ -508,6 +668,62 @@ const lineOptions = computed(() => ({
   }
 }))
 
+const profitLineOptions = computed(() => ({
+  ...lineOptions.value,
+  plugins: {
+    ...lineOptions.value.plugins,
+    tooltip: {
+      callbacks: {
+        label: (context: any) => `${context.dataset.label}: $${formatCost(Number(context.raw))}`
+      }
+    }
+  },
+  scales: {
+    ...lineOptions.value.scales,
+    y: {
+      ...lineOptions.value.scales.y,
+      ticks: {
+        ...lineOptions.value.scales.y.ticks,
+        callback: (value: string | number) => `$${formatCost(Number(value))}`
+      }
+    }
+  }
+}))
+
+const profitTrendChartData = computed(() => {
+  const trend = profitMonitor.value?.trend || []
+  if (!trend.length) return null
+  return {
+    labels: trend.map((point) => point.date),
+    datasets: [
+      {
+        label: t('admin.dashboard.profitSales'),
+        data: trend.map((point) => point.sales),
+        borderColor: '#10b981',
+        backgroundColor: '#10b98120',
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: t('admin.dashboard.profitCost'),
+        data: trend.map((point) => point.cost),
+        borderColor: '#f59e0b',
+        backgroundColor: '#f59e0b20',
+        tension: 0.3,
+        fill: false
+      },
+      {
+        label: t('admin.dashboard.profit'),
+        data: trend.map((point) => point.profit),
+        borderColor: '#3b82f6',
+        backgroundColor: '#3b82f620',
+        tension: 0.3,
+        fill: false
+      }
+    ]
+  }
+})
+
 // User trend chart data
 const userTrendChartData = computed(() => {
   if (!userTrend.value?.length) return null
@@ -604,6 +820,110 @@ const formatCost = (value: number | null | undefined): string => {
   return safeValue.toFixed(4)
 }
 
+const formatMargin = (value: number | null | undefined): string => {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '-'
+  return `${Number(value).toFixed(1)}%`
+}
+
+const formatSampleTime = (value: string): string => {
+  const sampleTime = new Date(value)
+  if (Number.isNaN(sampleTime.getTime())) return '-'
+  return sampleTime.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  })
+}
+
+const formatProfitSource = (value: string): string => {
+  switch (value) {
+    case 'upstream_probe':
+      return t('admin.dashboard.profitUpstreamProbe')
+    case 'group_break_even_estimate':
+      return t('admin.dashboard.profitGroupEstimate')
+    case 'official_upstream':
+      return t('admin.dashboard.profitOfficialUpstream')
+    case 'unknown':
+      return t('admin.dashboard.profitCostUnknown')
+    case 'usage_record_upstream_rate':
+      return t('admin.dashboard.profitLocalEstimate')
+    case 'channel_pricing':
+      return t('admin.dashboard.profitLocalEstimate')
+    case 'mixed':
+      return t('admin.dashboard.profitMixed')
+    case 'legacy_formula':
+      return t('admin.dashboard.profitLegacyFormula')
+    default:
+      return value || t('admin.dashboard.profitCostUnknown')
+  }
+}
+
+const formatProfitReconciliationStatus = (value: string | undefined): string => {
+  switch (value) {
+    case 'matched':
+      return t('admin.dashboard.profitReconciliationMatched')
+    case 'difference':
+      return t('admin.dashboard.profitReconciliationDifference')
+    case 'pending':
+      return t('admin.dashboard.profitReconciliationPending')
+    case 'missing_start':
+      return t('admin.dashboard.profitReconciliationMissingStart')
+    case 'sample_unauthorized':
+      return t('admin.dashboard.profitReconciliationSampleUnauthorized')
+    case 'sample_failed':
+      return t('admin.dashboard.profitReconciliationSampleFailed')
+    case 'sample_unsupported':
+      return t('admin.dashboard.profitReconciliationSampleUnsupported')
+    case 'estimated':
+      return t('admin.dashboard.profitReconciliationEstimated')
+    case 'official_zero':
+      return t('admin.dashboard.profitReconciliationOfficialZero')
+    case 'unavailable':
+    default:
+      return t('admin.dashboard.profitReconciliationUnavailable')
+  }
+}
+
+const profitReconciliationClass = (value: string | undefined): string => {
+  switch (value) {
+    case 'matched':
+      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800'
+    case 'difference':
+      return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800'
+    case 'pending':
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800'
+    case 'missing_start':
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800'
+    case 'sample_unauthorized':
+    case 'sample_failed':
+      return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-800'
+    case 'sample_unsupported':
+      return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-dark-800 dark:text-gray-300 dark:ring-dark-700'
+    case 'estimated':
+      return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-800'
+    case 'official_zero':
+      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800'
+    case 'unavailable':
+    default:
+      return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-dark-800 dark:text-gray-300 dark:ring-dark-700'
+  }
+}
+
+const formatSignedCost = (value: number | null | undefined): string => {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '-'
+  const numericValue = Number(value)
+  const sign = numericValue >= 0 ? '+' : '-'
+  return `${sign}$${formatCost(Math.abs(numericValue))}`
+}
+
+const formatSignedPercent = (value: number | null | undefined): string => {
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return '-'
+  const numericValue = Number(value)
+  const sign = numericValue >= 0 ? '+' : '-'
+  return `${sign}${Math.abs(numericValue).toFixed(1)}%`
+}
+
 const formatDuration = (ms: number): string => {
   if (ms >= 1000) {
     return `${(ms / 1000).toFixed(2)}s`
@@ -643,8 +963,25 @@ const onDateRangeChange = (range: {
   loadChartData()
 }
 
+const scheduleProfitRefresh = (nextSampleAt?: string) => {
+  if (profitRefreshTimer !== undefined) {
+    clearTimeout(profitRefreshTimer)
+    profitRefreshTimer = undefined
+  }
+  if (!nextSampleAt) return
+
+  const target = new Date(nextSampleAt).getTime() + 20_000
+  const delay = target - Date.now()
+  if (!Number.isFinite(target) || delay <= 0) return
+
+  profitRefreshTimer = setTimeout(() => {
+    profitRefreshTimer = undefined
+    void loadDashboardSnapshot(false)
+  }, delay)
+}
+
 // Load data
-const loadDashboardSnapshot = async (includeStats: boolean) => {
+async function loadDashboardSnapshot(includeStats: boolean) {
   const currentSeq = ++chartLoadSeq
   if (includeStats && !stats.value) {
     loading.value = true
@@ -659,7 +996,8 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       include_trend: true,
       include_model_stats: true,
       include_group_stats: false,
-      include_users_trend: false
+      include_users_trend: false,
+      include_profit: true
     })
     if (currentSeq !== chartLoadSeq) return
     if (includeStats && response.stats) {
@@ -667,6 +1005,8 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
     }
     trendData.value = response.trend || []
     modelStats.value = response.models || []
+    profitMonitor.value = response.profit || null
+    scheduleProfitRefresh(response.profit?.next_sample_at)
   } catch (error) {
     if (currentSeq !== chartLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
@@ -751,6 +1091,12 @@ const loadChartData = async () => {
 onMounted(() => {
   void refreshBatchImageAccess()
   loadDashboardStats()
+})
+
+onUnmounted(() => {
+  if (profitRefreshTimer !== undefined) {
+    clearTimeout(profitRefreshTimer)
+  }
 })
 </script>
 

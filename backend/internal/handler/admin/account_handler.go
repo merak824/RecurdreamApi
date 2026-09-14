@@ -48,29 +48,35 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
-	adminService            service.AdminService
-	oauthService            *service.OAuthService
-	openaiOAuthService      *service.OpenAIOAuthService
-	geminiOAuthService      *service.GeminiOAuthService
-	antigravityOAuthService *service.AntigravityOAuthService
-	grokOAuthService        service.GrokOAuthTokenService
-	rateLimitService        *service.RateLimitService
-	accountUsageService     *service.AccountUsageService
-	accountTestService      *service.AccountTestService
-	concurrencyService      *service.ConcurrencyService
-	crsSyncService          *service.CRSSyncService
-	sessionLimitCache       service.SessionLimitCache
-	rpmCache                service.RPMCache
-	tokenCacheInvalidator   service.TokenCacheInvalidator
-	grokImportProber        grokImportProber
-	upstreamBillingProbe    *service.UpstreamBillingProbeService
-	ollamaCloudUsage        *service.OllamaCloudUsageService
-	cfg                     *config.Config
+	adminService                service.AdminService
+	oauthService                *service.OAuthService
+	openaiOAuthService          *service.OpenAIOAuthService
+	geminiOAuthService          *service.GeminiOAuthService
+	antigravityOAuthService     *service.AntigravityOAuthService
+	grokOAuthService            service.GrokOAuthTokenService
+	rateLimitService            *service.RateLimitService
+	accountUsageService         *service.AccountUsageService
+	accountTestService          *service.AccountTestService
+	concurrencyService          *service.ConcurrencyService
+	crsSyncService              *service.CRSSyncService
+	sessionLimitCache           service.SessionLimitCache
+	rpmCache                    service.RPMCache
+	tokenCacheInvalidator       service.TokenCacheInvalidator
+	grokImportProber            grokImportProber
+	upstreamBillingProbe        *service.UpstreamBillingProbeService
+	upstreamBillingProbeAccount func(context.Context, int64) (*service.UpstreamBillingProbeSnapshot, error)
+	ollamaCloudUsage            *service.OllamaCloudUsageService
+	cfg                         *config.Config
 }
 
 // SetUpstreamBillingProbeService attaches the optional remote billing probe service.
 func (h *AccountHandler) SetUpstreamBillingProbeService(probe *service.UpstreamBillingProbeService) {
 	h.upstreamBillingProbe = probe
+	if probe == nil {
+		h.upstreamBillingProbeAccount = nil
+		return
+	}
+	h.upstreamBillingProbeAccount = probe.ProbeAccount
 }
 
 func (h *AccountHandler) SetOllamaCloudUsageService(usage *service.OllamaCloudUsageService) {
@@ -1075,6 +1081,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 	// 探测失败不影响账号创建响应。
 	h.scheduleOpenAIResponsesProbe(createdAccount)
 	h.scheduleGrokImportProbe(createdAccount)
+	h.scheduleUpstreamBillingProbe(createdAccount)
 	response.Success(c, result.Data)
 }
 
@@ -1219,6 +1226,31 @@ func (h *AccountHandler) scheduleOpenAIResponsesProbe(account *service.Account) 
 			}
 		}()
 		h.accountTestService.ProbeOpenAIAPIKeyResponsesSupport(context.Background(), accountID)
+	}()
+}
+
+func (h *AccountHandler) scheduleUpstreamBillingProbe(account *service.Account) {
+	if h == nil || h.upstreamBillingProbeAccount == nil || account == nil ||
+		!service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type) {
+		return
+	}
+	enabled, _ := account.Extra[service.UpstreamBillingProbeEnabledExtraKey].(bool)
+	if !enabled {
+		return
+	}
+	accountID := account.ID
+	probe := h.upstreamBillingProbeAccount
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("upstream_billing_probe_create_panic", "account_id", accountID, "recover", r)
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := probe(ctx, accountID); err != nil {
+			slog.Warn("upstream_billing_probe_create_failed", "account_id", accountID, "error", err)
+		}
 	}()
 }
 
@@ -2114,6 +2146,7 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 				GroupIDs:              item.GroupIDs,
 				ExpiresAt:             item.ExpiresAt,
 				AutoPauseOnExpired:    item.AutoPauseOnExpired,
+				ProbeEnabled:          item.ProbeEnabled,
 				SkipMixedChannelCheck: skipCheck,
 			})
 			if err != nil {
@@ -2137,6 +2170,7 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 			// OpenAI APIKey 账号异步探测 /v1/responses 能力。
 			h.scheduleOpenAIResponsesProbe(account)
 			h.scheduleGrokImportProbe(account)
+			h.scheduleUpstreamBillingProbe(account)
 			success++
 			results = append(results, gin.H{
 				"name":    item.Name,

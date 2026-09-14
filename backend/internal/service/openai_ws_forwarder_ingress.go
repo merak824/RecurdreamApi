@@ -1138,11 +1138,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if isTokenEvent {
 				tokenEventCount++
 			}
+			isSemanticOutput := isOpenAIWSSemanticOutput(upstreamMessage, eventType)
 			isTerminalEvent := isOpenAIWSTerminalEvent(eventType)
 			if isTerminalEvent {
 				terminalEventCount++
 			}
-			if firstTokenMs == nil && isTokenEvent {
+			if firstTokenMs == nil && isSemanticOutput {
 				ms := int(time.Since(turnStart).Milliseconds())
 				firstTokenMs = &ms
 			}
@@ -1244,6 +1245,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					ResponseHeaders:               lease.HandshakeHeaders(),
 					Duration:                      time.Since(turnStart),
 					FirstTokenMs:                  firstTokenMs,
+					UpstreamFirstTokenMs:          firstTokenMs,
+					TTFTTransport:                 OpenAITTFTTransportResponsesWS,
+					FirstSemanticEvent:            "responses_ws.semantic_output",
+					ClientDisconnect:              clientDisconnected,
 				}
 				if replayInput := replayCollector.Items(); len(replayInput) > 0 {
 					result.wsReplayInput = replayInput

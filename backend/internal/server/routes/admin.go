@@ -73,6 +73,8 @@ func RegisterAdminRoutes(
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
 
+		registerRedPacketRoutes(admin, h)
+
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
@@ -130,6 +132,18 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+	}
+}
+
+func registerRedPacketRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	redPackets := admin.Group("/red-packets")
+	{
+		redPackets.GET("", h.Admin.RedPacket.List)
+		redPackets.POST("", h.Admin.RedPacket.Create)
+		redPackets.PUT("/:id", h.Admin.RedPacket.Update)
+		redPackets.POST("/:id/publish", h.Admin.RedPacket.Publish)
+		redPackets.POST("/:id/cancel", h.Admin.RedPacket.Cancel)
+		redPackets.GET("/:id/export", h.Admin.RedPacket.Export)
 	}
 }
 
@@ -812,12 +826,14 @@ func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		affiliates.GET("/invites", h.Admin.Affiliate.ListInviteRecords)
 		affiliates.GET("/rebates", h.Admin.Affiliate.ListRebateRecords)
 		affiliates.GET("/transfers", h.Admin.Affiliate.ListTransferRecords)
+		affiliates.GET("/withdrawals", h.Admin.Affiliate.ListWithdrawalRecords)
+		affiliates.POST("/withdrawals/:id/paid", h.Admin.Affiliate.MarkWithdrawalPaid)
+		affiliates.POST("/withdrawals/:id/reject", h.Admin.Affiliate.RejectWithdrawal)
 
 		users := affiliates.Group("/users")
 		{
 			users.GET("", h.Admin.Affiliate.ListUsers)
 			users.GET("/lookup", h.Admin.Affiliate.LookupUsers)
-			users.POST("/batch-rate", h.Admin.Affiliate.BatchSetRate)
 			users.GET("/:user_id/overview", h.Admin.Affiliate.GetUserOverview)
 			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
 			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)

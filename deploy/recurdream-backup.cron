@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+0 3 * * * root /root/backup-recurdream.sh daily >> /var/log/recurdream-backup.log 2>&1
+30 3 * * 0 root /root/backup-recurdream.sh weekly >> /var/log/recurdream-backup.log 2>&1

@@ -339,7 +339,8 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 				if u := extractCCStreamUsage(payload); u != nil {
 					usage = *u
 				}
-				if firstTokenMs == nil && !usageOnlyChunk {
+				if firstTokenMs == nil && !usageOnlyChunk && openAIChatRawPayloadHasSemanticOutput(payload) {
+					markOpenAIUpstreamSemanticOutput(c, "chat_completions.delta")
 					elapsed := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &elapsed
 				}
@@ -442,7 +443,12 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		}
 	}
 
-	return resultWithUsage(), nil
+	result := resultWithUsage()
+	result.UpstreamFirstTokenMs = func() *int { value, _ := openAIUpstreamTTFTObservationFromContext(c); return value }()
+	result.TTFTTransport = OpenAITTFTTransportHTTPSSE
+	result.FirstSemanticEvent = func() string { _, event := openAIUpstreamTTFTObservationFromContext(c); return event }()
+	result.ClientDisconnect = clientDisconnected
+	return result, nil
 }
 
 // ensureOpenAIChatStreamUsage 确保 raw Chat Completions 流式请求会让上游返回 usage。
@@ -464,6 +470,22 @@ func isOpenAIChatUsageOnlyStreamChunk(payload string) bool {
 	}
 	choices := gjson.Get(payload, "choices")
 	return choices.Exists() && choices.IsArray() && len(choices.Array()) == 0
+}
+
+func openAIChatRawPayloadHasSemanticOutput(payload string) bool {
+	choices := gjson.Get(payload, "choices")
+	if !choices.Exists() || !choices.IsArray() {
+		return false
+	}
+	for _, choice := range choices.Array() {
+		for _, path := range []string{"delta.content", "delta.tool_calls", "delta.function_call", "text", "message.content"} {
+			value := choice.Get(path)
+			if value.Exists() && strings.TrimSpace(value.String()) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // extractCCStreamUsage 从单个 CC 流式 chunk 的 payload 中提取 usage 字段。

@@ -215,6 +215,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 	}
 
 	scan := s.scanCCStream(c, resp, "openai messages chat fallback", requestID, startTime, emitChunk)
+	upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 	usage := scan.Usage
 
 	if scan.Err != nil {
@@ -234,6 +235,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 			Stream:                      true,
 			Duration:                    time.Since(startTime),
 			FirstTokenMs:                scan.FirstTokenMs,
+			UpstreamFirstTokenMs:        upstreamFirstTokenMs,
+			TTFTTransport:               OpenAITTFTTransportHTTPSSE,
+			FirstSemanticEvent:          firstSemanticEvent,
 			ClientDisconnect:            clientDisconnected,
 		}, fmt.Errorf("stream usage incomplete: %w", scan.Err)
 	}
@@ -271,6 +275,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 		Stream:                      true,
 		Duration:                    time.Since(startTime),
 		FirstTokenMs:                scan.FirstTokenMs,
+		UpstreamFirstTokenMs:        upstreamFirstTokenMs,
+		TTFTTransport:               OpenAITTFTTransportHTTPSSE,
+		FirstSemanticEvent:          firstSemanticEvent,
 		ClientDisconnect:            clientDisconnected,
 	}, nil
 }

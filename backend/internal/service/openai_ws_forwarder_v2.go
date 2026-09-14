@@ -618,11 +618,12 @@ readLoop:
 		if isTokenEvent {
 			tokenEventCount++
 		}
+		isSemanticOutput := isOpenAIWSSemanticOutput(message, eventType)
 		isTerminalEvent := isOpenAIWSTerminalEvent(eventType)
 		if isTerminalEvent {
 			terminalEventCount++
 		}
-		if firstTokenMs == nil && isTokenEvent {
+		if firstTokenMs == nil && isSemanticOutput {
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
 		}
@@ -843,6 +844,9 @@ readLoop:
 	result := resultWithUsage()
 	result.ImageCount = imageCounter.Count()
 	result.ImageOutputSizes = imageCounter.Sizes()
+	result.UpstreamFirstTokenMs = firstTokenMs
+	result.TTFTTransport = OpenAITTFTTransportResponsesWS
+	result.FirstSemanticEvent = "responses_ws.semantic_output"
 	return result, nil
 }
 

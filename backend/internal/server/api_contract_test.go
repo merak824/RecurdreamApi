@@ -872,10 +872,6 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_wechat_platform_quotas": null,
 					"auth_source_default_dingtalk_platform_quotas": null,
 					"affiliate_rebate_rate": 20,
-					"affiliate_rebate_freeze_hours": 0,
-					"affiliate_rebate_duration_days": 0,
-					"affiliate_rebate_per_invitee_cap": 0,
-					"affiliate_admin_recharge_enabled": false,
 					"default_user_rpm_limit": 0,
 					"default_subscriptions": [],
 					"enable_model_fallback": false,
@@ -924,6 +920,12 @@ func TestAPIContracts(t *testing.T) {
 					"openai_low_upstream_rate_priority_enabled": true,
 					"openai_oauth_scheduling_rate_multiplier": 0.05,
 					"openai_ttft_mode": "semantic",
+					"openai_ttft_optimizer_enabled": false,
+					"openai_ttft_base_p90_seconds": 10,
+					"openai_ttft_cache_protection_enabled": true,
+					"openai_ttft_cache_min_context_tokens": 100000,
+					"openai_ttft_cache_min_hit_rate_percent": 80,
+					"openai_ttft_cache_elastic_p90_cap_seconds": 30,
 					"openai_advanced_scheduler_enabled": true,
 					"openai_advanced_scheduler_sticky_weighted_enabled": false,
 					"openai_advanced_scheduler_subscription_priority_enabled": false,
@@ -1194,10 +1196,6 @@ func TestAPIContracts(t *testing.T) {
 					"default_concurrency": 0,
 					"default_balance": 0,
 					"affiliate_rebate_rate": 20,
-					"affiliate_rebate_freeze_hours": 0,
-					"affiliate_rebate_duration_days": 0,
-					"affiliate_rebate_per_invitee_cap": 0,
-					"affiliate_admin_recharge_enabled": false,
 					"default_user_rpm_limit": 0,
 					"default_subscriptions": [],
 					"enable_model_fallback": false,
@@ -1240,6 +1238,12 @@ func TestAPIContracts(t *testing.T) {
 					"openai_low_upstream_rate_priority_enabled": false,
 					"openai_oauth_scheduling_rate_multiplier": 1,
 					"openai_ttft_mode": "semantic",
+					"openai_ttft_optimizer_enabled": false,
+					"openai_ttft_base_p90_seconds": 10,
+					"openai_ttft_cache_protection_enabled": true,
+					"openai_ttft_cache_min_context_tokens": 100000,
+					"openai_ttft_cache_min_hit_rate_percent": 80,
+					"openai_ttft_cache_elastic_p90_cap_seconds": 30,
 					"openai_advanced_scheduler_enabled": false,
 					"openai_advanced_scheduler_sticky_weighted_enabled": false,
 					"openai_advanced_scheduler_subscription_priority_enabled": false,
@@ -1472,7 +1476,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	subscriptionService := service.NewSubscriptionService(groupRepo, userSubRepo, nil, nil, cfg)
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil)
 	redeemHandler := handler.NewRedeemHandler(redeemService)
 
 	settingRepo := newStubSettingRepo()

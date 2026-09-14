@@ -22,6 +22,15 @@ export { totpAPI } from './totp'
 export { passkeyAPI, type PasskeyCredentialSummary } from './passkey'
 export { default as announcementsAPI } from './announcements'
 export { channelMonitorUserAPI } from './channelMonitor'
+export { redPacketsAPI } from './redPackets'
+export type {
+  RedPacketActivity,
+  RedPacketActivityDetail,
+  RedPacketEligibility,
+  RedPacketParticipationResult,
+  RedPacketReward,
+  RedPacketWinner
+} from './redPackets'
 
 // Admin APIs
 export { adminAPI } from './admin'

@@ -391,19 +391,11 @@ func (r *oauthEmailAffiliateRepoStub) BindInviter(_ context.Context, userID, inv
 	return true, nil
 }
 
-func (r *oauthEmailAffiliateRepoStub) AccrueQuota(context.Context, int64, int64, float64, int, *int64) (bool, error) {
+func (r *oauthEmailAffiliateRepoStub) AccrueQuota(context.Context, int64, int64, float64, *int64) (bool, error) {
 	panic("unexpected AccrueQuota call")
 }
 
-func (r *oauthEmailAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
-	panic("unexpected GetAccruedRebateFromInvitee call")
-}
-
-func (r *oauthEmailAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
-	panic("unexpected ThawFrozenQuota call")
-}
-
-func (r *oauthEmailAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+func (r *oauthEmailAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64, float64) (float64, float64, error) {
 	panic("unexpected TransferQuotaToBalance call")
 }
 
@@ -411,20 +403,24 @@ func (r *oauthEmailAffiliateRepoStub) ListInvitees(context.Context, int64, int) 
 	panic("unexpected ListInvitees call")
 }
 
-func (r *oauthEmailAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
-	panic("unexpected UpdateUserAffCode call")
+func (r *oauthEmailAffiliateRepoStub) CreateWithdrawal(context.Context, int64, float64, string, service.AffiliateImageData) (*service.AffiliateWithdrawal, error) {
+	panic("unexpected CreateWithdrawal call")
 }
 
-func (r *oauthEmailAffiliateRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
-	panic("unexpected ResetUserAffCode call")
+func (r *oauthEmailAffiliateRepoStub) ListWithdrawalsByUser(context.Context, int64, int) ([]service.AffiliateWithdrawal, error) {
+	panic("unexpected ListWithdrawalsByUser call")
 }
 
-func (r *oauthEmailAffiliateRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
-	panic("unexpected SetUserRebateRate call")
+func (r *oauthEmailAffiliateRepoStub) GetWithdrawalStats(context.Context, int64) (float64, float64, error) {
+	panic("unexpected GetWithdrawalStats call")
 }
 
-func (r *oauthEmailAffiliateRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
-	panic("unexpected BatchSetUserRebateRate call")
+func (r *oauthEmailAffiliateRepoStub) UpdateExclusiveSettings(context.Context, int64, service.AffiliateExclusiveSettingsInput) error {
+	panic("unexpected UpdateExclusiveSettings call")
+}
+
+func (r *oauthEmailAffiliateRepoStub) ClearExclusiveSettings(context.Context, int64) (string, error) {
+	panic("unexpected ClearExclusiveSettings call")
 }
 
 func (r *oauthEmailAffiliateRepoStub) ListUsersWithCustomSettings(context.Context, service.AffiliateAdminFilter) ([]service.AffiliateAdminEntry, int64, error) {
@@ -441,6 +437,18 @@ func (r *oauthEmailAffiliateRepoStub) ListAffiliateRebateRecords(context.Context
 
 func (r *oauthEmailAffiliateRepoStub) ListAffiliateTransferRecords(context.Context, service.AffiliateRecordFilter) ([]service.AffiliateTransferRecord, int64, error) {
 	panic("unexpected ListAffiliateTransferRecords call")
+}
+
+func (r *oauthEmailAffiliateRepoStub) ListAffiliateWithdrawalRecords(context.Context, service.AffiliateRecordFilter) ([]service.AffiliateWithdrawalRecord, int64, error) {
+	panic("unexpected ListAffiliateWithdrawalRecords call")
+}
+
+func (r *oauthEmailAffiliateRepoStub) MarkWithdrawalPaid(context.Context, int64, service.AffiliateWithdrawalAdminActionInput, service.AffiliateImageData) (*service.AffiliateWithdrawal, error) {
+	panic("unexpected MarkWithdrawalPaid call")
+}
+
+func (r *oauthEmailAffiliateRepoStub) RejectWithdrawal(context.Context, int64, service.AffiliateWithdrawalAdminActionInput) (*service.AffiliateWithdrawal, error) {
+	panic("unexpected RejectWithdrawal call")
 }
 
 func (r *oauthEmailAffiliateRepoStub) GetAffiliateUserOverview(context.Context, int64) (*service.AffiliateUserOverview, error) {

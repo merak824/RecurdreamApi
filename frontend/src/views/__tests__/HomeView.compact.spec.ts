@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 
 import HomeView from '../HomeView.vue'
@@ -37,6 +37,8 @@ vi.mock('vue-i18n', async (importOriginal) => {
   }
 })
 
+const mountedWrappers: ReturnType<typeof mount>[] = []
+
 function mountHome(settings: Record<string, unknown> = {}) {
   appStore.cachedPublicSettings = {
     site_name: 'Test site',
@@ -44,7 +46,7 @@ function mountHome(settings: Record<string, unknown> = {}) {
     ...settings,
   }
 
-  return mount(HomeView, {
+  const wrapper = mount(HomeView, {
     global: {
       stubs: {
         RouterLink: RouterLinkStub,
@@ -53,6 +55,8 @@ function mountHome(settings: Record<string, unknown> = {}) {
       },
     },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 function compactDestination(wrapper: ReturnType<typeof mountHome>) {
@@ -75,6 +79,12 @@ describe('HomeView compact mode', () => {
     appStore.fetchPublicSettings.mockClear()
     localStorage.clear()
     vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
+  })
+
+  afterEach(() => {
+    mountedWrappers.forEach((wrapper) => wrapper.unmount())
+    mountedWrappers.length = 0
+    vi.restoreAllMocks()
   })
 
   it('renders custom HTML ahead of compact mode', () => {
@@ -108,7 +118,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.terminal-container').exists()).toBe(true)
+    expect(wrapper.find('.terminal').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {

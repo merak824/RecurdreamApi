@@ -49,6 +49,9 @@ const (
 	upstreamBillingProbeAccountRateScale       = 10000.0
 	upstreamBillingProbeLeaderLockKey          = "upstream:billing:probe:leader"
 	upstreamBillingProbeLeaderLockTTL          = 2 * time.Minute
+	upstreamUsageSnapshotInterval              = 10 * time.Minute
+	upstreamUsageSnapshotLeaderLockKey         = "upstream:usage:snapshot:leader"
+	upstreamUsageSnapshotLeaderLockTTL         = 11 * time.Minute
 )
 
 // UpstreamBillingProbeMaxBatchSize limits one manual batch and one runner cycle.
@@ -242,19 +245,21 @@ type UpstreamBillingProbeService struct {
 	accountTestService *AccountTestService
 	settingService     *SettingService
 
-	parentCtx    context.Context
-	parentCancel context.CancelFunc
-	wg           sync.WaitGroup
-	mu           sync.Mutex
-	started      bool
-	stopped      bool
-	cycleMu      sync.Mutex
-	probeGroup   singleflight.Group
-	probeSlots   chan struct{}
-	now          func() time.Time
-	lockCache    LeaderLockCache
-	db           *sql.DB
-	instanceID   string
+	parentCtx               context.Context
+	parentCancel            context.CancelFunc
+	wg                      sync.WaitGroup
+	mu                      sync.Mutex
+	started                 bool
+	stopped                 bool
+	cycleMu                 sync.Mutex
+	usageCycleMu            sync.Mutex
+	lastUsageSnapshotBucket int64
+	probeGroup              singleflight.Group
+	probeSlots              chan struct{}
+	now                     func() time.Time
+	lockCache               LeaderLockCache
+	db                      *sql.DB
+	instanceID              string
 }
 
 type upstreamBillingProbeSnapshotWriter interface {
@@ -337,6 +342,7 @@ func (s *UpstreamBillingProbeService) Stop() {
 
 func (s *UpstreamBillingProbeService) runLoop() {
 	defer s.wg.Done()
+	_ = s.RunUpstreamUsageSnapshotsDue(s.parentCtx)
 	_ = s.RunDue(s.parentCtx)
 	ticker := time.NewTicker(upstreamBillingProbeCycleInterval)
 	defer ticker.Stop()
@@ -345,6 +351,9 @@ func (s *UpstreamBillingProbeService) runLoop() {
 		case <-s.parentCtx.Done():
 			return
 		case <-ticker.C:
+			if err := s.RunUpstreamUsageSnapshotsDue(s.parentCtx); err != nil {
+				logger.LegacyPrintf("service.upstream_billing_probe", "usage_snapshot_cycle_failed: error_code=cycle_failed")
+			}
 			if err := s.RunDue(s.parentCtx); err != nil {
 				logger.LegacyPrintf("service.upstream_billing_probe", "run_due_failed: err=%v", err)
 			}
@@ -565,10 +574,14 @@ func upstreamBillingProbeLeaderLockKeyAt(now time.Time) string {
 }
 
 func (s *UpstreamBillingProbeService) tryAcquireLeaderLock(ctx context.Context, key string) (func(), bool, error) {
+	return s.tryAcquireLeaderLockWithTTL(ctx, key, upstreamBillingProbeLeaderLockTTL)
+}
+
+func (s *UpstreamBillingProbeService) tryAcquireLeaderLockWithTTL(ctx context.Context, key string, ttl time.Duration) (func(), bool, error) {
 	lockCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if s.lockCache != nil {
-		acquired, err := s.lockCache.TryAcquireLeaderLock(lockCtx, key, s.instanceID, upstreamBillingProbeLeaderLockTTL)
+		acquired, err := s.lockCache.TryAcquireLeaderLock(lockCtx, key, s.instanceID, ttl)
 		if err != nil {
 			return nil, false, err
 		}

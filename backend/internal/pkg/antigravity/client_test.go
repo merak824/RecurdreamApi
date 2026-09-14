@@ -465,9 +465,7 @@ func TestShouldFallbackToNextURL_无错误且200(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestClient_ExchangeCode_成功(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 验证请求方法
@@ -482,7 +480,7 @@ func TestClient_ExchangeCode_成功(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("解析表单失败: %v", err)
 		}
-		if r.FormValue("client_id") != ClientID {
+		if r.FormValue("client_id") != testAntigravityClientID {
 			t.Errorf("client_id 不匹配: got %s", r.FormValue("client_id"))
 		}
 		if r.FormValue("client_secret") != "test-secret" {
@@ -524,7 +522,7 @@ func TestClient_ExchangeCode_成功(t *testing.T) {
 	// 改用直接构造请求测试 mock server 响应
 	ctx := context.Background()
 	params := url.Values{}
-	params.Set("client_id", ClientID)
+	params.Set("client_id", testAntigravityClientID)
 	params.Set("client_secret", "test-secret")
 	params.Set("code", "auth-code")
 	params.Set("redirect_uri", RedirectURI)
@@ -560,9 +558,7 @@ func TestClient_ExchangeCode_成功(t *testing.T) {
 }
 
 func TestClient_ExchangeCode_无ClientSecret(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = ""
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "")
 
 	client := mustNewClient(t, "")
 	_, err := client.ExchangeCode(context.Background(), "code", "verifier")
@@ -575,9 +571,7 @@ func TestClient_ExchangeCode_无ClientSecret(t *testing.T) {
 }
 
 func TestClient_ExchangeCode_服务器返回错误(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -602,9 +596,7 @@ func TestClient_ExchangeCode_服务器返回错误(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestClient_RefreshToken_MockServer(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -632,7 +624,7 @@ func TestClient_RefreshToken_MockServer(t *testing.T) {
 
 	ctx := context.Background()
 	params := url.Values{}
-	params.Set("client_id", ClientID)
+	params.Set("client_id", testAntigravityClientID)
 	params.Set("client_secret", "test-secret")
 	params.Set("refresh_token", "old-refresh-tok")
 	params.Set("grant_type", "refresh_token")
@@ -663,9 +655,7 @@ func TestClient_RefreshToken_MockServer(t *testing.T) {
 }
 
 func TestClient_RefreshToken_无ClientSecret(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = ""
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "")
 
 	client := mustNewClient(t, "")
 	_, err := client.RefreshToken(context.Background(), "refresh-tok")
@@ -865,9 +855,7 @@ func newTestClientWithRedirect(redirects map[string]string) *Client {
 // ---------------------------------------------------------------------------
 
 func TestClient_ExchangeCode_Success_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -879,7 +867,7 @@ func TestClient_ExchangeCode_Success_RealCall(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("解析表单失败: %v", err)
 		}
-		if r.FormValue("client_id") != ClientID {
+		if r.FormValue("client_id") != testAntigravityClientID {
 			t.Errorf("client_id 不匹配: got %s", r.FormValue("client_id"))
 		}
 		if r.FormValue("client_secret") != "test-secret" {
@@ -936,9 +924,7 @@ func TestClient_ExchangeCode_Success_RealCall(t *testing.T) {
 }
 
 func TestClient_ExchangeCode_ServerError_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -963,9 +949,7 @@ func TestClient_ExchangeCode_ServerError_RealCall(t *testing.T) {
 }
 
 func TestClient_ExchangeCode_InvalidJSON_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -988,9 +972,7 @@ func TestClient_ExchangeCode_InvalidJSON_RealCall(t *testing.T) {
 }
 
 func TestClient_ExchangeCode_ContextCanceled_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(5 * time.Second) // 模拟慢响应
@@ -1016,9 +998,7 @@ func TestClient_ExchangeCode_ContextCanceled_RealCall(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestClient_RefreshToken_Success_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1033,7 +1013,7 @@ func TestClient_RefreshToken_Success_RealCall(t *testing.T) {
 		if r.FormValue("refresh_token") != "my-refresh-token" {
 			t.Errorf("refresh_token 不匹配: got %s", r.FormValue("refresh_token"))
 		}
-		if r.FormValue("client_id") != ClientID {
+		if r.FormValue("client_id") != testAntigravityClientID {
 			t.Errorf("client_id 不匹配: got %s", r.FormValue("client_id"))
 		}
 		if r.FormValue("client_secret") != "test-secret" {
@@ -1067,9 +1047,7 @@ func TestClient_RefreshToken_Success_RealCall(t *testing.T) {
 }
 
 func TestClient_RefreshToken_ServerError_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -1091,9 +1069,7 @@ func TestClient_RefreshToken_ServerError_RealCall(t *testing.T) {
 }
 
 func TestClient_RefreshToken_InvalidJSON_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1116,9 +1092,7 @@ func TestClient_RefreshToken_InvalidJSON_RealCall(t *testing.T) {
 }
 
 func TestClient_RefreshToken_ContextCanceled_RealCall(t *testing.T) {
-	old := defaultClientSecret
-	defaultClientSecret = "test-secret"
-	t.Cleanup(func() { defaultClientSecret = old })
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(5 * time.Second)

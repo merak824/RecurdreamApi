@@ -742,7 +742,7 @@ func affiliateRebateBaseAmount(o *dbent.PaymentOrder) float64 {
 	}
 	switch o.OrderType {
 	case payment.OrderTypeBalance, payment.OrderTypeSubscription:
-		return o.Amount
+		return o.PayAmount
 	default:
 		return 0
 	}

@@ -8,11 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAffiliateUserOverviewSQLIncludesMaturedFrozenQuota(t *testing.T) {
+func TestAffiliateUserOverviewSQLUsesOnlyUnifiedAvailableQuota(t *testing.T) {
 	query := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
 
-	require.Contains(t, query, "ua.aff_quota + COALESCE(matured.matured_frozen_quota, 0)")
-	require.Contains(t, query, "frozen_until <= NOW()")
+	require.Contains(t, query, "ua.aff_quota::double precision")
+	require.NotContains(t, query, "matured_frozen_quota")
+	require.NotContains(t, query, "frozen_until")
 }
 
 func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
@@ -25,4 +26,19 @@ func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
 	require.Contains(t, content, "ual.balance_after::double precision")
 	require.NotContains(t, content, "parseAffiliateRebateAmount")
 	require.NotContains(t, content, `"current_balance": "u.balance"`)
+}
+
+func TestRejectWithdrawalRefundsUnifiedAffiliateQuota(t *testing.T) {
+	source, err := os.ReadFile("affiliate_repo.go")
+	require.NoError(t, err)
+	content := string(source)
+
+	start := strings.Index(content, "func (r *affiliateRepository) RejectWithdrawal")
+	require.NotEqual(t, -1, start)
+	endOffset := strings.Index(content[start:], "\nfunc (r *affiliateRepository) ListInvitees")
+	require.NotEqual(t, -1, endOffset)
+	rejectWithdrawal := content[start : start+endOffset]
+
+	require.Contains(t, rejectWithdrawal, "SET aff_quota = aff_quota + $1")
+	require.NotContains(t, rejectWithdrawal, "agent_aff_quota")
 }

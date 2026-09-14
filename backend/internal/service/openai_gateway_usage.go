@@ -30,6 +30,7 @@ type OpenAIRecordUsageInput struct {
 	UserAgent          string // 请求的 User-Agent
 	IPAddress          string // 请求的客户端 IP 地址
 	SessionID          string // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
+	SessionHash        string // 网关已计算的会话哈希，仅用于短期首 Token 缓存画像
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
@@ -331,6 +332,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
+	profitCostSource, usageLogRateMultiplier := usageLogProfitCostSnapshot(account, pricingAt)
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
 	if result.OpenAIWSMode {
 		if upstreamRequestID := strings.TrimSpace(result.RequestID); upstreamRequestID != "" {
@@ -421,7 +423,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	} else {
 		usageLog.RateMultiplier = multiplier
 	}
-	usageLog.AccountRateMultiplier = &accountRateMultiplier
+	usageLog.AccountRateMultiplier = usageLogRateMultiplier
+	usageLog.ProfitCostSource = profitCostSource
 	usageLog.BillingType = billingType
 	usageLog.Stream = result.Stream
 	if input.CyberBlocked {
@@ -430,6 +433,52 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs
 	usageLog.FirstTokenMs = result.FirstTokenMs
+	usageLog.UpstreamFirstTokenMs = result.UpstreamFirstTokenMs
+	usageLog.ClientDisconnected = result.ClientDisconnect
+	if result.Stream && account.Platform == PlatformOpenAI {
+		transport := result.TTFTTransport
+		if !transport.Valid() {
+			transport = OpenAITTFTTransportHTTPSSE
+			if result.OpenAIWSMode {
+				transport = OpenAITTFTTransportResponsesWS
+			}
+		}
+		usageLog.OpenAITTFTContext = &OpenAITTFTContext{
+			Version:              2,
+			Transport:            string(transport),
+			OptimizerApplied:     result.TTFTOptimized,
+			UserFirstTokenMs:     result.FirstTokenMs,
+			UpstreamFirstTokenMs: result.UpstreamFirstTokenMs,
+			FirstSemanticEvent:   result.FirstSemanticEvent,
+			ClientDisconnected:   result.ClientDisconnect,
+			Exploration:          result.TTFTExploration,
+			SampleCount:          result.TTFTSampleCount,
+			CacheProfileStatus:   result.TTFTCacheProfileStatus,
+			CacheEligible:        result.TTFTCacheEligible,
+			CacheContextTokens:   result.TTFTCacheContextTokens,
+			BaseP90Ms:            result.TTFTBaseP90Ms,
+			EffectiveP90Ms:       result.TTFTEffectiveP90Ms,
+			StickySwitched:       result.TTFTStickySwitched,
+			DebounceKept:         result.TTFTDebounceKept,
+			StickyEscapeReason:   result.TTFTStickyEscapeReason,
+		}
+		if result.TTFTCacheContextTokens > 0 || result.TTFTCacheProfileStatus != "" {
+			hitRate := result.TTFTCacheHitRatePercent
+			usageLog.OpenAITTFTContext.CacheHitRatePercent = &hitRate
+		}
+		if result.TTFTSwitchedFromAccountID > 0 {
+			fromAccountID := result.TTFTSwitchedFromAccountID
+			usageLog.OpenAITTFTContext.SchedulerSwitchedFromAccountID = &fromAccountID
+		}
+		if result.TTFTP50Ms > 0 {
+			value := result.TTFTP50Ms
+			usageLog.OpenAITTFTContext.SampleP50Ms = &value
+		}
+		if result.TTFTP90Ms > 0 {
+			value := result.TTFTP90Ms
+			usageLog.OpenAITTFTContext.SampleP90Ms = &value
+		}
+	}
 	usageLog.CreatedAt = time.Now()
 	// 设置渠道信息
 	usageLog.ChannelID = optionalInt64Ptr(input.ChannelID)
@@ -478,6 +527,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		s.recordOpenAITTFTSample(usageLog)
+		s.recordOpenAITTFTCacheProfile(input, usageLog.CreatedAt)
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
 		return nil
@@ -512,6 +563,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	s.recordOpenAITTFTSample(usageLog)
+	s.recordOpenAITTFTCacheProfile(input, usageLog.CreatedAt)
 
 	return nil
 }

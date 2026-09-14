@@ -705,6 +705,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	}
 
 	resultWithUsage := func() *OpenAIForwardResult {
+		upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 		out := &OpenAIForwardResult{
 			RequestID:                     requestID,
 			UpstreamHeaders:               resp.Header,
@@ -718,6 +719,10 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 			Stream:                        true,
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
+			UpstreamFirstTokenMs:          upstreamFirstTokenMs,
+			TTFTTransport:                 OpenAITTFTTransportHTTPSSE,
+			FirstSemanticEvent:            firstSemanticEvent,
+			ClientDisconnect:              clientDisconnected,
 		}
 		if searchCount > 0 {
 			out.SearchCount = searchCount
@@ -735,7 +740,6 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		if countSearch {
 			searchCount += countGrokNativeSearchCallsInSSEDataDedup([]byte(payload), streamSearchSeen)
 		}
-
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			logger.L().Warn("openai chat_completions stream: failed to parse event",
@@ -743,6 +747,13 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 				zap.String("request_id", requestID),
 			)
 			return false
+		}
+		if responsesStreamEventHasSemanticOutput(event) {
+			if firstTokenMs == nil {
+				ms := int(time.Since(startTime).Milliseconds())
+				firstTokenMs = &ms
+			}
+			markOpenAIUpstreamSemanticOutput(c, "chat_completions.responses_delta")
 		}
 		observer.ObserveOpenAI([]byte(payload), event.Type)
 		refusalDetector.ObservePayload([]byte(payload))

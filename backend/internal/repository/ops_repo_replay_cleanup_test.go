@@ -8,8 +8,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-func TestOpsErrorLogInsertDoesNotPersistRequestReplayFields(t *testing.T) {
-	disallowedColumns := []string{
+func TestOpsErrorLogInsertDoesNotWriteLegacyRequestReplayFields(t *testing.T) {
+	legacyColumns := []string{
 		"request_body",
 		"request_headers",
 		"request_body_truncated",
@@ -20,14 +20,14 @@ func TestOpsErrorLogInsertDoesNotPersistRequestReplayFields(t *testing.T) {
 	}
 
 	insertSQL := strings.ToLower(insertOpsErrorLogSQL)
-	for _, column := range disallowedColumns {
+	for _, column := range legacyColumns {
 		if strings.Contains(insertSQL, column) {
-			t.Fatalf("ops error log insert still references dropped replay column %q", column)
+			t.Fatalf("ops error log insert still writes legacy replay column %q", column)
 		}
 	}
 
 	inputType := reflect.TypeOf(service.OpsInsertErrorLogInput{})
-	disallowedFields := []string{
+	legacyFields := []string{
 		"RequestBodyJSON",
 		"RequestBodyTruncated",
 		"RequestBodyBytes",
@@ -36,9 +36,9 @@ func TestOpsErrorLogInsertDoesNotPersistRequestReplayFields(t *testing.T) {
 		"RetryCount",
 		"ResolvedRetryID",
 	}
-	for _, field := range disallowedFields {
+	for _, field := range legacyFields {
 		if _, ok := inputType.FieldByName(field); ok {
-			t.Fatalf("OpsInsertErrorLogInput still carries replay field %q", field)
+			t.Fatalf("OpsInsertErrorLogInput still carries legacy replay field %q", field)
 		}
 	}
 }

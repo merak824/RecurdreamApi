@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">递归梦境API</title>
+  <desc id="desc">橙蓝渐变圆环、渐变星群与三层半透明梦境方块</desc>
+  <defs>
+    <linearGradient id="orbit" x1="10" y1="8" x2="55" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.46" stop-color="#3B82F6"/>
+      <stop offset="0.72" stop-color="#FF8A4C"/>
+      <stop offset="1" stop-color="#F65F32"/>
+    </linearGradient>
+    <linearGradient id="dreamLayerBack" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2459D6"/>
+      <stop offset="0.55" stop-color="#3478EA"/>
+      <stop offset="1" stop-color="#68A5F1"/>
+    </linearGradient>
+    <linearGradient id="dreamLayerMiddle" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#315FD4"/>
+      <stop offset="0.5" stop-color="#7A6FC5"/>
+      <stop offset="1" stop-color="#F17839"/>
+    </linearGradient>
+    <linearGradient id="dreamLayerFront" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2D75E8"/>
+      <stop offset="0.55" stop-color="#3D78E6"/>
+      <stop offset="1" stop-color="#F9782E"/>
+    </linearGradient>
+    <linearGradient id="starWarm" x1="-4.8" y1="0" x2="4.8" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="0.3" stop-color="#FF8A4C"/>
+      <stop offset="1" stop-color="#F65F32"/>
+    </linearGradient>
+    <linearGradient id="starCool" x1="-4.8" y1="0" x2="4.8" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.7" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#FF8A4C"/>
+    </linearGradient>
+    <linearGradient id="sparkCool" x1="-4.8" y1="-4.8" x2="4.8" y2="4.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#64B5FF"/>
+      <stop offset="0.58" stop-color="#3478EA"/>
+      <stop offset="1" stop-color="#FF8A4C"/>
+    </linearGradient>
+    <linearGradient id="sparkBlend" x1="-4.8" y1="-4.8" x2="4.8" y2="4.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2D75E8"/>
+      <stop offset="0.48" stop-color="#7A6FC5"/>
+      <stop offset="1" stop-color="#F9782E"/>
+    </linearGradient>
+    <linearGradient id="sparkWarm" x1="-4.8" y1="-4.8" x2="4.8" y2="4.8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3D78E6"/>
+      <stop offset="0.38" stop-color="#FF9A62"/>
+      <stop offset="1" stop-color="#F65F32"/>
+    </linearGradient>
+    <filter id="layerShadow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0.8" stdDeviation="1" flood-color="#173B74" flood-opacity="0.16"/>
+    </filter>
+    <path id="fourPointStar" d="M0 -4.8L1.4 -1.4L4.8 0L1.4 1.4L0 4.8L-1.4 1.4L-4.8 0L-1.4 -1.4Z"/>
+    <mask id="starCutouts" x="0" y="0" width="64" height="64" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:luminance">
+      <rect width="64" height="64" fill="#FFFFFF"/>
+      <use href="#fourPointStar" transform="translate(50 14) scale(1.15)" fill="none" stroke="#000000" stroke-width="1" stroke-linejoin="round"/>
+      <use href="#fourPointStar" transform="translate(14 50) scale(1.15)" fill="none" stroke="#000000" stroke-width="1" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#starCutouts)">
+    <circle cx="32" cy="32" r="25.5" fill="none" stroke="url(#orbit)" stroke-width="4.4"/>
+    <use href="#fourPointStar" transform="translate(50 14) scale(1.15)" fill="url(#starWarm)"/>
+    <use href="#fourPointStar" transform="translate(14 50) scale(1.15)" fill="url(#starCool)"/>
+  </g>
+
+  <g>
+    <use href="#fourPointStar" transform="translate(27 14.5) scale(0.55)" fill="url(#sparkBlend)"/>
+    <use href="#fourPointStar" transform="translate(16.5 23.5) scale(0.68)" fill="url(#sparkCool)"/>
+    <use href="#fourPointStar" transform="translate(48.5 24.5) scale(0.62)" fill="url(#sparkWarm)"/>
+    <use href="#fourPointStar" transform="translate(47 44.5) scale(0.48)" fill="url(#sparkWarm)"/>
+    <use href="#fourPointStar" transform="translate(22 47) scale(0.48)" fill="url(#sparkBlend)"/>
+  </g>
+
+  <g style="isolation:isolate">
+    <rect x="20" y="20" width="14" height="14" rx="2.4" fill="url(#dreamLayerBack)" fill-opacity="0.76" filter="url(#layerShadow)"/>
+    <rect x="25" y="25" width="14" height="14" rx="2.4" fill="url(#dreamLayerMiddle)" fill-opacity="0.84" filter="url(#layerShadow)"/>
+    <rect x="30" y="30" width="14" height="14" rx="2.4" fill="url(#dreamLayerFront)" fill-opacity="0.9" filter="url(#layerShadow)"/>
+  </g>
+</svg>
