@@ -25,7 +25,7 @@ const (
 	UserInfoURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 	// Antigravity OAuth 客户端凭证
-	ClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+	AntigravityOAuthClientIDEnv = "ANTIGRAVITY_OAUTH_CLIENT_ID"
 
 	// AntigravityOAuthClientSecretEnv 是 Antigravity OAuth client_secret 的环境变量名。
 	AntigravityOAuthClientSecretEnv = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
@@ -70,16 +70,20 @@ var (
 )
 
 // defaultClientSecret 可通过环境变量 ANTIGRAVITY_OAUTH_CLIENT_SECRET 配置
-var defaultClientSecret = "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"
+var (
+	defaultClientID     string
+	defaultClientSecret string
+)
 
 func init() {
 	// 从环境变量读取版本号，未设置则使用默认值
 	if version := NormalizeUserAgentVersion(os.Getenv(AntigravityUserAgentVersionEnv)); version != "" {
 		defaultUserAgentVersion = version
 	}
+	defaultClientID = strings.TrimSpace(os.Getenv(AntigravityOAuthClientIDEnv))
 	// 从环境变量读取 client_secret，未设置则使用默认值
 	if secret := os.Getenv(AntigravityOAuthClientSecretEnv); secret != "" {
-		defaultClientSecret = secret
+		defaultClientSecret = strings.TrimSpace(secret)
 	}
 }
 
@@ -139,10 +143,31 @@ func GetUserAgent() string {
 }
 
 func getClientSecret() (string, error) {
-	if v := strings.TrimSpace(defaultClientSecret); v != "" {
+	if v := currentClientSecret(); v != "" {
 		return v, nil
 	}
 	return "", infraerrors.Newf(http.StatusBadRequest, "ANTIGRAVITY_OAUTH_CLIENT_SECRET_MISSING", "missing antigravity oauth client_secret; set %s", AntigravityOAuthClientSecretEnv)
+}
+
+func getClientID() (string, error) {
+	if v := currentClientID(); v != "" {
+		return v, nil
+	}
+	return "", infraerrors.Newf(http.StatusBadRequest, "ANTIGRAVITY_OAUTH_CLIENT_ID_MISSING", "missing antigravity oauth client_id; set %s", AntigravityOAuthClientIDEnv)
+}
+
+func currentClientID() string {
+	if v := strings.TrimSpace(os.Getenv(AntigravityOAuthClientIDEnv)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(defaultClientID)
+}
+
+func currentClientSecret() string {
+	if v := strings.TrimSpace(os.Getenv(AntigravityOAuthClientSecretEnv)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(defaultClientSecret)
 }
 
 // BaseURLs 定义 Antigravity API 端点（与 Antigravity-Manager 保持一致）
@@ -395,7 +420,7 @@ func base64URLEncode(data []byte) string {
 // BuildAuthorizationURL 构建 Google OAuth 授权 URL
 func BuildAuthorizationURL(state, codeChallenge string) string {
 	params := url.Values{}
-	params.Set("client_id", ClientID)
+	params.Set("client_id", currentClientID())
 	params.Set("redirect_uri", RedirectURI)
 	params.Set("response_type", "code")
 	params.Set("scope", Scopes)

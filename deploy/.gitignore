@@ -6,6 +6,8 @@
 data/
 postgres_data/
 redis_data/
+nginx/conf.d/*.conf
+.hotdeploy/
 
 # Environment configuration (contains sensitive information)
 .env

@@ -83,3 +83,39 @@ func (h *RedeemHandler) GetHistory(c *gin.Context) {
 	}
 	response.Success(c, out)
 }
+
+// GetBalanceHistory returns balance-affecting records for the current user.
+// GET /api/v1/balance-history
+func (h *RedeemHandler) GetBalanceHistory(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	page, pageSize = service.NormalizeBalanceHistoryPagination(page, pageSize)
+	items, total, err := h.redeemService.GetUserBalanceHistory(
+		c.Request.Context(),
+		subject.UserID,
+		page,
+		pageSize,
+		c.Query("type"),
+	)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	if pages < 1 {
+		pages = 1
+	}
+	response.Success(c, gin.H{
+		"items":     items,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"pages":     pages,
+	})
+}

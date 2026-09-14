@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -115,6 +115,10 @@ describe('admin DashboardView', () => {
     })
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('uses last 24 hours as default dashboard range', async () => {
     mount(DashboardView, {
       global: {
@@ -126,7 +130,7 @@ describe('admin DashboardView', () => {
           Select: true,
           ModelDistributionChart: true,
           TokenUsageTrend: true,
-          Line: true
+          Line: { template: '<div />' }
         }
       }
     })
@@ -140,7 +144,205 @@ describe('admin DashboardView', () => {
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
-      granularity: 'hour'
+      granularity: 'hour',
+      include_profit: true
     }))
+  })
+
+  it('renders profit summary and switches dimension tabs from snapshot data', async () => {
+    getSnapshotV2.mockResolvedValueOnce({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-10T00:00:00Z',
+        summary: {
+          sales: 10,
+          cost: 7,
+          profit: 3,
+          margin_percent: 30,
+          requests: 2,
+          tokens: 100,
+          unknown_cost_count: 1,
+          unverified_cost_count: 2,
+          cost_source: 'mixed',
+          verification_status: 'unverified'
+        },
+        trend: [],
+        groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }],
+        models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'group_break_even_estimate', verification_status: 'unverified' }],
+        accounts: []
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    expect(monitor.text()).toContain('admin.dashboard.profit')
+    expect(monitor.text()).toContain('default')
+    expect(monitor.text()).toContain('admin.dashboard.profitUpstreamProbe')
+    expect(monitor.text()).toContain('admin.dashboard.profitPendingCostCount')
+
+    const modelTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitModels')
+    expect(modelTab).toBeDefined()
+    await modelTab!.trigger('click')
+    expect(monitor.text()).toContain('gpt-test')
+    expect(monitor.text()).toContain('admin.dashboard.profitGroupEstimate')
+  })
+
+  it('renders automatic upstream reconciliation states and the mismatch amount', async () => {
+    getSnapshotV2.mockResolvedValueOnce({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-18T08:20:00Z',
+        summary: {
+          sales: 50,
+          cost: 40,
+          profit: 10,
+          margin_percent: 20,
+          requests: 5,
+          tokens: 500,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'difference',
+          upstream_actual_cost: 42,
+          reconciliation_difference: 2,
+          reconciliation_difference_percent: 4.7619,
+          reconciliation_observed_at: '2026-08-18T08:20:00Z'
+        },
+        trend: [],
+        groups: [],
+        models: [],
+        accounts: [
+          { id: 1, name: 'matched-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'matched', upstream_actual_cost: 8.005, reconciliation_difference: 0.005 },
+          { id: 2, name: 'difference-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'difference', upstream_actual_cost: 10, reconciliation_difference: 2, reconciliation_difference_percent: 20 },
+          { id: 3, name: 'pending-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'pending' },
+          { id: 4, name: 'unavailable-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'unavailable' },
+          { id: 5, name: 'estimated-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'group_break_even_estimate', verification_status: 'unverified', reconciliation_status: 'estimated' }
+        ]
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    const accountTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitAccounts')
+    expect(accountTab).toBeDefined()
+    await accountTab!.trigger('click')
+
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationMatched')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationDifference')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationPending')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationUnavailable')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationEstimated')
+    expect(monitor.text()).toContain('+$2.00')
+    expect(monitor.text()).not.toContain('admin.dashboard.profitUnverified')
+  })
+
+  it('explains a missing start sample and refreshes after the next sampling time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-19T07:26:00Z'))
+    getSnapshotV2.mockResolvedValue({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-19T07:26:00Z',
+        last_sample_at: '2026-08-19T07:20:13Z',
+        next_sample_at: '2026-08-19T07:30:00Z',
+        summary: {
+          sales: 10,
+          cost: 8,
+          profit: 2,
+          margin_percent: 20,
+          requests: 1,
+          tokens: 100,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'missing_start'
+        },
+        trend: [],
+        groups: [],
+        models: [],
+        accounts: [{
+          id: 7,
+          name: 'upstream-7',
+          requests: 1,
+          tokens: 100,
+          sales: 10,
+          cost: 8,
+          profit: 2,
+          margin_percent: 20,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified',
+          reconciliation_status: 'missing_start',
+          last_sample_at: '2026-08-19T07:20:13Z',
+          next_sample_at: '2026-08-19T07:30:00Z'
+        }]
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: { template: '<div />' }
+        }
+      }
+    })
+
+    await flushPromises()
+    const monitor = wrapper.get('[data-testid="profit-monitor"]')
+    expect(monitor.text()).toContain('admin.dashboard.profitReconciliationMissingStart')
+    expect(monitor.text()).toContain('admin.dashboard.profitLastSample')
+    expect(monitor.text()).toContain('admin.dashboard.profitNextSample')
+
+    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(4 * 60 * 1000 + 21 * 1000)
+    await flushPromises()
+    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
   })
 })

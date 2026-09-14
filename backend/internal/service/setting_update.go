@@ -126,6 +126,9 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if err := s.normalizeOpenAIAdvancedSchedulerOverrides(settings); err != nil {
 		return nil, err
 	}
+	if err := normalizeOpenAITTFTSystemSettings(settings); err != nil {
+		return nil, err
+	}
 	settings.PaymentVisibleMethodAlipaySource = alipaySource
 	settings.PaymentVisibleMethodWxpaySource = wxpaySource
 	settings.WeChatConnectAppID = strings.TrimSpace(settings.WeChatConnectAppID)
@@ -365,25 +368,6 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
 	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
-	if settings.AffiliateRebateFreezeHours < 0 {
-		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursDefault
-	}
-	if settings.AffiliateRebateFreezeHours > AffiliateRebateFreezeHoursMax {
-		settings.AffiliateRebateFreezeHours = AffiliateRebateFreezeHoursMax
-	}
-	updates[SettingKeyAffiliateRebateFreezeHours] = strconv.Itoa(settings.AffiliateRebateFreezeHours)
-	if settings.AffiliateRebateDurationDays < 0 {
-		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysDefault
-	}
-	if settings.AffiliateRebateDurationDays > AffiliateRebateDurationDaysMax {
-		settings.AffiliateRebateDurationDays = AffiliateRebateDurationDaysMax
-	}
-	updates[SettingKeyAffiliateRebateDurationDays] = strconv.Itoa(settings.AffiliateRebateDurationDays)
-	if settings.AffiliateRebatePerInviteeCap < 0 {
-		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
-	}
-	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
-	updates[SettingKeyAffiliateAdminRechargeEnabled] = strconv.FormatBool(settings.AdminRechargeRebateEnabled)
 	updates[SettingKeyDefaultUserRPMLimit] = strconv.Itoa(settings.DefaultUserRPMLimit)
 	defaultSubsJSON, err := json.Marshal(settings.DefaultSubscriptions)
 	if err != nil {
@@ -503,6 +487,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyOpenAIAdvancedSchedulerWeightUpstreamCost] = settings.OpenAIAdvancedSchedulerWeightUpstreamCost
 	updates[SettingKeyOpenAIAdvancedSchedulerWeightPreviousResponse] = settings.OpenAIAdvancedSchedulerWeightPreviousResponse
 	updates[SettingKeyOpenAIAdvancedSchedulerWeightSessionSticky] = settings.OpenAIAdvancedSchedulerWeightSessionSticky
+	updates[SettingKeyOpenAITTFTOptimizerEnabled] = strconv.FormatBool(settings.OpenAITTFTOptimizerEnabled)
+	updates[SettingKeyOpenAITTFTBaseP90Seconds] = strconv.Itoa(settings.OpenAITTFTBaseP90Seconds)
+	updates[SettingKeyOpenAITTFTCacheProtectionEnabled] = strconv.FormatBool(settings.OpenAITTFTCacheProtectionEnabled)
+	updates[SettingKeyOpenAITTFTCacheMinContextTokens] = strconv.Itoa(settings.OpenAITTFTCacheMinContextTokens)
+	updates[SettingKeyOpenAITTFTCacheMinHitRatePercent] = strconv.Itoa(settings.OpenAITTFTCacheMinHitRatePercent)
+	updates[SettingKeyOpenAITTFTCacheElasticP90CapSeconds] = strconv.Itoa(settings.OpenAITTFTCacheElasticP90CapSeconds)
 
 	// 余额、订阅到期与账号限额通知
 	updates[SettingKeyBalanceLowNotifyEnabled] = strconv.FormatBool(settings.BalanceLowNotifyEnabled)
@@ -749,6 +739,14 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 		}),
 		expiresAt: time.Now().Add(openAIAdvancedSchedulerSettingCacheTTL).UnixNano(),
 	})
+	storeOpenAITTFTRuntimeSettings(openAITTFTRuntimeSettings{
+		Enabled:                settings.OpenAITTFTOptimizerEnabled,
+		BaseP90Ms:              settings.OpenAITTFTBaseP90Seconds * 1_000,
+		CacheProtectionEnabled: settings.OpenAITTFTCacheProtectionEnabled,
+		MinContextTokens:       settings.OpenAITTFTCacheMinContextTokens,
+		MinHitRatePercent:      settings.OpenAITTFTCacheMinHitRatePercent,
+		ElasticP90CapMs:        settings.OpenAITTFTCacheElasticP90CapSeconds * 1_000,
+	}, openAITTFTRuntimeSettingsTTL)
 	// Invalidate the quota auto-pause cache and let the next read trigger a fresh load.
 	// We can't know from here whether ops_advanced_settings was also touched, so be
 	// defensive: store an expired entry — GetOpenAIQuotaAutoPauseSettings will serve

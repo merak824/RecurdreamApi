@@ -173,10 +173,6 @@ type UpdateSettingsRequest struct {
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
 	DefaultBalance                            float64                           `json:"default_balance"`
 	AffiliateRebateRate                       *float64                          `json:"affiliate_rebate_rate"`
-	AffiliateRebateFreezeHours                *int                              `json:"affiliate_rebate_freeze_hours"`
-	AffiliateRebateDurationDays               *int                              `json:"affiliate_rebate_duration_days"`
-	AffiliateRebatePerInviteeCap              *float64                          `json:"affiliate_rebate_per_invitee_cap"`
-	AdminRechargeRebateEnabled                *bool                             `json:"affiliate_admin_recharge_enabled"`
 	DefaultUserRPMLimit                       int                               `json:"default_user_rpm_limit"`
 	DefaultSubscriptions                      []dto.DefaultSubscriptionSetting  `json:"default_subscriptions"`
 	AuthSourceDefaultEmailBalance             *float64                          `json:"auth_source_default_email_balance"`
@@ -288,6 +284,12 @@ type UpdateSettingsRequest struct {
 	OpenAIAdvancedSchedulerWeightUpstreamCost          *string  `json:"openai_advanced_scheduler_weight_upstream_cost"`
 	OpenAIAdvancedSchedulerWeightPreviousResponse      *string  `json:"openai_advanced_scheduler_weight_previous_response"`
 	OpenAIAdvancedSchedulerWeightSessionSticky         *string  `json:"openai_advanced_scheduler_weight_session_sticky"`
+	OpenAITTFTOptimizerEnabled                         *bool    `json:"openai_ttft_optimizer_enabled"`
+	OpenAITTFTBaseP90Seconds                           *int     `json:"openai_ttft_base_p90_seconds"`
+	OpenAITTFTCacheProtectionEnabled                   *bool    `json:"openai_ttft_cache_protection_enabled"`
+	OpenAITTFTCacheMinContextTokens                    *int     `json:"openai_ttft_cache_min_context_tokens"`
+	OpenAITTFTCacheMinHitRatePercent                   *int     `json:"openai_ttft_cache_min_hit_rate_percent"`
+	OpenAITTFTCacheElasticP90CapSeconds                *int     `json:"openai_ttft_cache_elastic_p90_cap_seconds"`
 
 	// 余额不足提醒
 	BalanceLowNotifyEnabled         *bool                   `json:"balance_low_notify_enabled"`
@@ -562,37 +564,6 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if affiliateRebateRate > service.AffiliateRebateRateMax {
 		affiliateRebateRate = service.AffiliateRebateRateMax
-	}
-	affiliateRebateFreezeHours := previousSettings.AffiliateRebateFreezeHours
-	if req.AffiliateRebateFreezeHours != nil {
-		affiliateRebateFreezeHours = *req.AffiliateRebateFreezeHours
-	}
-	if affiliateRebateFreezeHours < 0 {
-		affiliateRebateFreezeHours = service.AffiliateRebateFreezeHoursDefault
-	}
-	if affiliateRebateFreezeHours > service.AffiliateRebateFreezeHoursMax {
-		affiliateRebateFreezeHours = service.AffiliateRebateFreezeHoursMax
-	}
-	affiliateRebateDurationDays := previousSettings.AffiliateRebateDurationDays
-	if req.AffiliateRebateDurationDays != nil {
-		affiliateRebateDurationDays = *req.AffiliateRebateDurationDays
-	}
-	if affiliateRebateDurationDays < 0 {
-		affiliateRebateDurationDays = service.AffiliateRebateDurationDaysDefault
-	}
-	if affiliateRebateDurationDays > service.AffiliateRebateDurationDaysMax {
-		affiliateRebateDurationDays = service.AffiliateRebateDurationDaysMax
-	}
-	affiliateRebatePerInviteeCap := previousSettings.AffiliateRebatePerInviteeCap
-	if req.AffiliateRebatePerInviteeCap != nil {
-		affiliateRebatePerInviteeCap = *req.AffiliateRebatePerInviteeCap
-	}
-	if affiliateRebatePerInviteeCap < 0 {
-		affiliateRebatePerInviteeCap = service.AffiliateRebatePerInviteeCapDefault
-	}
-	adminRechargeRebateEnabled := previousSettings.AdminRechargeRebateEnabled
-	if req.AdminRechargeRebateEnabled != nil {
-		adminRechargeRebateEnabled = *req.AdminRechargeRebateEnabled
 	}
 	// 通用表格配置：兼容旧客户端未传字段时保留当前值。
 	if req.TableDefaultPageSize <= 0 {
@@ -1626,10 +1597,6 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
 		AffiliateRebateRate:                    affiliateRebateRate,
-		AffiliateRebateFreezeHours:             affiliateRebateFreezeHours,
-		AffiliateRebateDurationDays:            affiliateRebateDurationDays,
-		AffiliateRebatePerInviteeCap:           affiliateRebatePerInviteeCap,
-		AdminRechargeRebateEnabled:             adminRechargeRebateEnabled,
 		DefaultUserRPMLimit:                    req.DefaultUserRPMLimit,
 		DefaultSubscriptions:                   defaultSubscriptions,
 		EnableModelFallback:                    req.EnableModelFallback,
@@ -1829,6 +1796,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpenAIAdvancedSchedulerWeightUpstreamCost:     stringSetting(req.OpenAIAdvancedSchedulerWeightUpstreamCost, previousSettings.OpenAIAdvancedSchedulerWeightUpstreamCost),
 		OpenAIAdvancedSchedulerWeightPreviousResponse: stringSetting(req.OpenAIAdvancedSchedulerWeightPreviousResponse, previousSettings.OpenAIAdvancedSchedulerWeightPreviousResponse),
 		OpenAIAdvancedSchedulerWeightSessionSticky:    stringSetting(req.OpenAIAdvancedSchedulerWeightSessionSticky, previousSettings.OpenAIAdvancedSchedulerWeightSessionSticky),
+		OpenAITTFTOptimizerEnabled:                    boolSetting(req.OpenAITTFTOptimizerEnabled, previousSettings.OpenAITTFTOptimizerEnabled),
+		OpenAITTFTBaseP90Seconds:                      intSetting(req.OpenAITTFTBaseP90Seconds, previousSettings.OpenAITTFTBaseP90Seconds),
+		OpenAITTFTCacheProtectionEnabled:              boolSetting(req.OpenAITTFTCacheProtectionEnabled, previousSettings.OpenAITTFTCacheProtectionEnabled),
+		OpenAITTFTCacheMinContextTokens:               intSetting(req.OpenAITTFTCacheMinContextTokens, previousSettings.OpenAITTFTCacheMinContextTokens),
+		OpenAITTFTCacheMinHitRatePercent:              intSetting(req.OpenAITTFTCacheMinHitRatePercent, previousSettings.OpenAITTFTCacheMinHitRatePercent),
+		OpenAITTFTCacheElasticP90CapSeconds:           intSetting(req.OpenAITTFTCacheElasticP90CapSeconds, previousSettings.OpenAITTFTCacheElasticP90CapSeconds),
 		BalanceLowNotifyEnabled: func() bool {
 			if req.BalanceLowNotifyEnabled != nil {
 				return *req.BalanceLowNotifyEnabled
@@ -2236,10 +2209,6 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,
 		AffiliateRebateRate:                                    updatedSettings.AffiliateRebateRate,
-		AffiliateRebateFreezeHours:                             updatedSettings.AffiliateRebateFreezeHours,
-		AffiliateRebateDurationDays:                            updatedSettings.AffiliateRebateDurationDays,
-		AffiliateRebatePerInviteeCap:                           updatedSettings.AffiliateRebatePerInviteeCap,
-		AdminRechargeRebateEnabled:                             updatedSettings.AdminRechargeRebateEnabled,
 		DefaultUserRPMLimit:                                    updatedSettings.DefaultUserRPMLimit,
 		DefaultSubscriptions:                                   updatedDefaultSubscriptions,
 		EnableModelFallback:                                    updatedSettings.EnableModelFallback,
@@ -2308,6 +2277,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpenAIAdvancedSchedulerEffectiveWeightUpstreamCost:     updatedSettings.OpenAIAdvancedSchedulerEffectiveWeightUpstreamCost,
 		OpenAIAdvancedSchedulerEffectiveWeightPreviousResponse: updatedSettings.OpenAIAdvancedSchedulerEffectiveWeightPreviousResponse,
 		OpenAIAdvancedSchedulerEffectiveWeightSessionSticky:    updatedSettings.OpenAIAdvancedSchedulerEffectiveWeightSessionSticky,
+		OpenAITTFTOptimizerEnabled:                             updatedSettings.OpenAITTFTOptimizerEnabled,
+		OpenAITTFTBaseP90Seconds:                               updatedSettings.OpenAITTFTBaseP90Seconds,
+		OpenAITTFTCacheProtectionEnabled:                       updatedSettings.OpenAITTFTCacheProtectionEnabled,
+		OpenAITTFTCacheMinContextTokens:                        updatedSettings.OpenAITTFTCacheMinContextTokens,
+		OpenAITTFTCacheMinHitRatePercent:                       updatedSettings.OpenAITTFTCacheMinHitRatePercent,
+		OpenAITTFTCacheElasticP90CapSeconds:                    updatedSettings.OpenAITTFTCacheElasticP90CapSeconds,
 		BalanceLowNotifyEnabled:                                updatedSettings.BalanceLowNotifyEnabled,
 		BalanceLowNotifyThreshold:                              updatedSettings.BalanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:                            updatedSettings.BalanceLowNotifyRechargeURL,

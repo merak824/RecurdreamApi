@@ -7,11 +7,26 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+const testAntigravityClientID = "test-antigravity-client-id.apps.example.test"
+
+func setTestAntigravityClient(t *testing.T, clientID, secret string) {
+	t.Helper()
+	oldID := defaultClientID
+	oldSecret := defaultClientSecret
+	defaultClientID = clientID
+	defaultClientSecret = secret
+	t.Setenv(AntigravityOAuthClientIDEnv, clientID)
+	t.Setenv(AntigravityOAuthClientSecretEnv, secret)
+	t.Cleanup(func() {
+		defaultClientID = oldID
+		defaultClientSecret = oldSecret
+	})
+}
 
 // ---------------------------------------------------------------------------
 // getClientSecret
@@ -24,8 +39,6 @@ func TestGetClientSecret_环境变量设置(t *testing.T) {
 	t.Setenv(AntigravityOAuthClientSecretEnv, "my-secret-value")
 
 	// 需要重新触发 init 逻辑：手动从环境变量读取
-	defaultClientSecret = os.Getenv(AntigravityOAuthClientSecretEnv)
-
 	secret, err := getClientSecret()
 	if err != nil {
 		t.Fatalf("获取 client_secret 失败: %v", err)
@@ -592,6 +605,8 @@ func TestGenerateCodeChallenge_不同输入不同输出(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBuildAuthorizationURL_参数验证(t *testing.T) {
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
+
 	state := "test-state-123"
 	codeChallenge := "test-challenge-abc"
 
@@ -611,7 +626,7 @@ func TestBuildAuthorizationURL_参数验证(t *testing.T) {
 	params := parsed.Query()
 
 	expectedParams := map[string]string{
-		"client_id":              ClientID,
+		"client_id":              testAntigravityClientID,
 		"redirect_uri":           RedirectURI,
 		"response_type":          "code",
 		"scope":                  Scopes,
@@ -632,6 +647,8 @@ func TestBuildAuthorizationURL_参数验证(t *testing.T) {
 }
 
 func TestBuildAuthorizationURL_参数数量(t *testing.T) {
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
+
 	authURL := BuildAuthorizationURL("s", "c")
 	parsed, err := url.Parse(authURL)
 	if err != nil {
@@ -647,6 +664,8 @@ func TestBuildAuthorizationURL_参数数量(t *testing.T) {
 }
 
 func TestBuildAuthorizationURL_特殊字符编码(t *testing.T) {
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
+
 	state := "state+with/special=chars"
 	codeChallenge := "challenge+value"
 
@@ -668,6 +687,8 @@ func TestBuildAuthorizationURL_特殊字符编码(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestConstants_值正确(t *testing.T) {
+	setTestAntigravityClient(t, testAntigravityClientID, "test-secret")
+
 	if AuthorizeURL != "https://accounts.google.com/o/oauth2/v2/auth" {
 		t.Errorf("AuthorizeURL 不匹配: got %s", AuthorizeURL)
 	}
@@ -677,14 +698,11 @@ func TestConstants_值正确(t *testing.T) {
 	if UserInfoURL != "https://www.googleapis.com/oauth2/v2/userinfo" {
 		t.Errorf("UserInfoURL 不匹配: got %s", UserInfoURL)
 	}
-	if ClientID != "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com" {
-		t.Errorf("ClientID 不匹配: got %s", ClientID)
-	}
 	secret, err := getClientSecret()
 	if err != nil {
 		t.Fatalf("getClientSecret 应返回默认值，但报错: %v", err)
 	}
-	if secret != "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" {
+	if secret != "test-secret" {
 		t.Errorf("默认 client_secret 不匹配: got %s", secret)
 	}
 	if RedirectURI != "http://localhost:8085/callback" {

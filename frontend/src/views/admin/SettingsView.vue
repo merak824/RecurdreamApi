@@ -4861,6 +4861,174 @@
             </div>
           </div>
 
+          <!-- OpenAI First-token Optimization -->
+          <div class="card" data-testid="openai-ttft-settings">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.openaiTTFT.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.openaiTTFT.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between gap-5">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t("admin.settings.openaiTTFT.optimizerEnabled") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.optimizerEnabledHint") }}
+                  </p>
+                </div>
+                <Toggle
+                  v-model="form.openai_ttft_optimizer_enabled"
+                  data-testid="openai-ttft-optimizer-enabled"
+                />
+              </div>
+
+              <div
+                class="grid gap-5 border-t border-gray-100 pt-5 dark:border-dark-700 md:grid-cols-2"
+                :class="!form.openai_ttft_optimizer_enabled && 'opacity-60'"
+              >
+                <div>
+                  <label
+                    for="openai-ttft-base-p90"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.baseP90") }}
+                  </label>
+                  <div class="relative mt-2 max-w-48">
+                    <input
+                      id="openai-ttft-base-p90"
+                      v-model.number="form.openai_ttft_base_p90_seconds"
+                      type="number"
+                      min="1"
+                      max="30"
+                      step="1"
+                      required
+                      class="input pr-12"
+                      :disabled="!form.openai_ttft_optimizer_enabled"
+                      data-testid="openai-ttft-base-p90"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.secondsUnit") }}
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.baseP90Hint") }}
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-between gap-5 md:self-start md:pt-1">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t("admin.settings.openaiTTFT.cacheProtectionEnabled") }}
+                    </label>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.cacheProtectionEnabledHint") }}
+                    </p>
+                  </div>
+                  <Toggle
+                    v-model="form.openai_ttft_cache_protection_enabled"
+                    :disabled="!form.openai_ttft_optimizer_enabled"
+                    data-testid="openai-ttft-cache-protection-enabled"
+                  />
+                </div>
+              </div>
+
+              <div
+                class="grid gap-5 border-t border-gray-100 pt-5 dark:border-dark-700 md:grid-cols-3"
+                :class="(!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled) && 'opacity-60'"
+              >
+                <div>
+                  <label
+                    for="openai-ttft-cache-min-context"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.cacheMinContextTokens") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-cache-min-context"
+                      v-model.number="form.openai_ttft_cache_min_context_tokens"
+                      type="number"
+                      min="1000"
+                      max="10000000"
+                      step="1000"
+                      required
+                      class="input pr-16"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-cache-min-context"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      Token
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.cacheMinContextTokensHint") }}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    for="openai-ttft-cache-min-hit-rate"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.cacheMinHitRate") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-cache-min-hit-rate"
+                      v-model.number="form.openai_ttft_cache_min_hit_rate_percent"
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="1"
+                      required
+                      class="input pr-10"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-cache-min-hit-rate"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">%</span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.cacheMinHitRateHint") }}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    for="openai-ttft-elastic-p90-cap"
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.openaiTTFT.elasticP90Cap") }}
+                  </label>
+                  <div class="relative mt-2">
+                    <input
+                      id="openai-ttft-elastic-p90-cap"
+                      v-model.number="form.openai_ttft_cache_elastic_p90_cap_seconds"
+                      type="number"
+                      :min="form.openai_ttft_base_p90_seconds"
+                      max="60"
+                      step="1"
+                      required
+                      class="input pr-12"
+                      :disabled="!form.openai_ttft_optimizer_enabled || !form.openai_ttft_cache_protection_enabled"
+                      data-testid="openai-ttft-elastic-p90-cap"
+                    />
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-400">
+                      {{ t("admin.settings.openaiTTFT.secondsUnit") }}
+                    </span>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.openaiTTFT.elasticP90CapHint") }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Gateway Scheduling Settings -->
           <div class="card">
             <div
@@ -7210,25 +7378,15 @@
             </div>
 
             <div v-if="form.affiliate_enabled" class="space-y-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.features.affiliate.adminRechargeRebate') }}
-                  </label>
-                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.features.affiliate.adminRechargeRebateHint') }}
-                  </p>
-                </div>
-                <Toggle v-model="form.affiliate_admin_recharge_enabled" />
-              </div>
-
               <div>
-                <label class="input-label">
+                <label for="affiliate-global-rate" class="input-label">
                   {{ t('admin.settings.features.affiliate.rebateRate') }}
                 </label>
                 <div class="relative">
                   <input
+                    id="affiliate-global-rate"
                     v-model.number="form.affiliate_rebate_rate"
+                    name="affiliate_rebate_rate"
                     type="number"
                     step="0.01"
                     min="0"
@@ -7240,56 +7398,6 @@
                 </div>
                 <p class="mt-1 text-xs text-gray-400">
                   {{ t('admin.settings.features.affiliate.rebateRateHint') }}
-                </p>
-              </div>
-
-              <div>
-                <label class="input-label">
-                  {{ t('admin.settings.features.affiliate.freezeHours') }}
-                </label>
-                <input
-                  v-model.number="form.affiliate_rebate_freeze_hours"
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="720"
-                  class="input"
-                />
-                <p class="mt-1 text-xs text-gray-400">
-                  {{ t('admin.settings.features.affiliate.freezeHoursDesc') }}
-                </p>
-              </div>
-
-              <div>
-                <label class="input-label">
-                  {{ t('admin.settings.features.affiliate.durationDays') }}
-                </label>
-                <input
-                  v-model.number="form.affiliate_rebate_duration_days"
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="3650"
-                  class="input"
-                />
-                <p class="mt-1 text-xs text-gray-400">
-                  {{ t('admin.settings.features.affiliate.durationDaysDesc') }}
-                </p>
-              </div>
-
-              <div>
-                <label class="input-label">
-                  {{ t('admin.settings.features.affiliate.perInviteeCap') }}
-                </label>
-                <input
-                  v-model.number="form.affiliate_rebate_per_invitee_cap"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  class="input"
-                />
-                <p class="mt-1 text-xs text-gray-400">
-                  {{ t('admin.settings.features.affiliate.perInviteeCapDesc') }}
                 </p>
               </div>
 
@@ -7313,7 +7421,7 @@
                   </button>
                 </div>
 
-                <div class="mb-3 flex items-center gap-2">
+                <div class="mb-3">
                   <input
                     v-model="affiliateState.search"
                     type="text"
@@ -7321,31 +7429,17 @@
                     :placeholder="t('admin.settings.features.affiliate.customUsers.searchPlaceholder')"
                     @input="onAffiliateSearchInput"
                   />
-                  <button
-                    v-if="affiliateState.selected.length > 0"
-                    type="button"
-                    class="btn btn-secondary btn-sm"
-                    @click="openAffiliateBatchModal"
-                  >
-                    {{ t('admin.settings.features.affiliate.customUsers.batchButton', { count: affiliateState.selected.length }) }}
-                  </button>
                 </div>
 
                 <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-dark-700">
                   <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
                     <thead class="bg-gray-50 dark:bg-dark-800">
                       <tr>
-                        <th class="px-3 py-2 text-left">
-                          <input
-                            type="checkbox"
-                            :checked="affiliateState.entries.length > 0 && affiliateState.selected.length === affiliateState.entries.length"
-                            @change="toggleAffiliateSelectAll"
-                          />
-                        </th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.email') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.withdrawal') }}</th>
                         <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
                       </tr>
                     </thead>
@@ -7361,13 +7455,6 @@
                         </td>
                       </tr>
                       <tr v-for="entry in affiliateState.entries" :key="entry.user_id">
-                        <td class="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            :checked="affiliateState.selected.includes(entry.user_id)"
-                            @change="toggleAffiliateSelect(entry.user_id)"
-                          />
-                        </td>
                         <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ entry.email }}</td>
                         <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{{ entry.username }}</td>
                         <td class="px-3 py-2 text-sm font-mono">
@@ -7378,12 +7465,21 @@
                           >{{ t('admin.settings.features.affiliate.customUsers.customBadge') }}</span>
                         </td>
                         <td class="px-3 py-2 text-sm">
-                          <span v-if="entry.aff_rebate_rate_percent != null">{{ entry.aff_rebate_rate_percent }}%</span>
-                          <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
+                          {{ entry.aff_rebate_rate_percent }}%
+                        </td>
+                        <td class="px-3 py-2 text-sm">
+                          <span :class="entry.withdrawal_enabled ? 'badge badge-success' : 'badge badge-gray'">
+                            {{ entry.withdrawal_enabled ? t('common.enabled') : t('common.disabled') }}
+                          </span>
                         </td>
                         <td class="px-3 py-2 text-sm">
                           <div class="flex items-center gap-2">
-                            <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
+                            <button
+                              type="button"
+                              :data-testid="`affiliate-edit-${entry.user_id}`"
+                              class="text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                              @click="openAffiliateModal(entry)"
+                            >
                               {{ t('common.edit') }}
                             </button>
                             <button
@@ -7496,9 +7592,11 @@
               </div>
 
               <div>
-                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.codeLabel') }}</label>
+                <label for="affiliate-code" class="input-label">{{ t('admin.settings.features.affiliate.modal.codeLabel') }}</label>
                 <input
-                  v-model="affiliateModal.code"
+                  id="affiliate-code"
+                  v-model.trim="affiliateModal.code"
+                  name="affiliate-code"
                   type="text"
                   class="input font-mono"
                   :placeholder="t('admin.settings.features.affiliate.modal.codePlaceholder')"
@@ -7510,10 +7608,12 @@
               </div>
 
               <div>
-                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.rateLabel') }}</label>
+                <label for="affiliate-rate" class="input-label">{{ t('admin.settings.features.affiliate.modal.rateLabel') }}</label>
                 <div class="relative">
                   <input
-                    v-model="affiliateModal.rate"
+                    id="affiliate-rate"
+                    v-model.number="affiliateModal.rate"
+                    name="affiliate-rate"
                     type="number"
                     step="0.01"
                     min="0"
@@ -7526,6 +7626,22 @@
                 <p class="mt-1 text-xs text-gray-400">
                   {{ t('admin.settings.features.affiliate.modal.rateHint') }}
                 </p>
+              </div>
+
+              <div class="flex min-h-11 items-center justify-between gap-4">
+                <div>
+                  <label for="affiliate-withdrawal-enabled" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.features.affiliate.modal.withdrawalLabel') }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.features.affiliate.modal.withdrawalHint') }}
+                  </p>
+                </div>
+                <Toggle
+                  id="affiliate-withdrawal-enabled"
+                  v-model="affiliateModal.withdrawalEnabled"
+                  name="affiliate-withdrawal-enabled"
+                />
               </div>
             </div>
 
@@ -7543,6 +7659,7 @@
                 </button>
                 <button
                   type="button"
+                  data-testid="affiliate-save"
                   class="btn btn-primary"
                   :disabled="affiliateModal.saving || !affiliateModalCanSubmit"
                   @click="submitAffiliateModal"
@@ -7550,50 +7667,6 @@
                   {{ affiliateModal.saving ? t('common.saving') : t('common.save') }}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Affiliate batch rate modal -->
-        <div
-          v-if="affiliateBatchModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="affiliateBatchModal.open = false"
-        >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
-            <h3 class="mb-4 text-lg font-semibold">
-              {{ t('admin.settings.features.affiliate.batchModal.title', { count: affiliateState.selected.length }) }}
-            </h3>
-            <p class="mb-4 text-sm text-gray-500">
-              {{ t('admin.settings.features.affiliate.batchModal.hint') }}
-            </p>
-            <div class="relative">
-              <input
-                v-model="affiliateBatchModal.rate"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                class="input pr-8"
-                :placeholder="t('admin.settings.features.affiliate.batchModal.placeholder')"
-              />
-              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
-            </div>
-            <p class="mt-2 text-xs text-gray-400">
-              {{ t('admin.settings.features.affiliate.batchModal.clearHint') }}
-            </p>
-            <div class="mt-6 flex justify-end gap-2">
-              <button type="button" class="btn btn-secondary" @click="affiliateBatchModal.open = false">
-                {{ t('common.cancel') }}
-              </button>
-              <button
-                type="button"
-                class="btn btn-primary"
-                :disabled="affiliateBatchModal.saving"
-                @click="submitAffiliateBatchModal"
-              >
-                {{ affiliateBatchModal.saving ? t('common.saving') : t('common.save') }}
-              </button>
             </div>
           </div>
         </div>
@@ -9391,6 +9464,12 @@ type SettingsForm = Omit<
   github_oauth_client_secret: string;
   google_oauth_client_secret: string;
   force_email_on_third_party_signup: boolean;
+  openai_ttft_optimizer_enabled: boolean;
+  openai_ttft_base_p90_seconds: number;
+  openai_ttft_cache_protection_enabled: boolean;
+  openai_ttft_cache_min_context_tokens: number;
+  openai_ttft_cache_min_hit_rate_percent: number;
+  openai_ttft_cache_elastic_p90_cap_seconds: number;
   openai_low_upstream_rate_priority_enabled: boolean;
   openai_oauth_scheduling_rate_multiplier: number;
   openai_advanced_scheduler_enabled: boolean;
@@ -9439,10 +9518,6 @@ const form = reactive<SettingsForm>({
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
   account_scheduling_thresholds: normalizeAccountSchedulingThresholdsMap(),
   affiliate_rebate_rate: 20,
-  affiliate_rebate_freeze_hours: 0,
-  affiliate_rebate_duration_days: 0,
-  affiliate_rebate_per_invitee_cap: 0,
-  affiliate_admin_recharge_enabled: false,
   default_concurrency: 1,
   default_subscriptions: [],
   force_email_on_third_party_signup: false,
@@ -9633,6 +9708,12 @@ const form = reactive<SettingsForm>({
   max_claude_code_version: "",
   // 分组隔离
   allow_ungrouped_key_scheduling: false,
+  openai_ttft_optimizer_enabled: true,
+  openai_ttft_base_p90_seconds: 10,
+  openai_ttft_cache_protection_enabled: true,
+  openai_ttft_cache_min_context_tokens: 100000,
+  openai_ttft_cache_min_hit_rate_percent: 80,
+  openai_ttft_cache_elastic_p90_cap_seconds: 30,
   openai_low_upstream_rate_priority_enabled: false,
   openai_oauth_scheduling_rate_multiplier: 1,
   openai_advanced_scheduler_enabled: false,
@@ -10885,6 +10966,39 @@ function findDuplicateDefaultSubscription(
   });
 }
 
+function validateAndNormalizeOpenAITTFTSettings(): boolean {
+  const baseP90 = Number(form.openai_ttft_base_p90_seconds);
+  const minContextTokens = Number(form.openai_ttft_cache_min_context_tokens);
+  const minHitRate = Number(form.openai_ttft_cache_min_hit_rate_percent);
+  const elasticP90Cap = Number(
+    form.openai_ttft_cache_elastic_p90_cap_seconds,
+  );
+  const valid =
+    Number.isInteger(baseP90) &&
+    baseP90 >= 1 &&
+    baseP90 <= 30 &&
+    Number.isInteger(minContextTokens) &&
+    minContextTokens >= 1_000 &&
+    minContextTokens <= 10_000_000 &&
+    Number.isInteger(minHitRate) &&
+    minHitRate >= 1 &&
+    minHitRate <= 100 &&
+    Number.isInteger(elasticP90Cap) &&
+    elasticP90Cap >= baseP90 &&
+    elasticP90Cap <= 60;
+
+  if (!valid) {
+    appStore.showError(t("admin.settings.openaiTTFT.invalidSettings"));
+    return false;
+  }
+
+  form.openai_ttft_base_p90_seconds = baseP90;
+  form.openai_ttft_cache_min_context_tokens = minContextTokens;
+  form.openai_ttft_cache_min_hit_rate_percent = minHitRate;
+  form.openai_ttft_cache_elastic_p90_cap_seconds = elasticP90Cap;
+  return true;
+}
+
 async function saveSettings() {
   saving.value = true;
   try {
@@ -10920,6 +11034,9 @@ async function saveSettings() {
 
     form.table_default_page_size = normalizedTableDefaultPageSize;
     form.table_page_size_options = normalizedTablePageSizeOptions;
+    if (!validateAndNormalizeOpenAITTFTSettings()) {
+      return;
+    }
 
     const normalizedLoginAgreementDocuments =
       normalizeLoginAgreementDocumentsForSave();
@@ -11064,10 +11181,6 @@ async function saveSettings() {
         100,
         Math.max(0, Number(form.affiliate_rebate_rate) || 0),
       ),
-      affiliate_rebate_freeze_hours: Math.max(0, Math.min(720, Number(form.affiliate_rebate_freeze_hours) || 0)),
-      affiliate_rebate_duration_days: Math.max(0, Math.min(3650, Math.floor(Number(form.affiliate_rebate_duration_days) || 0))),
-      affiliate_rebate_per_invitee_cap: Math.max(0, Number(form.affiliate_rebate_per_invitee_cap) || 0),
-      affiliate_admin_recharge_enabled: form.affiliate_admin_recharge_enabled,
       default_concurrency: form.default_concurrency,
       default_subscriptions: normalizedDefaultSubscriptions,
       force_email_on_third_party_signup: form.force_email_on_third_party_signup,
@@ -11287,6 +11400,19 @@ async function saveSettings() {
       payment_alipay_force_qrcode: form.payment_alipay_force_qrcode,
       payment_alipay_mobile_precreate_deep_link:
         form.payment_alipay_mobile_precreate_deep_link,
+      openai_ttft_optimizer_enabled: form.openai_ttft_optimizer_enabled,
+      openai_ttft_base_p90_seconds: Number(form.openai_ttft_base_p90_seconds),
+      openai_ttft_cache_protection_enabled:
+        form.openai_ttft_cache_protection_enabled,
+      openai_ttft_cache_min_context_tokens: Number(
+        form.openai_ttft_cache_min_context_tokens,
+      ),
+      openai_ttft_cache_min_hit_rate_percent: Number(
+        form.openai_ttft_cache_min_hit_rate_percent,
+      ),
+      openai_ttft_cache_elastic_p90_cap_seconds: Number(
+        form.openai_ttft_cache_elastic_p90_cap_seconds,
+      ),
       openai_low_upstream_rate_priority_enabled:
         form.openai_low_upstream_rate_priority_enabled,
       openai_oauth_scheduling_rate_multiplier:
@@ -12436,7 +12562,6 @@ interface AffiliateState {
   page: number;
   pageSize: number;
   search: string;
-  selected: number[];
   searchTimer: number | null;
 }
 
@@ -12447,13 +12572,9 @@ const affiliateState = reactive<AffiliateState>({
   page: 1,
   pageSize: 20,
   search: "",
-  selected: [],
   searchTimer: null,
 });
 
-// `rate` is typed as string|number because <input type="number"> makes Vue's
-// v-model auto-cast the bound value to a Number on every keystroke. We keep
-// both shapes and normalize at read time.
 interface AffiliateModalState {
   open: boolean;
   mode: "add" | "edit";
@@ -12463,7 +12584,8 @@ interface AffiliateModalState {
   selectedUser: AffiliateSimpleUser | null;
   editingEntry: AffiliateAdminEntry | null;
   code: string;
-  rate: string | number;
+  rate: number | null;
+  withdrawalEnabled: boolean;
   searchTimer: number | null;
 }
 
@@ -12476,18 +12598,9 @@ const affiliateModal = reactive<AffiliateModalState>({
   selectedUser: null,
   editingEntry: null,
   code: "",
-  rate: "",
+  rate: null,
+  withdrawalEnabled: false,
   searchTimer: null,
-});
-
-const affiliateBatchModal = reactive<{
-  open: boolean;
-  saving: boolean;
-  rate: string | number;
-}>({
-  open: false,
-  saving: false,
-  rate: "",
 });
 
 // affiliateConfirmDialog drives the project-standard <ConfirmDialog>. We can't
@@ -12555,11 +12668,14 @@ function debounceTimer(slot: { searchTimer: number | null }, delayMs: number, ru
 // the value to Number on each keystroke (e.g. typing "30" lands a `30: number`
 // in state, not a `"30": string`). String("") and (30).trim() would crash, so
 // we normalize here instead of forcing every caller to remember.
-function parseRebateRate(raw: unknown): number | null | undefined {
+function parseRebateRate(raw: unknown): number | undefined {
   const s = String(raw ?? "").trim();
-  if (s === "") return null;
+  if (s === "") {
+    appStore.showError(t("admin.settings.features.affiliate.modal.errorBadRate"));
+    return undefined;
+  }
   const parsed = Number(s);
-  if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
     appStore.showError(t("admin.settings.features.affiliate.modal.errorBadRate"));
     return undefined;
   }
@@ -12576,9 +12692,6 @@ async function loadAffiliateUsers() {
     });
     affiliateState.entries = res.items ?? [];
     affiliateState.total = res.total ?? 0;
-    // Drop selections that are no longer visible.
-    const visibleIds = new Set(affiliateState.entries.map((e) => e.user_id));
-    affiliateState.selected = affiliateState.selected.filter((id) => visibleIds.has(id));
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, t("common.error")));
   } finally {
@@ -12599,17 +12712,6 @@ function changeAffiliatePage(page: number) {
   loadAffiliateUsers();
 }
 
-function toggleAffiliateSelectAll(e: Event) {
-  const checked = (e.target as HTMLInputElement).checked;
-  affiliateState.selected = checked ? affiliateState.entries.map((entry) => entry.user_id) : [];
-}
-
-function toggleAffiliateSelect(userId: number) {
-  const idx = affiliateState.selected.indexOf(userId);
-  if (idx >= 0) affiliateState.selected.splice(idx, 1);
-  else affiliateState.selected.push(userId);
-}
-
 // openAffiliateModal opens the add/edit modal, prefilling fields from the
 // edited entry when present and resetting them otherwise.
 function openAffiliateModal(entry: AffiliateAdminEntry | null) {
@@ -12620,8 +12722,8 @@ function openAffiliateModal(entry: AffiliateAdminEntry | null) {
   affiliateModal.selectedUser = null;
   affiliateModal.editingEntry = entry;
   affiliateModal.code = entry?.aff_code_custom ? entry.aff_code : "";
-  affiliateModal.rate =
-    entry?.aff_rebate_rate_percent != null ? String(entry.aff_rebate_rate_percent) : "";
+  affiliateModal.rate = entry?.aff_rebate_rate_percent ?? null;
+  affiliateModal.withdrawalEnabled = entry?.withdrawal_enabled ?? false;
 }
 
 function closeAffiliateModal() {
@@ -12669,15 +12771,8 @@ const affiliateModalCanSubmit = computed(() => {
   } else if (!affiliateModal.editingEntry) {
     return false;
   }
-  const codeFilled = affiliateModal.code.trim() !== "";
-  const rateFilled = String(affiliateModal.rate ?? "").trim() !== "";
-  if (codeFilled || rateFilled) return true;
-  // Edit mode + empty rate input is a meaningful "clear" only if the user
-  // currently has an exclusive rate to clear.
-  return (
-    affiliateModal.mode === "edit" &&
-    affiliateModal.editingEntry?.aff_rebate_rate_percent != null
-  );
+  const rate = affiliateModal.rate;
+  return typeof rate === "number" && Number.isFinite(rate) && rate >= 0 && rate <= 100;
 });
 
 async function submitAffiliateModal() {
@@ -12694,19 +12789,15 @@ async function submitAffiliateModal() {
     userId = affiliateModal.editingEntry!.user_id;
   }
 
-  const payload: Parameters<typeof affiliatesAPI.updateUserSettings>[1] = {};
+  const rateInput = parseRebateRate(affiliateModal.rate);
+  if (rateInput === undefined) return;
+
+  const payload: Parameters<typeof affiliatesAPI.updateUserSettings>[1] = {
+    aff_rebate_rate_percent: rateInput,
+    withdrawal_enabled: affiliateModal.withdrawalEnabled,
+  };
   const codeRaw = affiliateModal.code.trim();
   if (codeRaw) payload.aff_code = codeRaw.toUpperCase();
-
-  const rateInput = parseRebateRate(affiliateModal.rate);
-  if (rateInput === undefined) return; // toast already shown
-  if (rateInput === null) {
-    if (affiliateModal.mode === "edit" && affiliateModal.editingEntry?.aff_rebate_rate_percent != null) {
-      payload.clear_rebate_rate = true;
-    }
-  } else {
-    payload.aff_rebate_rate_percent = rateInput;
-  }
 
   affiliateModal.saving = true;
   try {
@@ -12734,35 +12825,6 @@ function askResetAffiliateUser(entry: AffiliateAdminEntry) {
     t("common.delete"),
     () => affiliatesAPI.clearUserSettings(entry.user_id),
   );
-}
-
-function openAffiliateBatchModal() {
-  if (affiliateState.selected.length === 0) return;
-  affiliateBatchModal.open = true;
-  affiliateBatchModal.rate = "";
-}
-
-async function submitAffiliateBatchModal() {
-  const rateInput = parseRebateRate(affiliateBatchModal.rate);
-  if (rateInput === undefined) return;
-  const userIDs = [...affiliateState.selected];
-  const payload: Parameters<typeof affiliatesAPI.batchSetRate>[0] =
-    rateInput === null
-      ? { user_ids: userIDs, clear: true }
-      : { user_ids: userIDs, aff_rebate_rate_percent: rateInput };
-
-  affiliateBatchModal.saving = true;
-  try {
-    await affiliatesAPI.batchSetRate(payload);
-    appStore.showSuccess(t("common.saved"));
-    affiliateBatchModal.open = false;
-    affiliateState.selected = [];
-    await loadAffiliateUsers();
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, t("common.error")));
-  } finally {
-    affiliateBatchModal.saving = false;
-  }
 }
 
 // Load the per-user table the first time the affiliate switch is observed

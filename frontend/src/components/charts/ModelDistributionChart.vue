@@ -354,6 +354,11 @@ const chartColors = [
   '#a855f7'
 ]
 
+const toFiniteNumber = (value: unknown): number => {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : 0
+}
+
 const displayModelStats = computed(() => {
   const sourceStats = props.source === 'upstream'
     ? props.upstreamModelStats
@@ -480,7 +485,8 @@ const rankingDoughnutOptions = computed(() => ({
   }
 }))
 
-const formatTokens = (value: number): string => {
+const formatTokens = (value: number | undefined | null): string => {
+  value = toFiniteNumber(value)
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`
   } else if (value >= 1_000_000) {
@@ -491,7 +497,7 @@ const formatTokens = (value: number): string => {
   return value.toLocaleString()
 }
 
-const formatNumber = (value: number): string => {
+const formatNumber = (value: number | undefined | null): string => {
   return toFiniteNumber(value).toLocaleString()
 }
 
@@ -506,12 +512,7 @@ const getRankingRowLabel = (item: RankingDisplayItem): string => {
   return getRankingUserLabel(item)
 }
 
-const toFiniteNumber = (value: unknown): number => {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue : 0
-}
-
-const formatCost = (value: number | null | undefined): string => {
+const formatCost = (value: number | undefined | null): string => {
   const safeValue = toFiniteNumber(value)
   if (safeValue >= 1000) {
     return (safeValue / 1000).toFixed(2) + 'K'

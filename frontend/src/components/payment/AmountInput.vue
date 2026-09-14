@@ -5,7 +5,7 @@
       <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
         {{ t('payment.quickAmounts') }}
       </label>
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <button
           v-for="amt in filteredAmounts"
           :key="amt"
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Custom Amount Input -->
-    <div>
+    <div v-if="allowCustom">
       <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
         {{ t('payment.customAmount') }}
       </label>
@@ -54,10 +54,12 @@ const props = withDefaults(defineProps<{
   modelValue: number | null
   min?: number
   max?: number
+  allowCustom?: boolean
 }>(), {
   amounts: () => [10, 20, 50, 100, 200, 500, 1000, 2000, 5000],
   min: 0,
   max: 0,
+  allowCustom: true,
 })
 
 const emit = defineEmits<{
@@ -75,8 +77,8 @@ const filteredAmounts = computed(() =>
 
 const placeholderText = computed(() => {
   if (props.min > 0 && props.max > 0) return `${props.min} - ${props.max}`
-  if (props.min > 0) return `≥ ${props.min}`
-  if (props.max > 0) return `≤ ${props.max}`
+  if (props.min > 0) return `>= ${props.min}`
+  if (props.max > 0) return `<= ${props.max}`
   return t('payment.enterAmount')
 })
 

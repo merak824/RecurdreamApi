@@ -15,6 +15,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
+const testGeminiCLIOAuthClientID = "test-gemini-cli-client-id.apps.example.test"
+
+func setTestGeminiCLIClient(t *testing.T, secret string) {
+	t.Helper()
+	t.Setenv(geminicli.GeminiCLIOAuthClientIDEnv, testGeminiCLIOAuthClientID)
+	t.Setenv(geminicli.GeminiCLIOAuthClientSecretEnv, secret)
+}
+
 // =====================
 // 保留原有测试
 // =====================
@@ -23,7 +31,7 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 	// NOTE: This test sets process env; it must not run in parallel.
 	// The built-in Gemini CLI client secret is not embedded in this repository.
 	// Tests set a dummy secret via env to simulate operator-provided configuration.
-	t.Setenv(geminicli.GeminiCLIOAuthClientSecretEnv, "test-built-in-secret")
+	setTestGeminiCLIClient(t, "test-built-in-secret")
 
 	type testCase struct {
 		name          string
@@ -46,7 +54,7 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 				},
 			},
 			oauthType:     "google_one",
-			wantClientID:  geminicli.GeminiCLIOAuthClientID,
+			wantClientID:  testGeminiCLIOAuthClientID,
 			wantRedirect:  geminicli.GeminiCLIRedirectURI,
 			wantScope:     geminicli.DefaultCodeAssistScopes,
 			wantProjectID: "",
@@ -62,7 +70,7 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 				},
 			},
 			oauthType:     "google_one",
-			wantClientID:  geminicli.GeminiCLIOAuthClientID,
+			wantClientID:  testGeminiCLIOAuthClientID,
 			wantRedirect:  geminicli.GeminiCLIRedirectURI,
 			wantScope:     geminicli.DefaultCodeAssistScopes,
 			wantProjectID: "",
@@ -79,7 +87,7 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 			},
 			oauthType:     "code_assist",
 			projectID:     "my-gcp-project",
-			wantClientID:  geminicli.GeminiCLIOAuthClientID,
+			wantClientID:  testGeminiCLIOAuthClientID,
 			wantRedirect:  geminicli.GeminiCLIRedirectURI,
 			wantScope:     geminicli.DefaultCodeAssistScopes,
 			wantProjectID: "my-gcp-project",
@@ -595,7 +603,7 @@ func TestGeminiOAuthService_BuildAccountCredentials(t *testing.T) {
 // =====================
 
 func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
-	t.Parallel()
+	setTestGeminiCLIClient(t, "test-built-in-secret")
 
 	tests := []struct {
 		name        string
@@ -638,7 +646,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 			cfg: &config.Config{
 				Gemini: config.GeminiConfig{
 					OAuth: config.GeminiOAuthConfig{
-						ClientID:     geminicli.GeminiCLIOAuthClientID,
+						ClientID:     testGeminiCLIOAuthClientID,
 						ClientSecret: "some-secret",
 					},
 				},

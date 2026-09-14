@@ -66,6 +66,25 @@ const messages: Record<string, string> = {
 	'usage.upstreamResponseModel': 'Upstream response',
 	'usage.modelVariant': 'Possible version variant',
 	'usage.modelMismatch': 'Different model',
+	'usage.ttftDiagnostics': 'First-token scheduling diagnostics',
+	'usage.ttftOptimizerApplied': 'First-token optimization',
+	'usage.ttftTransport': 'Transport',
+	'usage.ttftSamples': 'Historical samples',
+	'usage.ttftCacheProfile': 'Cache profile',
+	'usage.ttftCacheEligible': 'Cache protection',
+	'usage.ttftCacheContext': 'Context tokens',
+	'usage.ttftCacheHitRate': 'Cache hit rate',
+	'usage.ttftP90Thresholds': 'P90 thresholds',
+	'usage.ttftDecision': 'Decision',
+	'usage.ttftReason': 'Reason',
+	'usage.ttftYes': 'eligible',
+	'usage.ttftNo': 'not eligible',
+	'usage.ttftApplied': 'applied',
+	'usage.ttftDecisionSwitched': 'switched account',
+	'usage.ttftDecisionDebounced': 'kept by debounce',
+	'usage.ttftDecisionKept': 'kept current account',
+	'usage.ttftCacheStatusEligible': 'valid',
+	'usage.ttftReasonP90': 'historical P90 exceeded threshold',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -254,6 +273,68 @@ describe('admin UsageTable tooltip', () => {
     const text = wrapper.text()
     expect(text).toContain('claude-sonnet-4')
     expect(text).toContain('claude-sonnet-4-20250514')
+  })
+
+  it('shows cache-aware first-token diagnostics only from the admin context', () => {
+    const DataTableStubWithLatency = {
+      props: ['data'],
+      template: `
+        <div>
+          <div v-for="row in data" :key="row.request_id">
+            <slot name="cell-latency" :row="row" />
+          </div>
+        </div>
+      `,
+    }
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{
+          request_id: 'req-openai-ttft-diagnostics',
+          first_token_ms: 9200,
+          upstream_first_token_ms: 8600,
+          duration_ms: 12000,
+          openai_ttft_context: {
+            version: 2,
+            transport: 'http_sse',
+            optimizer_applied: true,
+            sample_count: 10,
+            sample_p50_ms: 2100,
+            sample_p90_ms: 9200,
+            cache_profile_status: 'eligible',
+            cache_eligible: true,
+            cache_context_tokens: 160000,
+            cache_hit_rate_percent: 86.5,
+            base_p90_ms: 10000,
+            effective_p90_ms: 20000,
+            sticky_switched: true,
+            debounce_kept: false,
+            sticky_escape_reason: 'ttft_p90',
+          },
+        }],
+        loading: false,
+        columns: [{ key: 'latency', label: 'Latency' }],
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStubWithLatency,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const diagnostics = wrapper.get('[data-testid="openai-ttft-diagnostics"]')
+    const title = diagnostics.attributes('title')
+    expect(title).toContain('First-token scheduling diagnostics')
+    expect(title).toContain('First-token optimization: applied')
+    expect(title).toContain('Historical samples: 10 · P50 2.10s · P90 9.20s')
+    expect(title).toContain('Cache profile: valid')
+    expect(title).toContain('Context tokens: 160,000')
+    expect(title).toContain('Cache hit rate: 86.5%')
+    expect(title).toContain('P90 thresholds: 10.00s → 20.00s')
+    expect(title).toContain('Decision: switched account')
+    expect(title).toContain('Reason: historical P90 exceeded threshold')
   })
 
 	it.each([

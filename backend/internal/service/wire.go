@@ -859,6 +859,8 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewContentModerationService,
 	NewAffiliateService,
+	NewRedPacketService,
+	ProvideRedPacketWorker,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
@@ -933,6 +935,13 @@ func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *Set
 	}
 	r.Start()
 	return r
+}
+
+// ProvideRedPacketWorker creates and starts the retrying red-packet draw worker.
+func ProvideRedPacketWorker(repo RedPacketRepository, billingCache *BillingCacheService, authCache APIKeyAuthCacheInvalidator) *RedPacketWorker {
+	worker := NewRedPacketWorker(repo, billingCache, authCache, 2*time.Second)
+	worker.Start()
+	return worker
 }
 
 // ProvideChannelMonitorV2Service wires settings for user-facing privacy flags

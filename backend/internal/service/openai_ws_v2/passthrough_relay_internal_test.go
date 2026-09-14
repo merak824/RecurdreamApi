@@ -35,6 +35,26 @@ func TestRunEntry_DelegatesRelay(t *testing.T) {
 	require.Equal(t, "resp_entry", result.RequestID)
 }
 
+func TestSemanticOutputEventRequiresPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   string
+		payload string
+		want    bool
+	}{
+		{name: "empty text delta", event: "response.output_text.delta", payload: `{"type":"response.output_text.delta","delta":""}`},
+		{name: "text delta", event: "response.output_text.delta", payload: `{"type":"response.output_text.delta","delta":"hello"}`, want: true},
+		{name: "role only item", event: "response.output_item.added", payload: `{"type":"response.output_item.added","item":{"type":"message","role":"assistant","content":[]}}`},
+		{name: "tool arguments", event: "response.function_call_arguments.delta", payload: `{"type":"response.function_call_arguments.delta","delta":"{\"x\":"}`, want: true},
+		{name: "terminal", event: "response.completed", payload: `{"type":"response.completed","response":{"usage":{"input_tokens":1}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, isSemanticOutputEvent([]byte(tt.payload), tt.event))
+		})
+	}
+}
+
 func TestRunClientToUpstream_ErrorPaths(t *testing.T) {
 	t.Parallel()
 

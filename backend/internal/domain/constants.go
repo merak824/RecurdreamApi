@@ -14,6 +14,7 @@ const (
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
+	RoleAgent = "agent"
 )
 
 // Platform constants

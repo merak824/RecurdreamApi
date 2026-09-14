@@ -224,6 +224,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 
 		upstreamStart := time.Now()
+		setOpenAIUpstreamTTFTStart(c, upstreamStart)
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
@@ -270,6 +271,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 
 	var usage *OpenAIUsage
 	var firstTokenMs *int
+	var upstreamFirstTokenMs *int
+	firstSemanticEvent := ""
+	clientDisconnected := false
 	responseID := ""
 	imageCount := 0
 	var imageOutputSizes []string
@@ -280,6 +284,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
+		upstreamFirstTokenMs = result.upstreamFirstTokenMs
+		firstSemanticEvent = result.firstSemanticEvent
+		clientDisconnected = result.clientDisconnected
 		responseID = strings.TrimSpace(result.responseID)
 		imageCount = result.imageCount
 		imageOutputSizes = result.imageOutputSizes
@@ -320,6 +327,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		OpenAIWSMode:                  false,
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  firstTokenMs,
+		UpstreamFirstTokenMs:          upstreamFirstTokenMs,
+		TTFTTransport:                 OpenAITTFTTransportHTTPSSE,
+		FirstSemanticEvent:            firstSemanticEvent,
+		ClientDisconnect:              clientDisconnected,
 	}
 	if imageCount > 0 {
 		forwardResult.ImageCount = imageCount
@@ -794,11 +805,14 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 }
 
 type openaiStreamingResultPassthrough struct {
-	usage            *OpenAIUsage
-	firstTokenMs     *int
-	responseID       string
-	imageCount       int
-	imageOutputSizes []string
+	usage                *OpenAIUsage
+	firstTokenMs         *int
+	upstreamFirstTokenMs *int
+	firstSemanticEvent   string
+	clientDisconnected   bool
+	responseID           string
+	imageCount           int
+	imageOutputSizes     []string
 }
 
 type openaiNonStreamingResultPassthrough struct {
@@ -1300,12 +1314,16 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 
 	needModelReplace := strings.TrimSpace(originalModel) != "" && strings.TrimSpace(mappedModel) != "" && strings.TrimSpace(originalModel) != strings.TrimSpace(mappedModel)
 	resultWithUsage := func() *openaiStreamingResultPassthrough {
+		upstreamFirstTokenMs, firstSemanticEvent := openAIUpstreamTTFTObservationFromContext(c)
 		return &openaiStreamingResultPassthrough{
-			usage:            usage,
-			firstTokenMs:     firstTokenMs,
-			responseID:       responseID,
-			imageCount:       imageCounter.Count(),
-			imageOutputSizes: imageCounter.Sizes(),
+			usage:                usage,
+			firstTokenMs:         firstTokenMs,
+			upstreamFirstTokenMs: upstreamFirstTokenMs,
+			firstSemanticEvent:   firstSemanticEvent,
+			clientDisconnected:   clientDisconnected,
+			responseID:           responseID,
+			imageCount:           imageCounter.Count(),
+			imageOutputSizes:     imageCounter.Sizes(),
 		}
 	}
 
@@ -1406,6 +1424,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				line = "data: " + string(sanitizedData)
 			}
 			lineStartsClientOutput = forceFlushFailedEvent || openAIStreamDataStartsClientOutput(trimmedData, eventType)
+			if lineStartsClientOutput && trimmedData != "[DONE]" && openAIStreamDataHasSemanticOutput(trimmedData, eventType) {
+				markOpenAIUpstreamSemanticOutput(c, "responses.passthrough_output")
+			}
 			if lineStartsClientOutput && trimmedData != "[DONE]" && !openAIStreamEventTypeIsTerminal(eventType) {
 				semanticOutputSeen = true
 			}

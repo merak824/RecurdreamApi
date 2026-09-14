@@ -164,15 +164,11 @@ type SystemSettings struct {
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
 
-	DefaultConcurrency           int                          `json:"default_concurrency"`
-	DefaultBalance               float64                      `json:"default_balance"`
-	AffiliateRebateRate          float64                      `json:"affiliate_rebate_rate"`
-	AffiliateRebateFreezeHours   int                          `json:"affiliate_rebate_freeze_hours"`
-	AffiliateRebateDurationDays  int                          `json:"affiliate_rebate_duration_days"`
-	AffiliateRebatePerInviteeCap float64                      `json:"affiliate_rebate_per_invitee_cap"`
-	AdminRechargeRebateEnabled   bool                         `json:"affiliate_admin_recharge_enabled"`
-	DefaultUserRPMLimit          int                          `json:"default_user_rpm_limit"`
-	DefaultSubscriptions         []DefaultSubscriptionSetting `json:"default_subscriptions"`
+	DefaultConcurrency   int                          `json:"default_concurrency"`
+	DefaultBalance       float64                      `json:"default_balance"`
+	AffiliateRebateRate  float64                      `json:"affiliate_rebate_rate"`
+	DefaultUserRPMLimit  int                          `json:"default_user_rpm_limit"`
+	DefaultSubscriptions []DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -261,6 +257,12 @@ type SystemSettings struct {
 	OpenAIAdvancedSchedulerEffectiveWeightUpstreamCost     string  `json:"openai_advanced_scheduler_effective_weight_upstream_cost"`
 	OpenAIAdvancedSchedulerEffectiveWeightPreviousResponse string  `json:"openai_advanced_scheduler_effective_weight_previous_response"`
 	OpenAIAdvancedSchedulerEffectiveWeightSessionSticky    string  `json:"openai_advanced_scheduler_effective_weight_session_sticky"`
+	OpenAITTFTOptimizerEnabled                             bool    `json:"openai_ttft_optimizer_enabled"`
+	OpenAITTFTBaseP90Seconds                               int     `json:"openai_ttft_base_p90_seconds"`
+	OpenAITTFTCacheProtectionEnabled                       bool    `json:"openai_ttft_cache_protection_enabled"`
+	OpenAITTFTCacheMinContextTokens                        int     `json:"openai_ttft_cache_min_context_tokens"`
+	OpenAITTFTCacheMinHitRatePercent                       int     `json:"openai_ttft_cache_min_hit_rate_percent"`
+	OpenAITTFTCacheElasticP90CapSeconds                    int     `json:"openai_ttft_cache_elastic_p90_cap_seconds"`
 
 	// Payment configuration
 	PaymentEnabled                   bool     `json:"payment_enabled"`

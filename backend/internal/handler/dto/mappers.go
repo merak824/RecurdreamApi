@@ -711,6 +711,9 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
 		UsageLog:              usageLog,
+		UpstreamFirstTokenMs:  l.UpstreamFirstTokenMs,
+		ClientDisconnected:    l.ClientDisconnected,
+		OpenAITTFTContext:     l.OpenAITTFTContext,
 		UpstreamModel:         l.UpstreamModel,
 		UpstreamResponseModel: l.UpstreamResponseModel,
 		UpstreamModelMismatch: l.UpstreamModelMismatch,

@@ -16,6 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPrepareUsageLogInsertPersistsProfitCostSource(t *testing.T) {
+	source := service.ProfitCostSourceGroupBreakEven
+	log := &service.UsageLog{
+		Model:            "gpt-test",
+		ProfitCostSource: source,
+	}
+
+	prepared := prepareUsageLogInsert(log)
+	require.Equal(t, source, prepared.args[len(prepared.args)-1])
+
+	query, args := buildUsageLogBestEffortInsertQuery([]usageLogInsertPrepared{prepared})
+	require.Contains(t, query, "profit_cost_source")
+	require.Equal(t, source, args[len(args)-1])
+}
+
 func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}
@@ -100,6 +115,10 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // account_stats_cost
 			sqlmock.AnyArg(), // session_id
 			createdAt,
+			sqlmock.AnyArg(), // upstream_first_token_ms
+			log.ClientDisconnected,
+			sqlmock.AnyArg(), // openai_ttft_context
+			service.ProfitCostSourceUnknown,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
 
@@ -192,6 +211,10 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // account_stats_cost
 			sqlmock.AnyArg(), // session_id
 			createdAt,
+			sqlmock.AnyArg(), // upstream_first_token_ms
+			log.ClientDisconnected,
+			sqlmock.AnyArg(), // openai_ttft_context
+			service.ProfitCostSourceUnknown,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
 
@@ -853,6 +876,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{},
 			sql.NullString{},
 			now,
+			sql.NullInt64{},
+			false,
+			sql.NullString{},
 		}})
 		require.NoError(t, err)
 		require.Equal(t, 2, log.ImageCount)
@@ -930,6 +956,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // session_id
 			now,
+			sql.NullInt64{},  // upstream_first_token_ms
+			false,            // client_disconnected
+			sql.NullString{}, // openai_ttft_context
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
@@ -990,6 +1019,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // session_id
 			now,
+			sql.NullInt64{},  // upstream_first_token_ms
+			false,            // client_disconnected
+			sql.NullString{}, // openai_ttft_context
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
@@ -1050,6 +1082,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_stats_cost
 			sql.NullString{},  // session_id
 			now,
+			sql.NullInt64{},  // upstream_first_token_ms
+			false,            // client_disconnected
+			sql.NullString{}, // openai_ttft_context
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)

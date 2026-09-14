@@ -225,6 +225,12 @@ func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedS
 		"openai_advanced_scheduler_enabled":                       true,
 		"openai_oauth_scheduling_rate_multiplier":                 0.05,
 		"openai_advanced_scheduler_subscription_priority_enabled": true,
+		"openai_ttft_optimizer_enabled":                           true,
+		"openai_ttft_base_p90_seconds":                            12,
+		"openai_ttft_cache_protection_enabled":                    true,
+		"openai_ttft_cache_min_context_tokens":                    150000,
+		"openai_ttft_cache_min_hit_rate_percent":                  85,
+		"openai_ttft_cache_elastic_p90_cap_seconds":               40,
 	}
 	rawBody, err := json.Marshal(body)
 	require.NoError(t, err)
@@ -244,6 +250,12 @@ func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedS
 	require.Equal(t, "true", repo.values["openai_advanced_scheduler_enabled"])
 	require.Equal(t, "0.05", repo.values[service.SettingKeyOpenAIOAuthSchedulingRateMultiplier])
 	require.Equal(t, "true", repo.values[service.SettingKeyOpenAIAdvancedSchedulerSubscriptionPriorityEnabled])
+	require.Equal(t, "true", repo.values[service.SettingKeyOpenAITTFTOptimizerEnabled])
+	require.Equal(t, "12", repo.values[service.SettingKeyOpenAITTFTBaseP90Seconds])
+	require.Equal(t, "true", repo.values[service.SettingKeyOpenAITTFTCacheProtectionEnabled])
+	require.Equal(t, "150000", repo.values[service.SettingKeyOpenAITTFTCacheMinContextTokens])
+	require.Equal(t, "85", repo.values[service.SettingKeyOpenAITTFTCacheMinHitRatePercent])
+	require.Equal(t, "40", repo.values[service.SettingKeyOpenAITTFTCacheElasticP90CapSeconds])
 
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -256,6 +268,12 @@ func TestSettingHandler_UpdateSettings_PersistsPaymentVisibleMethodsAndAdvancedS
 	require.Equal(t, true, data["openai_advanced_scheduler_enabled"])
 	require.Equal(t, 0.05, data["openai_oauth_scheduling_rate_multiplier"])
 	require.Equal(t, true, data["openai_advanced_scheduler_subscription_priority_enabled"])
+	require.Equal(t, true, data["openai_ttft_optimizer_enabled"])
+	require.Equal(t, float64(12), data["openai_ttft_base_p90_seconds"])
+	require.Equal(t, true, data["openai_ttft_cache_protection_enabled"])
+	require.Equal(t, float64(150000), data["openai_ttft_cache_min_context_tokens"])
+	require.Equal(t, float64(85), data["openai_ttft_cache_min_hit_rate_percent"])
+	require.Equal(t, float64(40), data["openai_ttft_cache_elastic_p90_cap_seconds"])
 }
 
 func TestSettingHandler_UpdateSettings_PreservesLegacyBlankPaymentVisibleMethodSource(t *testing.T) {
