@@ -51,6 +51,11 @@ type systemUpdateService interface {
 	RollbackToVersion(ctx context.Context, version string) error
 }
 
+type asyncSystemUpdateService interface {
+	StartUpdate(ctx context.Context) (*service.UpdateExecution, error)
+	GetUpdateStatus(ctx context.Context, operationID string) (*service.UpdateExecution, error)
+}
+
 // NewSystemHandler creates a new SystemHandler
 func NewSystemHandler(updateSvc systemUpdateService, lockSvc *service.SystemOperationLockService) *SystemHandler {
 	return &SystemHandler{
@@ -98,6 +103,44 @@ func (h *SystemHandler) PerformUpdate(c *gin.Context) {
 
 		updateCtx, cancel := systemUpdateContext(ctx)
 		defer cancel()
+		if asyncSvc, ok := h.updateSvc.(asyncSystemUpdateService); ok {
+			execution, err := asyncSvc.StartUpdate(updateCtx)
+			if err != nil {
+				if errors.Is(err, service.ErrNoUpdateAvailable) {
+					info, checkErr := h.updateSvc.CheckUpdate(updateCtx, false)
+					if checkErr != nil {
+						releaseReason = "SYSTEM_UPDATE_FAILED"
+						return nil, checkErr
+					}
+					succeeded = true
+					return gin.H{
+						"message":            "Already up to date",
+						"already_up_to_date": true,
+						"current_version":    info.CurrentVersion,
+						"latest_version":     info.LatestVersion,
+						"operation_id":       lock.OperationID(),
+					}, nil
+				}
+				releaseReason = "SYSTEM_UPDATE_FAILED"
+				return nil, err
+			}
+			if execution == nil {
+				releaseReason = "SYSTEM_UPDATE_FAILED"
+				return nil, errors.New("update service returned an empty operation")
+			}
+			succeeded = true
+			message := execution.Message
+			if message == "" {
+				message = "Update accepted. Deployment is in progress."
+			}
+			return gin.H{
+				"message":      message,
+				"need_restart": execution.NeedRestart,
+				"operation_id": execution.OperationID,
+				"status":       execution.Status,
+				"version":      execution.Version,
+			}, nil
+		}
 
 		if err := h.updateSvc.PerformUpdate(updateCtx); err != nil {
 			if errors.Is(err, service.ErrNoUpdateAvailable) {
@@ -126,6 +169,27 @@ func (h *SystemHandler) PerformUpdate(c *gin.Context) {
 			"operation_id": lock.OperationID(),
 		}, nil
 	})
+}
+
+// GetUpdateStatus returns the state of a Docker host-agent deployment.
+// GET /api/v1/admin/system/update/:operation_id
+func (h *SystemHandler) GetUpdateStatus(c *gin.Context) {
+	asyncSvc, ok := h.updateSvc.(asyncSystemUpdateService)
+	if !ok {
+		response.Error(c, http.StatusNotImplemented, "container update agent is not supported")
+		return
+	}
+	operationID := strings.TrimSpace(c.Param("operation_id"))
+	if operationID == "" || strings.Contains(operationID, "/") {
+		response.Error(c, http.StatusBadRequest, "invalid update operation id")
+		return
+	}
+	execution, err := asyncSvc.GetUpdateStatus(c.Request.Context(), operationID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, execution)
 }
 
 // GetRollbackVersions lists versions available for rollback

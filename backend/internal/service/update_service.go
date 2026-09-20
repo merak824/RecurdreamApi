@@ -2,6 +2,7 @@ package service
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bufio"
 	"compress/gzip"
 	"context"
@@ -12,6 +13,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -23,8 +25,10 @@ import (
 )
 
 var (
-	ErrNoUpdateAvailable         = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
-	ErrRollbackVersionNotAllowed = infraerrors.BadRequest("ROLLBACK_VERSION_NOT_ALLOWED", "version is not in the allowed rollback list")
+	ErrNoUpdateAvailable          = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
+	ErrRollbackVersionNotAllowed  = infraerrors.BadRequest("ROLLBACK_VERSION_NOT_ALLOWED", "version is not in the allowed rollback list")
+	ErrContainerUpdateUnsupported = infraerrors.BadRequest("CONTAINER_UPDATE_UNSUPPORTED", "当前为容器化部署，无法在容器内在线替换程序，请使用蓝绿热部署或重新拉取镜像更新")
+	containerizedRuntimeDetector  = detectContainerizedRuntime
 )
 
 const (
@@ -61,10 +65,11 @@ type GitHubReleaseClient interface {
 
 // UpdateService handles software updates
 type UpdateService struct {
-	cache          UpdateCache
-	githubClient   GitHubReleaseClient
-	currentVersion string
-	buildType      string // "source" for manual builds, "release" for CI builds
+	cache                 UpdateCache
+	githubClient          GitHubReleaseClient
+	containerUpdateClient ContainerUpdateClient
+	currentVersion        string
+	buildType             string // "source" for manual builds, "release" for CI builds
 }
 
 // NewUpdateService creates a new UpdateService
@@ -75,6 +80,58 @@ func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, versi
 		currentVersion: version,
 		buildType:      buildType,
 	}
+}
+
+// SetContainerUpdateClient configures the host-side Docker update bridge.
+func (s *UpdateService) SetContainerUpdateClient(client ContainerUpdateClient) {
+	s.containerUpdateClient = client
+}
+
+// StartUpdate starts either a host-agent Docker deployment or an in-place
+// binary update, depending on the current runtime.
+func (s *UpdateService) StartUpdate(ctx context.Context) (*UpdateExecution, error) {
+	if containerizedRuntimeDetector() {
+		if s.containerUpdateClient == nil {
+			return nil, ErrContainerUpdateAgentUnavailable
+		}
+		info, err := s.CheckUpdate(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		if !info.HasUpdate {
+			return nil, ErrNoUpdateAvailable
+		}
+		execution, err := s.containerUpdateClient.Start(ctx, info.LatestVersion)
+		if err != nil {
+			return nil, err
+		}
+		if execution == nil {
+			return nil, fmt.Errorf("update agent returned an empty operation")
+		}
+		execution.NeedRestart = false
+		return execution, nil
+	}
+
+	if err := s.PerformUpdate(ctx); err != nil {
+		return nil, err
+	}
+	return &UpdateExecution{
+		Version:     s.currentVersion,
+		Status:      "succeeded",
+		NeedRestart: true,
+		Message:     "Update completed. Please restart the service.",
+	}, nil
+}
+
+// GetUpdateStatus returns the state of a host-agent Docker deployment.
+func (s *UpdateService) GetUpdateStatus(ctx context.Context, operationID string) (*UpdateExecution, error) {
+	if !containerizedRuntimeDetector() {
+		return nil, ErrContainerUpdateUnsupported
+	}
+	if s.containerUpdateClient == nil {
+		return nil, ErrContainerUpdateAgentUnavailable
+	}
+	return s.containerUpdateClient.Status(ctx, operationID)
 }
 
 // UpdateInfo contains update information
@@ -163,6 +220,10 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 // PerformUpdate downloads and applies the update
 // Uses atomic file replacement pattern for safe in-place updates
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
+	if err := ensureInPlaceUpdateSupported(); err != nil {
+		return err
+	}
+
 	info, err := s.CheckUpdate(ctx, true)
 	if err != nil {
 		return err
@@ -281,6 +342,10 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 
 // Rollback restores the previous version
 func (s *UpdateService) Rollback() error {
+	if err := ensureInPlaceUpdateSupported(); err != nil {
+		return err
+	}
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -327,6 +392,10 @@ func (s *UpdateService) ListRollbackVersions(ctx context.Context) ([]RollbackVer
 // The target must be one of the versions returned by ListRollbackVersions;
 // anything else (including the current version) is rejected.
 func (s *UpdateService) RollbackToVersion(ctx context.Context, version string) error {
+	if err := ensureInPlaceUpdateSupported(); err != nil {
+		return err
+	}
+
 	target := strings.TrimPrefix(strings.TrimSpace(version), "v")
 	if target == "" {
 		return ErrRollbackVersionNotAllowed
@@ -506,6 +575,10 @@ func (s *UpdateService) verifyChecksum(ctx context.Context, filePath, checksumUR
 }
 
 func (s *UpdateService) extractBinary(archivePath, destPath string) error {
+	if strings.HasSuffix(strings.ToLower(archivePath), ".zip") {
+		return s.extractZipBinary(archivePath, destPath)
+	}
+
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return err
@@ -591,6 +664,89 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 		return err
 	}
 	return out.Close()
+}
+
+func (s *UpdateService) extractZipBinary(archivePath, destPath string) error {
+	archive, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = archive.Close() }()
+
+	const maxBinarySize = 500 * 1024 * 1024
+	for _, entry := range archive.File {
+		entryName := strings.ReplaceAll(entry.Name, "\\", "/")
+		if strings.Contains(entryName, "..") {
+			return fmt.Errorf("path traversal attempt detected: %s", entry.Name)
+		}
+
+		if entry.FileInfo().IsDir() || entry.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+		baseName := path.Base(entryName)
+		if baseName != "sub2api" && baseName != "sub2api.exe" {
+			continue
+		}
+		if entry.UncompressedSize64 > maxBinarySize {
+			return fmt.Errorf("binary too large: %d bytes (max %d)", entry.UncompressedSize64, maxBinarySize)
+		}
+
+		reader, err := entry.Open()
+		if err != nil {
+			return err
+		}
+		out, err := os.Create(destPath)
+		if err != nil {
+			_ = reader.Close()
+			return err
+		}
+		written, copyErr := io.Copy(out, io.LimitReader(reader, maxBinarySize+1))
+		closeReaderErr := reader.Close()
+		closeOutErr := out.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeReaderErr != nil {
+			return closeReaderErr
+		}
+		if closeOutErr != nil {
+			return closeOutErr
+		}
+		if written > maxBinarySize {
+			return fmt.Errorf("binary too large: %d bytes (max %d)", written, maxBinarySize)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("binary not found in archive")
+}
+
+func ensureInPlaceUpdateSupported() error {
+	if containerizedRuntimeDetector() {
+		return ErrContainerUpdateUnsupported
+	}
+	return nil
+}
+
+func detectContainerizedRuntime() bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+
+	cgroup, err := os.ReadFile("/proc/1/cgroup")
+	if err != nil {
+		return false
+	}
+	cgroupText := strings.ToLower(string(cgroup))
+	for _, marker := range []string{"docker", "containerd", "kubepods", "crio", "libpod", "podman"} {
+		if strings.Contains(cgroupText, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {

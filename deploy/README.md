@@ -154,6 +154,37 @@ cd deploy
 SUB2API_IMAGE=ghcr.io/merak824/recurdreamapi:latest bash hot-deploy.sh
 ```
 
+#### Admin Docker update button
+
+For the admin **Update now** button to update a Docker deployment, install the
+host-side update agent before starting the blue/green stack. The application
+container receives only the agent Unix socket; it never receives
+`/var/run/docker.sock` or arbitrary shell access.
+
+The agent installation requires the runtime bundle's
+`recurdream-update-agent` binary and `update-agent.service` template:
+
+```bash
+cd /data/sub2api
+sudo UPDATE_AGENT_DEPLOY_PATH=/data/sub2api/deploy \
+  UPDATE_AGENT_IMAGE=ghcr.io/merak824/recurdreamapi \
+  UPDATE_AGENT_DRAIN_SECONDS=300 \
+  bash install-update-agent.sh \
+    /tmp/recurdream-update-agent \
+    /tmp/update-agent.service
+```
+
+The agent accepts only a newer `major.minor.patch` version, runs the fixed
+`hot-deploy.sh` command, and uses a 300-second drain window with
+`KEEP_OLD=false`. Set `UPDATE_AGENT_SOCKET_GID` in `.env` to the group ID that
+owns the host socket (`0` when the service runs as root). The current state is
+stored in `/data/sub2api/.update-agent/current-version`; logs are under
+`/var/log/recurdream-update-agent/`.
+
+After installation, click **Update now** in the administrator version menu.
+The page polls the operation until the new slot is healthy and refreshes the
+displayed version after traffic switches.
+
 Update from GitHub with a local Docker build:
 
 ```bash

@@ -28,6 +28,11 @@ on:
         required: true
         type: boolean
         default: true
+      update_agent_image:
+        description: "Allowlisted image repository used by the Docker update agent"
+        required: true
+        type: string
+        default: "ghcr.io/merak824/recurdreamapi"
 
 concurrency:
   group: production-deploy
@@ -53,10 +58,16 @@ jobs:
       DRAIN_SECONDS_INPUT: ${{ inputs.drain_seconds }}
       HEALTH_URL: ${{ inputs.health_url }}
       CLEANUP_ARCHIVE: ${{ inputs.cleanup_archive }}
+      UPDATE_AGENT_IMAGE_INPUT: ${{ inputs.update_agent_image }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
 
       - name: Validate Docker Go version
         shell: bash
@@ -110,6 +121,7 @@ jobs:
 
           {
             echo "image_tag=${image_tag}"
+            echo "version=${version}"
             echo "version_tag=${version_tag}"
             echo "archive_name=${archive_name}"
             echo "archive_path=${RUNNER_TEMP}/${archive_name}"
@@ -117,7 +129,18 @@ jobs:
             echo "runtime_bundle=${runtime_bundle}"
             echo "runtime_bundle_path=${RUNNER_TEMP}/${runtime_bundle}"
             echo "remote_runtime_bundle=/tmp/${runtime_bundle}"
+            echo "agent_binary_path=${RUNNER_TEMP}/recurdream-update-agent"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Build update agent
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags='-s -w' \
+            -o "${{ steps.meta.outputs.agent_binary_path }}" \
+            ./cmd/update-agent
+        working-directory: backend
 
       - name: Build and save Docker image
         shell: bash
@@ -138,7 +161,11 @@ jobs:
             nginx-sub2api.conf.template \
             .env.example \
             README.md \
-            HOT_DEPLOY_CN.md
+            HOT_DEPLOY_CN.md \
+            update-agent.service \
+            install-update-agent.sh \
+            -C "${RUNNER_TEMP}" \
+            recurdream-update-agent
 
       - name: Configure SSH
         shell: bash
@@ -177,6 +204,9 @@ jobs:
             REMOTE_ARCHIVE="${{ steps.meta.outputs.remote_archive }}" \
             REMOTE_RUNTIME_BUNDLE="${{ steps.meta.outputs.remote_runtime_bundle }}" \
             IMAGE_TAG="${{ steps.meta.outputs.image_tag }}" \
+            DEPLOY_VERSION="${{ steps.meta.outputs.version }}" \
+            SERVER_USER="$SERVER_USER" \
+            UPDATE_AGENT_IMAGE_INPUT="$UPDATE_AGENT_IMAGE_INPUT" \
             KEEP_OLD_INPUT="$KEEP_OLD_INPUT" \
             DRAIN_SECONDS_INPUT="$DRAIN_SECONDS_INPUT" \
             CLEANUP_ARCHIVE="$CLEANUP_ARCHIVE" \
@@ -206,6 +236,8 @@ jobs:
           install -m 0644 "$tmp_dir/nginx-sub2api.conf.template" "$DEPLOY_PATH/nginx-sub2api.conf.template"
           install -m 0644 "$tmp_dir/README.md" "$DEPLOY_PATH/README.md"
           install -m 0644 "$tmp_dir/HOT_DEPLOY_CN.md" "$DEPLOY_PATH/HOT_DEPLOY_CN.md"
+          install -m 0644 "$tmp_dir/update-agent.service" "$DEPLOY_PATH/update-agent.service"
+          install -m 0755 "$tmp_dir/install-update-agent.sh" "$DEPLOY_PATH/install-update-agent.sh"
           if [ ! -f "$DEPLOY_PATH/.env.example" ]; then
             install -m 0644 "$tmp_dir/.env.example" "$DEPLOY_PATH/.env.example"
           fi
@@ -216,12 +248,40 @@ jobs:
             exit 1
           fi
 
+          socket_gid="$(id -g "$SERVER_USER")"
+          if grep -q '^UPDATE_AGENT_SOCKET=' .env; then
+            socket_path="$(sed -n 's/^UPDATE_AGENT_SOCKET=//p' .env | head -n 1)"
+          else
+            socket_path="/run/recurdream/update-agent.sock"
+            printf '\nUPDATE_AGENT_SOCKET=%s\n' "$socket_path" >> .env
+          fi
+          if grep -q '^UPDATE_AGENT_SOCKET_GID=' .env; then
+            sed -i "s|^UPDATE_AGENT_SOCKET_GID=.*|UPDATE_AGENT_SOCKET_GID=$socket_gid|" .env
+          else
+            printf 'UPDATE_AGENT_SOCKET_GID=%s\n' "$socket_gid" >> .env
+          fi
+
+          UPDATE_AGENT_USER="$SERVER_USER" \
+          UPDATE_AGENT_DEPLOY_PATH="$DEPLOY_PATH" \
+          UPDATE_AGENT_SOCKET="$socket_path" \
+          UPDATE_AGENT_IMAGE="$UPDATE_AGENT_IMAGE_INPUT" \
+          UPDATE_AGENT_INITIAL_VERSION="${DEPLOY_VERSION#v}" \
+          UPDATE_AGENT_DRAIN_SECONDS=300 \
+            bash "$tmp_dir/install-update-agent.sh" \
+              "$tmp_dir/recurdream-update-agent" \
+              "$tmp_dir/update-agent.service"
+
           deploy_args=(--load-image "$REMOTE_ARCHIVE" --image "$IMAGE_TAG")
           if [ "$KEEP_OLD_INPUT" = "true" ]; then
             deploy_args+=(--keep-old)
           fi
 
           DRAIN_SECONDS="$DRAIN_SECONDS_INPUT" bash hot-deploy.sh "${deploy_args[@]}"
+
+          version_file="$DEPLOY_PATH/.update-agent/current-version"
+          mkdir -p "$(dirname "$version_file")"
+          printf '%s\n' "${DEPLOY_VERSION#v}" > "$version_file"
+          chmod 0600 "$version_file"
 
           docker compose -f docker-compose.hot.yml --profile blue --profile green ps
 

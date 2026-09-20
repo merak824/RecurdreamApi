@@ -41,8 +41,11 @@ export async function checkUpdates(force = false): Promise<VersionInfo> {
 }
 
 export interface UpdateResult {
-  message: string
+  message?: string
   need_restart: boolean
+  operation_id?: string
+  status?: 'queued' | 'running' | 'succeeded' | 'failed'
+  version?: string
 }
 
 export interface RollbackVersionInfo {
@@ -81,6 +84,17 @@ export async function performUpdate(): Promise<UpdateResult> {
 }
 
 /**
+ * Get the current state of a Docker host-agent update operation.
+ */
+export async function getUpdateStatus(operationId: string): Promise<UpdateResult> {
+  const { data } = await apiClient.get<UpdateResult>(
+    `/admin/system/update/${encodeURIComponent(operationId)}`,
+    { timeout: 15 * 1000 }
+  )
+  return data
+}
+
+/**
  * Rollback to a previous version
  * @param version - Target version (e.g. "0.1.146"); omit to restore the local backup binary
  */
@@ -105,6 +119,7 @@ export const systemAPI = {
   getVersion,
   checkUpdates,
   performUpdate,
+  getUpdateStatus,
   getRollbackVersions,
   rollback,
   restartService

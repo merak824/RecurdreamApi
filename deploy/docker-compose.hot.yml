@@ -15,6 +15,9 @@ x-sub2api-app: &sub2api-app
       hard: 100000
   volumes:
     - ./data:/app/data
+    - ${UPDATE_AGENT_SOCKET:-/run/recurdream/update-agent.sock}:/run/recurdream/update-agent.sock
+  group_add:
+    - "${UPDATE_AGENT_SOCKET_GID:-0}"
   env_file:
     - .env
   environment:
@@ -62,6 +65,7 @@ x-sub2api-app: &sub2api-app
     - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
     - SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS=${SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS:-}
     - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
+    - UPDATE_AGENT_SOCKET=/run/recurdream/update-agent.sock
     - GATEWAY_IMAGE_STREAM_DATA_INTERVAL_TIMEOUT=${GATEWAY_IMAGE_STREAM_DATA_INTERVAL_TIMEOUT:-900}
     - GATEWAY_IMAGE_STREAM_KEEPALIVE_INTERVAL=${GATEWAY_IMAGE_STREAM_KEEPALIVE_INTERVAL:-10}
     - GATEWAY_IMAGE_CONCURRENCY_ENABLED=${GATEWAY_IMAGE_CONCURRENCY_ENABLED:-false}

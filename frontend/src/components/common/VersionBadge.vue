@@ -643,11 +643,13 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   performUpdate,
+  getUpdateStatus,
   restartService,
   getRollbackVersions,
   rollback as rollbackAPI,
   type RollbackVersionInfo
 } from '@/api/admin/system'
+import { pollUpdateStatus } from '@/utils/updatePolling'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -759,12 +761,23 @@ async function handleUpdate() {
   updateSuccess.value = false
 
   try {
-    const result = await performUpdate()
+    const accepted = await performUpdate()
+    const result = accepted.operation_id
+      ? await pollUpdateStatus(accepted.operation_id, { getStatus: getUpdateStatus })
+      : accepted
+
+    if (result.status === 'failed') {
+      throw new Error(result.message || t('version.updateFailed'))
+    }
+
     successKind.value = 'update'
     updateSuccess.value = true
-    needRestart.value = result.need_restart
+    needRestart.value = result.need_restart || false
     // Clear version cache to reflect update completed
     appStore.clearVersionCache()
+    if (accepted.operation_id) {
+      await appStore.fetchVersion(true)
+    }
   } catch (error: unknown) {
     const err = error as { response?: { data?: { message?: string } }; message?: string }
     updateError.value = err.response?.data?.message || err.message || t('version.updateFailed')

@@ -12,7 +12,13 @@ vi.mock('../client', () => ({
   },
 }))
 
-import { getRollbackVersions, rollback, type RollbackVersionInfo } from '@/api/admin/system'
+import {
+  getRollbackVersions,
+  getUpdateStatus,
+  performUpdate,
+  rollback,
+  type RollbackVersionInfo
+} from '@/api/admin/system'
 
 describe('admin system rollback API', () => {
   beforeEach(() => {
@@ -59,5 +65,44 @@ describe('admin system rollback API', () => {
       undefined,
       { timeout: 15 * 60 * 1000 }
     )
+  })
+
+  it('performUpdate accepts an asynchronous Docker operation', async () => {
+    post.mockResolvedValue({
+      data: {
+        operation_id: 'update-abc',
+        status: 'queued',
+        version: '0.2.5',
+        message: 'update accepted',
+        need_restart: false
+      }
+    })
+
+    const result = await performUpdate()
+
+    expect(post).toHaveBeenCalledWith('/admin/system/update', undefined, {
+      timeout: 15 * 60 * 1000
+    })
+    expect(result.operation_id).toBe('update-abc')
+    expect(result.status).toBe('queued')
+  })
+
+  it('getUpdateStatus fetches the host-agent operation state', async () => {
+    get.mockResolvedValue({
+      data: {
+        operation_id: 'update-abc',
+        status: 'succeeded',
+        version: '0.2.5',
+        message: 'deployment completed',
+        need_restart: false
+      }
+    })
+
+    const result = await getUpdateStatus('update-abc')
+
+    expect(get).toHaveBeenCalledWith('/admin/system/update/update-abc', {
+      timeout: 15 * 1000
+    })
+    expect(result.status).toBe('succeeded')
   })
 })

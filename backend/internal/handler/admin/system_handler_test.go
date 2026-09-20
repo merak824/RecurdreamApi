@@ -36,6 +36,22 @@ type systemHandlerUpdateServiceStub struct {
 	rollbackVersionsCall  int
 }
 
+type asyncSystemHandlerUpdateServiceStub struct {
+	systemHandlerUpdateServiceStub
+	startResult  *service.UpdateExecution
+	startErr     error
+	statusResult *service.UpdateExecution
+	statusErr    error
+}
+
+func (s *asyncSystemHandlerUpdateServiceStub) StartUpdate(context.Context) (*service.UpdateExecution, error) {
+	return s.startResult, s.startErr
+}
+
+func (s *asyncSystemHandlerUpdateServiceStub) GetUpdateStatus(context.Context, string) (*service.UpdateExecution, error) {
+	return s.statusResult, s.statusErr
+}
+
 func (s *systemHandlerUpdateServiceStub) CheckUpdate(_ context.Context, force bool) (*service.UpdateInfo, error) {
 	s.checkForces = append(s.checkForces, force)
 	return s.updateInfo, s.checkErr
@@ -75,6 +91,9 @@ type systemUpdateResponseEnvelope struct {
 		CurrentVersion  string `json:"current_version"`
 		LatestVersion   string `json:"latest_version"`
 		OperationID     string `json:"operation_id"`
+		Status          string `json:"status"`
+		Version         string `json:"version"`
+		NeedRestart     bool   `json:"need_restart"`
 	} `json:"data"`
 }
 
@@ -83,7 +102,7 @@ type systemUpdateErrorEnvelope struct {
 	Message string `json:"message"`
 }
 
-func newSystemHandlerTestRouter(t *testing.T, updateSvc *systemHandlerUpdateServiceStub, repo *memoryIdempotencyRepoStub) *gin.Engine {
+func newSystemHandlerTestRouter(t *testing.T, updateSvc systemUpdateService, repo *memoryIdempotencyRepoStub) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	service.SetDefaultIdempotencyCoordinator(nil)
@@ -99,9 +118,59 @@ func newSystemHandlerTestRouter(t *testing.T, updateSvc *systemHandlerUpdateServ
 
 	router := gin.New()
 	router.POST("/api/v1/admin/system/update", handler.PerformUpdate)
+	router.GET("/api/v1/admin/system/update/:operation_id", handler.GetUpdateStatus)
 	router.POST("/api/v1/admin/system/rollback", handler.Rollback)
 	router.GET("/api/v1/admin/system/rollback-versions", handler.GetRollbackVersions)
 	return router
+}
+
+func TestSystemHandlerStartsAgentBackedUpdate(t *testing.T) {
+	updateSvc := &asyncSystemHandlerUpdateServiceStub{
+		startResult: &service.UpdateExecution{
+			OperationID: "update-1",
+			Version:     "0.2.5",
+			Status:      "queued",
+			Message:     "update accepted",
+		},
+	}
+	repo := newMemoryIdempotencyRepoStub()
+	router := newSystemHandlerTestRouter(t, updateSvc, repo)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/system/update", nil)
+	req.Header.Set("Idempotency-Key", "agent-update")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body systemUpdateResponseEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "update-1", body.Data.OperationID)
+	require.Equal(t, "queued", body.Data.Status)
+	require.Equal(t, "0.2.5", body.Data.Version)
+	require.False(t, body.Data.NeedRestart)
+}
+
+func TestSystemHandlerReturnsAgentUpdateStatus(t *testing.T) {
+	updateSvc := &asyncSystemHandlerUpdateServiceStub{
+		statusResult: &service.UpdateExecution{
+			OperationID: "update-1",
+			Version:     "0.2.5",
+			Status:      "succeeded",
+		},
+	}
+	repo := newMemoryIdempotencyRepoStub()
+	router := newSystemHandlerTestRouter(t, updateSvc, repo)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/system/update/update-1", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var body struct {
+		Data service.UpdateExecution `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "succeeded", body.Data.Status)
 }
 
 func requireSystemLockStatus(t *testing.T, repo *memoryIdempotencyRepoStub, wantStatus string) {

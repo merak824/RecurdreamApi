@@ -3,8 +3,12 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,6 +35,23 @@ type updateServiceGitHubClientStub struct {
 	release        *GitHubRelease
 	recentReleases []*GitHubRelease
 	recentErr      error
+}
+
+type updateServiceContainerClientStub struct {
+	startedVersion string
+	startResult    *UpdateExecution
+	startErr       error
+	statusResult   *UpdateExecution
+	statusErr      error
+}
+
+func (s *updateServiceContainerClientStub) Start(_ context.Context, version string) (*UpdateExecution, error) {
+	s.startedVersion = version
+	return s.startResult, s.startErr
+}
+
+func (s *updateServiceContainerClientStub) Status(context.Context, string) (*UpdateExecution, error) {
+	return s.statusResult, s.statusErr
 }
 
 func (s *updateServiceGitHubClientStub) FetchLatestRelease(context.Context, string) (*GitHubRelease, error) {
@@ -67,6 +88,107 @@ func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrNoUpdateAvailable))
 	require.ErrorIs(t, err, ErrNoUpdateAvailable)
+}
+
+func TestUpdateServiceRejectsContainerizedInPlaceUpdates(t *testing.T) {
+	previousDetector := containerizedRuntimeDetector
+	containerizedRuntimeDetector = func() bool { return true }
+	t.Cleanup(func() { containerizedRuntimeDetector = previousDetector })
+
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{
+			release: &GitHubRelease{TagName: "v0.2.5"},
+		},
+		"0.1.177",
+		"release",
+	)
+
+	err := svc.PerformUpdate(context.Background())
+
+	require.ErrorIs(t, err, ErrContainerUpdateUnsupported)
+	require.Contains(t, err.Error(), "容器化部署")
+}
+
+func TestUpdateServiceStartsContainerUpdateThroughAgent(t *testing.T) {
+	previousDetector := containerizedRuntimeDetector
+	containerizedRuntimeDetector = func() bool { return true }
+	t.Cleanup(func() { containerizedRuntimeDetector = previousDetector })
+	agent := &updateServiceContainerClientStub{
+		startResult: &UpdateExecution{OperationID: "update-1", Version: "0.2.5", Status: "queued"},
+	}
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{release: &GitHubRelease{TagName: "v0.2.5"}},
+		"0.1.177",
+		"release",
+	)
+	svc.containerUpdateClient = agent
+
+	execution, err := svc.StartUpdate(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, "0.2.5", agent.startedVersion)
+	require.Equal(t, "update-1", execution.OperationID)
+	require.False(t, execution.NeedRestart)
+}
+
+func TestUpdateServiceReturnsAgentUnavailableInContainer(t *testing.T) {
+	previousDetector := containerizedRuntimeDetector
+	containerizedRuntimeDetector = func() bool { return true }
+	t.Cleanup(func() { containerizedRuntimeDetector = previousDetector })
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{release: &GitHubRelease{TagName: "v0.2.5"}},
+		"0.1.177",
+		"release",
+	)
+
+	_, err := svc.StartUpdate(context.Background())
+
+	require.ErrorIs(t, err, ErrContainerUpdateAgentUnavailable)
+}
+
+func TestUpdateServiceProxiesContainerUpdateStatus(t *testing.T) {
+	previousDetector := containerizedRuntimeDetector
+	containerizedRuntimeDetector = func() bool { return true }
+	t.Cleanup(func() { containerizedRuntimeDetector = previousDetector })
+	svc := NewUpdateService(
+		&updateServiceCacheStub{},
+		&updateServiceGitHubClientStub{},
+		"0.1.177",
+		"release",
+	)
+	svc.containerUpdateClient = &updateServiceContainerClientStub{
+		statusResult: &UpdateExecution{OperationID: "update-1", Version: "0.2.5", Status: "succeeded"},
+	}
+
+	execution, err := svc.GetUpdateStatus(context.Background(), "update-1")
+
+	require.NoError(t, err)
+	require.Equal(t, "succeeded", execution.Status)
+}
+
+func TestUpdateServiceExtractBinarySupportsWindowsZip(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "sub2api_0.2.5_windows_amd64.zip")
+	destPath := filepath.Join(t.TempDir(), "sub2api")
+
+	archiveFile, err := os.Create(archivePath)
+	require.NoError(t, err)
+	zipWriter := zip.NewWriter(archiveFile)
+	entry, err := zipWriter.Create("release/sub2api.exe")
+	require.NoError(t, err)
+	_, err = io.WriteString(entry, "windows-binary")
+	require.NoError(t, err)
+	require.NoError(t, zipWriter.Close())
+	require.NoError(t, archiveFile.Close())
+
+	svc := &UpdateService{}
+	require.NoError(t, svc.extractBinary(archivePath, destPath))
+
+	contents, err := os.ReadFile(destPath)
+	require.NoError(t, err)
+	require.Equal(t, "windows-binary", string(contents))
 }
 
 func newRollbackTestService(current string, releases []*GitHubRelease) *UpdateService {

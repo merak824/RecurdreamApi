@@ -65,6 +65,37 @@ cd deploy
 SUB2API_IMAGE=ghcr.io/merak824/recurdreamapi:latest bash hot-deploy.sh
 ```
 
+## 后台“立即更新”（Docker）
+
+Docker 部署要先在宿主机安装更新代理，后台按钮才会执行真正的镜像升级。代理运行在宿主机上，只通过 Unix Socket 接收版本号，不会把 Docker Socket 暴露给应用容器。
+
+首次安装或手动刷新代理：
+
+```bash
+cd /data/sub2api
+sudo UPDATE_AGENT_DEPLOY_PATH=/data/sub2api/deploy \
+  UPDATE_AGENT_IMAGE=ghcr.io/merak824/recurdreamapi \
+  UPDATE_AGENT_DRAIN_SECONDS=300 \
+  bash install-update-agent.sh \
+    /tmp/recurdream-update-agent \
+    /tmp/update-agent.service
+```
+
+安装脚本会创建 `/etc/recurdream/update-agent.env`，并启用
+`recurdream-update-agent.service`。Compose 中的 `UPDATE_AGENT_SOCKET_GID`
+必须等于 Socket 所属用户的组 ID；代理以 root 运行时保持默认值 `0` 即可。
+代理固定使用 `DRAIN_SECONDS=300`、`KEEP_OLD=false`，新槽位健康并切流后会排空并停止旧槽位。
+
+更新代理的日志和当前版本状态：
+
+```bash
+sudo journalctl -u recurdream-update-agent -f
+sudo ls -l /var/log/recurdream-update-agent/
+cat /data/sub2api/.update-agent/current-version
+```
+
+安装代理后，进入管理员后台的版本菜单点击“立即更新”即可。页面会等待新槽位健康、切流和旧槽位排空；切换期间的短暂连接失败会自动重试。
+
 如果镜像只在本机存在，不需要 pull：
 
 ```bash
