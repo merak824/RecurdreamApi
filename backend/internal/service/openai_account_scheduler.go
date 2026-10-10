@@ -652,7 +652,7 @@ func (s *defaultOpenAIAccountScheduler) selectBySessionHash(
 	outcome := openAIStickyEscapeOutcome{TTFTEvaluated: ttftEvaluated, TTFT: ttftEvaluation}
 	result, acquireErr := s.service.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 	if acquireErr != nil && req.DisableStickyEscape {
-		return nil, false, acquireErr
+		return nil, outcome, acquireErr
 	}
 	if acquireErr == nil && result != nil && result.Acquired {
 		if !req.PreserveStickyBinding {
