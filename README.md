@@ -1,18 +1,30 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.11`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.15`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.2.11`
+- 当前版本：`v0.2.15`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.2.11](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.11)
-- Recurdream 定制基线：`v0.2.11`
+- 上游最新同步版本：[v0.2.15](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.15)
+- Recurdream 定制基线：`v0.2.15` + 本地业务定制
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.2.15
+
+- 同步上游 Sub2API `v0.2.15`，保留 Recurdream 的红包活动、邀请返利与提现、余额明细、分组利润控制、上游倍率探测、OpenAI TTFT 优化、中文品牌页面、备份脚本及 Docker Compose blue/green 热部署能力。
+- 新增 Cline 和 Command Code 平台支持；平台列表、账号表单、模型目录、默认端点、协议分流和上游探测统一改为基于平台清单与 provider profile，减少多协议平台的重复判断。
+- 新增 TypeSafe/SystemOne 兼容网关和账号能力，并补充协议路由基准、模型列表、工具调用、开发者消息、思考签名、拒答转换和 WebSocket 图片用量等兼容测试。
+- 新增充值优惠阶梯：支持赠金模式和折扣模式，可配置优惠比例、支付币种倍率、到账金额和折后实付金额；新增支付订单赠金字段及数据库迁移 `241`，余额返利按实际充值金额计算，不把赠送额度计入返利基数。
+- 用量页面新增输出 TPS 展示，保留本地 OpenAI 首 Token/上游首字及调度诊断；修复零倍率、分数 Token 速率和用量展示边界。
+- 优化 Claude 计费、钱包冷却和模型目录缓存；按平台能力展示模型同步入口，并完善 OpenCode Zen 路由、不支持模型处理和用量刷新重试。
+- 完善 OpenAI Responses 的上游协议分流、Anthropic 转换、工具选择、developer 消息、旧版 function call、thinking signature 和 web_search 历史回放；修复 web_search 在 Responses Lite 和 OAuth 历史重放中的能力声明。
+- 增强支付通知安全、公开支付接口限流、邮箱缓存原子性、备份轮询、弹窗 Escape、插件会话、验证码/合规重置和多处前端异步清理，降低并发竞态和重复提交风险。
+- 新增平台清单应用层校验，数据库迁移 `242` 移除旧平台约束，并升级 Go/网络依赖和安全扫描工具以适配 Go `1.27.2`。
 
 ### v0.2.11
 
@@ -233,6 +245,22 @@
 ```bash
 cd deploy
 cp .env.example .env
+chmod 600 .env
+
+# 3. 编辑配置（请使用安全密码和密钥）
+nano .env
+
+# 必填配置
+POSTGRES_PASSWORD=your_secure_password_here
+# JWT 密钥（建议设置，重启后保持登录状态）
+JWT_SECRET=your_jwt_secret_here
+# TOTP 加密密钥（建议设置，保持双因素认证）
+TOTP_ENCRYPTION_KEY=your_totp_key_here
+# 可选：管理员账号；留空则首次启动时自动生成并写入日志
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+# 可选：服务端口
+SERVER_PORT=8080
 ```
 
 修改 `.env` 中的数据库密码、JWT 密钥、管理员账号等配置后启动：
@@ -246,6 +274,12 @@ docker compose up -d
 ```bash
 cd deploy
 bash hot-deploy.sh --build
+```
+
+如果管理员邮箱或密码使用了自动生成值，可从首次启动日志中查看：
+
+```bash
+docker compose -f docker-compose.local.yml logs sub2api | grep "Generated admin"
 ```
 
 低内存服务器建议在本地或 CI 构建镜像，再上传到服务器热部署。
@@ -660,6 +694,31 @@ xAI quota is passive. Sub2API does not invent subscription quota values; it reco
 New Grok image and video generation requests use a media-specific eligibility check. API-key accounts remain eligible. OAuth accounts with explicit Free or forbidden billing evidence are excluded from new media generation. Missing or malformed observations are probed before dispatch; a successful but incomplete billing response is treated as `billing_inconclusive` and remains eligible for backwards compatibility, because an unknown billing schema is not proof that the account lacks media entitlement. Operators can quarantine a known-bad account with `extra.grok_media_eligible=false` or force-enable a verified account with `true`. Imports run the billing-first quota probe proactively. Chat requests and video status lookups are not affected by this media-only quarantine. If no eligible account remains, the media endpoint returns HTTP `503` with error type `grok_media_no_eligible_account`.
 
 Administrators can override automatic media eligibility through the account create/update API by setting `extra.grok_media_eligible` to `false` (exclude) or `true` (force eligible). On update, set it to `null` to remove the override and return to automatic probe-based behavior; omitting the field preserves the current override. A weekly allowance period alone is not treated as a paid tier signal. Successful image responses must contain at least one actual image output; empty HTTP `200` responses trigger account failover instead of being counted and returned as successful generations.
+
+---
+
+## TypeSafe / Jev Support
+
+Sub2API supports TypeSafe API-key accounts through Jev's native, non-streaming System One protocol.
+
+- Platform: `typesafe`; account type: API Key
+- Default upstream: `https://api.typesafe.ai`
+- Public endpoint: `POST /v1/systemone`
+- Model: `jev-latest`, also returned by `/v1/models` for TypeSafe groups
+- Questions: `noul`, `choice`, and `score`
+
+Requests and successful responses retain the native System One JSON structure. This endpoint is not compatible with Chat Completions, Responses, Anthropic Messages, or streaming clients.
+
+Question validation follows the TypeSafe OpenAPI wire schema (also used by SDK v0.5.7). `instructions` may be omitted or `null` for all question types. Noul `criteria` may be omitted or `null`; its `true`/`false` descriptions and Choice descriptions accept strings, objects, arrays, or `null`. Score `criteria` must be a non-empty array of string, object, or array descriptions; a single level is valid. SDK integer-keyed Score maps are normalized to arrays by the SDK before sending.
+
+```bash
+curl https://your-sub2api.example.com/v1/systemone \
+  -H 'Authorization: Bearer sk-your-sub2api-key' \
+  -H 'Content-Type: application/json' \
+  --data '{"model":"jev-latest","state":"Text to evaluate","questions":{"safety":{"type":"noul","instructions":"Evaluate whether the text is unsafe"}}}'
+```
+
+The built-in `jev-latest` price is `$0.042` per million input tokens and `$0` for output tokens. Channel pricing can override both values. Credential, billing, permission, rate-limit, overload, server, and network failures (`401`, `402`, `403`, `429`, `529`, `5xx`, transport errors) use the existing account error policy (including custom error codes and temporary-unschedulable rules) and fail over to another account; request errors (`400`, `413`, and `422`) are returned without retrying another account and never change account state. TypeSafe groups (and Composite requests routed to TypeSafe) reject Messages, Chat Completions, Responses, and count_tokens requests with `404`.
 
 ---
 
