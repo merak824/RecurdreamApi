@@ -294,6 +294,53 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('$0.069568')
   })
 
+  it.each(['token', 'image', 'per_request'])('keeps eight decimal places in %s cost details', async (billingMode) => {
+    const row = {
+      ...baseImageRow,
+      billing_mode: billingMode,
+      image_count: billingMode === 'image' ? 2 : 0,
+      input_cost: 0.00000001,
+      image_input_cost: 0.00000002,
+      output_cost: 0.00000003,
+      image_output_cost: 0.00000004,
+      cache_creation_cost: 0.00000005,
+      cache_read_cost: 0.00000006,
+      total_cost: 0.00000022,
+      actual_cost: 0.00000042,
+      account_stats_cost: 0.00000012,
+      account_rate_multiplier: 1.5,
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    const triggers = wrapper.findAll('.group.relative')
+    await triggers[triggers.length - 1].trigger('mouseenter')
+    const amounts = wrapper.get('.fixed').findAll('span').map(span => span.text())
+    expect(amounts).toEqual(expect.arrayContaining([
+      '$0.00000001', '$0.00000002', '$0.00000003', '$0.00000004',
+      '$0.00000005', '$0.00000006', '$0.00000022', '$0.00000042', '$0.00000018',
+    ]))
+    if (billingMode === 'image') expect(amounts).toContain('$0.00000011')
+    wrapper.unmount()
+  })
+
+  it('uses eight decimal places for missing cost values', async () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ ...baseImageRow, billing_mode: 'per_request', image_count: 0, total_cost: undefined, actual_cost: undefined }],
+        loading: false,
+        columns: [],
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    const triggers = wrapper.findAll('.group.relative')
+    await triggers[triggers.length - 1].trigger('mouseenter')
+    const amounts = wrapper.get('.fixed').findAll('span').map(span => span.text()).filter(text => text.startsWith('$'))
+    expect(amounts).toEqual(['$0.00000000', '$0.00000000', '$0.00000000', '$0.00000000'])
+    wrapper.unmount()
+  })
+
   it('shows requested and upstream models separately for admin rows', () => {
     const row = {
       request_id: 'req-admin-model-1',
@@ -423,6 +470,9 @@ describe('admin UsageTable tooltip', () => {
         </div>
       `,
     }
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{
           request_id: 'req-openai-ttft-diagnostics',
           first_token_ms: 9200,
           upstream_first_token_ms: 8600,
@@ -444,8 +494,19 @@ describe('admin UsageTable tooltip', () => {
             debounce_kept: false,
             sticky_escape_reason: 'ttft_p90',
           },
+        }],
+        loading: false,
         columns: [{ key: 'latency', label: 'Latency' }],
+      },
+      global: {
+        stubs: {
           DataTable: DataTableStubWithLatency,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
     const diagnostics = wrapper.get('[data-testid="openai-ttft-diagnostics"]')
     const title = diagnostics.attributes('title')
     expect(title).toContain('First-token scheduling diagnostics')
@@ -457,6 +518,7 @@ describe('admin UsageTable tooltip', () => {
     expect(title).toContain('P90 thresholds: 10.00s → 20.00s')
     expect(title).toContain('Decision: switched account')
     expect(title).toContain('Reason: historical P90 exceeded threshold')
+  })
 	it.each([
 		{
 			name: 'possible version variant',

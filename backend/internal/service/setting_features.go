@@ -103,6 +103,23 @@ func (s *SettingService) GetAffiliateRebateRatePercent(ctx context.Context) floa
 	return clampAffiliateRebateRate(rate)
 }
 
+// GetAffiliateRebateFreezeHours returns the configured affiliate rebate freeze
+// period. Invalid or missing values use the backward-compatible zero default.
+func (s *SettingService) GetAffiliateRebateFreezeHours(ctx context.Context) int {
+	if s == nil || s.settingRepo == nil {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateFreezeHours)
+	if err != nil {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	hours, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || hours < 0 || hours > AffiliateRebateFreezeHoursMax {
+		return AffiliateRebateFreezeHoursDefault
+	}
+	return hours
+}
+
 // IsPasswordResetEnabled 检查是否启用密码重置功能
 // 要求：必须同时开启邮件验证
 func (s *SettingService) IsPasswordResetEnabled(ctx context.Context) bool {
@@ -959,6 +976,7 @@ func (s *SettingService) SetOpenAIFastPolicySettings(ctx context.Context, settin
 	}
 	validTiers := map[string]bool{
 		OpenAIFastTierAny: true, OpenAIFastTierPriority: true, OpenAIFastTierUltrafast: true, OpenAIFastTierFlex: true,
+		OpenAIFastTierMissing: true,
 	}
 
 	for i, rule := range settings.Rules {

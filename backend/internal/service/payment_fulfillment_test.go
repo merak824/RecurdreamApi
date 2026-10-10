@@ -125,7 +125,7 @@ func (r *paymentFulfillmentAffiliateRepoStub) BindInviter(context.Context, int64
 	panic("unexpected BindInviter call")
 }
 
-func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, sourceOrderID *int64) (bool, error) {
+func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int, sourceOrderID *int64) (bool, error) {
 	var sourceCopy *int64
 	if sourceOrderID != nil {
 		v := *sourceOrderID
@@ -143,6 +143,10 @@ func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inv
 func (r *paymentFulfillmentAffiliateRepoStub) TransferQuotaToBalance(_ context.Context, _ int64, amount float64) (float64, float64, error) {
 	r.transferAmount = amount
 	return amount, 100 + amount, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) WithdrawQuota(context.Context, int64, float64, string) (*AffiliateWithdrawResult, error) {
+	panic("unexpected WithdrawQuota call")
 }
 
 func (r *paymentFulfillmentAffiliateRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {

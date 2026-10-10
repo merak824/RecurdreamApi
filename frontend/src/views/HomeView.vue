@@ -131,6 +131,15 @@
           {{ channelStatusSummary.label }}
         </span>
         <router-link
+          v-if="showModelPlazaEntry"
+          to="/model-plaza"
+          class="nav-utility-link"
+          :title="t('nav.modelPlaza')"
+        >
+          <Icon name="grid" size="md" />
+          <span>{{ t('nav.modelPlaza') }}</span>
+        </router-link>
+        <router-link
           class="nav-cta"
           :to="isAuthenticated ? dashboardPath : '/login'"
           @pointerenter="prefetchLoginPage"
