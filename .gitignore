@@ -145,6 +145,9 @@ docs/*
 !docs/codex-credits.md
 !docs/legal/
 !docs/legal/*.md
+# 本地设计/实施文档（superpowers 工作流产出），随代码一起入库
+!docs/superpowers/
+!docs/superpowers/**
 !docs/screenshots/
 docs/screenshots/*
 !docs/screenshots/mobile-account-actions-menu.png
