@@ -140,6 +140,16 @@ func (r *paymentFulfillmentAffiliateRepoStub) AccrueQuota(_ context.Context, inv
 	return true, nil
 }
 
+// GetAccruedRebateFromInvitee 默认视为该邀请人尚未给该被邀请人返利，
+// 需要模拟"已返利"场景的用例可以在 field 上扩展。
+func (r *paymentFulfillmentAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	return 0, nil
+}
+
+func (r *paymentFulfillmentAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	return 0, nil
+}
+
 func (r *paymentFulfillmentAffiliateRepoStub) TransferQuotaToBalance(_ context.Context, _ int64, amount float64) (float64, float64, error) {
 	r.transferAmount = amount
 	return amount, 100 + amount, nil
@@ -854,7 +864,7 @@ func TestExecuteBalanceFulfillmentBypassesUserRedeemRateLimit(t *testing.T) {
 		return nil
 	}
 	cache := &paymentFulfillmentRedeemCacheStub{count: redeemMaxFailedAttempts}
-	redeemService := NewRedeemService(redeemRepo, userRepo, nil, cache, nil, client, nil, nil)
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, cache, nil, client, nil)
 	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
 
 	require.NoError(t, svc.ExecuteBalanceFulfillment(ctx, order.ID))

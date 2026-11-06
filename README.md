@@ -1,18 +1,29 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.15`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.19`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.2.15`
+- 当前版本：`v0.2.19`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.2.15](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.15)
-- Recurdream 定制基线：`v0.2.15` + 本地业务定制
+- 上游最新同步版本：[v0.2.19](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.19)
+- Recurdream 定制基线：`v0.2.19` + 本地业务定制
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.2.19
+
+- 同步上游 Sub2API `v0.2.19`（`v0.2.15` → `v0.2.19`，共 157 个提交），完整保留 Recurdream 的本地定制：红包活动、邀请返利与提现、余额明细、分组利润控制、上游倍率探测、OpenAI 首字（TTFT）优化、中文品牌页面、备份脚本、Docker Compose blue/green 热部署以及主机侧更新代理。
+- 新增 GPT-6.1 Terra、Claude Haiku 5.5、Gemini 4 Argon 等模型与计费支持，补齐上游模型目录与价格，Gemini 默认模型列表移除已停用的 2.x 系列。
+- 支持显式上下文缓存（AI Studio / Vertex / 自建网关上游），内置官方缓存存储价并按 Pro / Flash 系列兜底；池模式下按配置的同账号重试次数（`gateway.max_same_account_retries_gemini`）重试。
+- Vertex 账号支持配额上限、API Key 认证与上游模型列表同步；兼容 AI Studio `AQ.` 格式密钥。
+- 图片计费按上游实际返回张数统计，多图请求支持逐张计费，并按端点与定价模式开关控制。
+- 分组名称与描述支持多语言；临时不可调度规则新增作用域 `scope` 选项；请求详情表展示账号名称。
+- 修复模型目录同步（singleflight 并发冷启动复查缓存、同账号刷新阻塞、目录诊断与快照原子保存）、DeepSeek `prompt_cache_hit_tokens` 缓存计费、OpenCode 转发 DeepSeek 角色兼容、管理员保护规则返回 500、超大图片上传被截断、分页 offset 溢出等问题。
+- 依赖与基线：Go 工具链对齐 `1.27.3`，`golang.org/x/net` 升级到 `v0.62.0`（GO-2026-6860），`dompurify` 升级到 `3.4.17`。
 
 ### v0.2.15
 
