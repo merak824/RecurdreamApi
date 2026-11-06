@@ -214,7 +214,7 @@ func (a *Agent) execute(operationID string) {
 	operation := cloneOperation(a.operations[operationID])
 	a.mu.Unlock()
 
-	var logWriter io.Writer = io.Discard
+	var logWriter = io.Discard
 	var logFile *os.File
 	if a.cfg.LogDir != "" {
 		if err := os.MkdirAll(a.cfg.LogDir, 0o750); err == nil {

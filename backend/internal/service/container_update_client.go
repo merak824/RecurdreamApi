@@ -65,13 +65,6 @@ func NewContainerUpdateClientFromEnv() ContainerUpdateClient {
 	return client
 }
 
-func newContainerUpdateClientFromHTTP(socketPath string, httpClient *http.Client) (*containerUpdateClient, error) {
-	if strings.TrimSpace(socketPath) == "" || httpClient == nil {
-		return nil, ErrContainerUpdateAgentUnavailable
-	}
-	return &containerUpdateClient{baseURL: "http://update-agent", httpClient: httpClient}, nil
-}
-
 func (c *containerUpdateClient) Start(ctx context.Context, version string) (*UpdateExecution, error) {
 	body, err := json.Marshal(map[string]string{"version": version})
 	if err != nil {

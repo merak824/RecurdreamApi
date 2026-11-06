@@ -160,6 +160,7 @@
           </details>
         <!-- /Tab: Security — Admin API Key -->
 
+        </div>
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
           <!-- Overload Cooldown (529) Settings -->
@@ -6508,7 +6509,6 @@
               </label>
             </div>
           </div>
-        </div>
         </div>
         <!-- /Tab: Gateway — Claude Code, Scheduling -->
 
