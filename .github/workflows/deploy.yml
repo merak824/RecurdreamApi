@@ -33,6 +33,11 @@ on:
         required: true
         type: string
         default: "ghcr.io/merak824/recurdreamapi"
+  push:
+    branches:
+      - main
+    paths:
+      - '.deploy-trigger'
 
 concurrency:
   group: production-deploy
@@ -53,12 +58,12 @@ jobs:
       SERVER_PORT: ${{ secrets.SERVER_PORT || '22' }}
       SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
       SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
-      DEPLOY_PATH: ${{ inputs.deploy_path }}
-      KEEP_OLD_INPUT: ${{ inputs.keep_old }}
-      DRAIN_SECONDS_INPUT: ${{ inputs.drain_seconds }}
-      HEALTH_URL: ${{ inputs.health_url }}
-      CLEANUP_ARCHIVE: ${{ inputs.cleanup_archive }}
-      UPDATE_AGENT_IMAGE_INPUT: ${{ inputs.update_agent_image }}
+      DEPLOY_PATH: ${{ inputs.deploy_path || '/data/sub2api' }}
+      KEEP_OLD_INPUT: ${{ inputs.keep_old || 'false' }}
+      DRAIN_SECONDS_INPUT: ${{ inputs.drain_seconds || '300' }}
+      HEALTH_URL: ${{ inputs.health_url || 'https://api.recurdream.com/health' }}
+      CLEANUP_ARCHIVE: ${{ inputs.cleanup_archive || 'true' }}
+      UPDATE_AGENT_IMAGE_INPUT: ${{ inputs.update_agent_image || 'ghcr.io/merak824/recurdreamapi' }}
 
     steps:
       - name: Checkout
