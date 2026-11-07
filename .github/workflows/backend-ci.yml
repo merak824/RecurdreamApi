@@ -49,21 +49,34 @@ jobs:
         shell: bash
         run: |
           LOG="$RUNNER_TEMP/unit.log"
-          # 抓每个 --- FAIL 起 25 行，覆盖 testify 的 Error/expected/actual，限 40KB
-          # GitHub 的 bash 步骤默认 -eo pipefail，head 提前关闭管道会让 awk 收 SIGPIPE(141)，
-          # 必须吞掉退出码，否则上报步骤自己会先崩掉、注解根本发不出来。
-          ( awk '/--- FAIL/{c=25} c>0{print; c--}' "$LOG" | head -c 40000 > "$RUNNER_TEMP/brief.txt" ) || true
           {
             echo '### Unit test failure summary'
             echo '```'
-            grep -nE '^(FAIL|--- FAIL|# |panic:)' "$LOG" | head -60 || true
+            grep -E '^(FAIL|--- FAIL|# |panic:)' "$LOG" | head -60 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          BRIEF="$(cat "$RUNNER_TEMP/brief.txt")"
-          BRIEF="${BRIEF//'%'/'%25'}"
-          BRIEF="${BRIEF//$'\r'/}"
-          BRIEF="${BRIEF//$'\n'/'%0A'}"
-          echo "::error title=unit-test-failures::$BRIEF"
+          # 单条注解上限约 4096 字符，合并输出必然被截断；按 --- FAIL 切块，一块一条注解。
+          python3 - "$LOG" <<'PY' || true
+          import re, sys
+
+          text = open(sys.argv[1], errors='replace').read()
+          keep = re.compile(
+              r'(--- FAIL:|Error Trace:|Error:|expected:|actual|Messages:|Test:|_test\.go:\d+)'
+          )
+          n = 0
+          for chunk in re.split(r'\n(?=\s*--- FAIL:)', text):
+              if '--- FAIL:' not in chunk:
+                  continue
+              lines = [ln.strip() for ln in chunk.splitlines() if keep.search(ln)]
+              if not lines:
+                  continue
+              msg = '\n'.join(lines[:12])[:3400]
+              msg = msg.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              n += 1
+              print('::error title=unit-fail-%02d::%s' % (n, msg))
+              if n >= 15:
+                  break
+          PY
           exit 1
       - name: Integration tests
         working-directory: backend
