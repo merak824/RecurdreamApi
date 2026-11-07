@@ -33,11 +33,6 @@ on:
         required: true
         type: string
         default: "ghcr.io/merak824/recurdreamapi"
-  push:
-    branches:
-      - main
-    paths:
-      - '.deploy-trigger'
 
 concurrency:
   group: production-deploy
