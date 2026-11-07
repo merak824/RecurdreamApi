@@ -1298,9 +1298,15 @@ func openAIStreamDataStartsSemanticTTFT(data, eventType string) bool {
 	case "error":
 		payload := []byte(trimmed)
 		return !openAIStreamFailedEventShouldFailover(payload, extractOpenAISSEErrorMessage(payload))
-	case "response.output_item.added", "response.content_part.added", "response.content_part.done":
-		// 结构占位事件（例如 content: [] 的 item）不携带任何可见内容，不能算首 token，
-		// 否则这种空壳事件会把 TTFT 打成 0ms。是否算作首 token 交给内容判定。
+	case "response.output_item.added":
+		// 空壳 message item（content: []）只是结构占位，不算首 token；
+		// 但 reasoning item 一出现就代表模型开始产出，即使 summary 为空也算。
+		if strings.TrimSpace(gjson.Get(trimmed, "item.type").String()) == "reasoning" {
+			return true
+		}
+		return openAIStreamAddedEventStartsClientOutput([]byte(trimmed), eventType)
+	case "response.content_part.added", "response.content_part.done":
+		// 结构占位事件不携带可见内容时不能算首 token，否则空壳事件会把 TTFT 打成 0ms。
 		return openAIStreamAddedEventStartsClientOutput([]byte(trimmed), eventType)
 	default:
 		return !openAIStreamEventIsMetadata(eventType)
