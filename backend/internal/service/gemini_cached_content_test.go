@@ -458,8 +458,9 @@ func TestGeminiCachedContentStorageCostInAccountStats(t *testing.T) {
 				statsCost = *log.AccountStatsCost
 			}
 			require.InDelta(t, tc.wantStats, statsCost, 1e-12, "账号统计成本须含存储费且只计一次")
-			require.NotNil(t, log.AccountRateMultiplier)
-			require.InDelta(t, tc.wantStats*accountRate, statsCost**log.AccountRateMultiplier, 1e-12, "成本 = 统计成本 × 账号倍率")
+			// account_rate_multiplier 自本地利润监控改造（8fb2730）起，只在上游计费探针命中时写入，
+			// 其余情况留空由 profit_cost_source 表达成本口径；本用例的账号没有探针数据，故应为空。
+			require.Nil(t, log.AccountRateMultiplier)
 		})
 	}
 }
