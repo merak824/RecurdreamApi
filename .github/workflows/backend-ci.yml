@@ -49,13 +49,15 @@ jobs:
         shell: bash
         run: |
           LOG="$RUNNER_TEMP/unit.log"
-          BRIEF="$(grep -nE '^(FAIL|--- FAIL|# |panic:)|\.go:[0-9]+:[0-9]+:' "$LOG" | head -80 | head -c 6000 || true)"
+          # 抓每个 --- FAIL 起 25 行，覆盖 testify 的 Error/expected/actual，限 40KB
+          awk '/--- FAIL/{c=25} c>0{print; c--}' "$LOG" | head -c 40000 > "$RUNNER_TEMP/brief.txt"
           {
             echo '### Unit test failure summary'
             echo '```'
             grep -nE '^(FAIL|--- FAIL|# |panic:)' "$LOG" | head -60 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          BRIEF="$(cat "$RUNNER_TEMP/brief.txt")"
           BRIEF="${BRIEF//'%'/'%25'}"
           BRIEF="${BRIEF//$'\r'/}"
           BRIEF="${BRIEF//$'\n'/'%0A'}"
