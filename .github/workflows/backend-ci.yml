@@ -37,8 +37,30 @@ jobs:
         run: |
           go version | grep -q 'go1.27.3'
       - name: Unit tests
+        id: unit
         working-directory: backend
-        run: make test-unit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          make test-unit 2>&1 | tee "$RUNNER_TEMP/unit.log"
+      - name: Report unit test failures
+        if: steps.unit.outcome == 'failure'
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/unit.log"
+          BRIEF="$(grep -nE '^(FAIL|--- FAIL|# |panic:)|\.go:[0-9]+:[0-9]+:' "$LOG" | head -80 | head -c 6000 || true)"
+          {
+            echo '### Unit test failure summary'
+            echo '```'
+            grep -nE '^(FAIL|--- FAIL|# |panic:)' "$LOG" | head -60 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          BRIEF="${BRIEF//'%'/'%25'}"
+          BRIEF="${BRIEF//$'\r'/}"
+          BRIEF="${BRIEF//$'\n'/'%0A'}"
+          echo "::error title=unit-test-failures::$BRIEF"
+          exit 1
       - name: Integration tests
         working-directory: backend
         run: make test-integration
