@@ -129,7 +129,9 @@ func TestPrepareUsageLogInsert_UpstreamRequestIDArgWiring(t *testing.T) {
 	})
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
 
-	idx := len(prepared.args) - 4
+	// upstream_request_id 之后还排着 session_id、native_compaction_v2、created_at，
+	// 以及追加在尾部的 TTFT 三列与 profit_cost_source，共 8 列。
+	idx := len(prepared.args) - 8
 	arg, ok := prepared.args[idx].(sql.NullString)
 	require.True(t, ok, "upstream_request_id arg should be sql.NullString, got %T", prepared.args[idx])
 	require.True(t, arg.Valid)

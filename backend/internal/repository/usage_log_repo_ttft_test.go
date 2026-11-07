@@ -95,7 +95,11 @@ func usageLogScanTestValues(now time.Time) []any {
 		sql.NullInt64{}, sql.NullInt64{}, sql.NullString{}, sql.NullString{}, 0,
 		sql.NullString{}, sql.NullString{}, sql.NullString{}, sql.NullString{}, sql.NullString{},
 		0, sql.NullString{}, sql.NullInt64{}, sql.NullString{}, sql.NullString{}, sql.NullString{}, sql.NullString{},
-		false, false, sql.NullInt64{}, sql.NullString{}, sql.NullString{}, sql.NullString{}, sql.NullFloat64{}, sql.NullString{}, now,
+		// upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id,
+		// model_mapping_chain, billing_tier, billing_mode, account_stats_cost,
+		// upstream_request_id, session_id, native_compaction_v2, created_at
+		sql.NullString{}, false, false, sql.NullInt64{}, sql.NullString{}, sql.NullString{}, sql.NullString{},
+		sql.NullFloat64{}, sql.NullString{}, sql.NullString{}, sql.NullBool{}, now,
 	}
 }
 

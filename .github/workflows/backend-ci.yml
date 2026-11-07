@@ -50,7 +50,9 @@ jobs:
         run: |
           LOG="$RUNNER_TEMP/unit.log"
           # 抓每个 --- FAIL 起 25 行，覆盖 testify 的 Error/expected/actual，限 40KB
-          awk '/--- FAIL/{c=25} c>0{print; c--}' "$LOG" | head -c 40000 > "$RUNNER_TEMP/brief.txt"
+          # GitHub 的 bash 步骤默认 -eo pipefail，head 提前关闭管道会让 awk 收 SIGPIPE(141)，
+          # 必须吞掉退出码，否则上报步骤自己会先崩掉、注解根本发不出来。
+          ( awk '/--- FAIL/{c=25} c>0{print; c--}' "$LOG" | head -c 40000 > "$RUNNER_TEMP/brief.txt" ) || true
           {
             echo '### Unit test failure summary'
             echo '```'
