@@ -1,18 +1,31 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.19`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.20`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.2.19`
+- 当前版本：`v0.2.20`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.2.19](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.19)
-- Recurdream 定制基线：`v0.2.19` + 本地业务定制
+- 上游最新同步版本：[v0.2.20](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.20)
+- Recurdream 定制基线：`v0.2.20` + 本地业务定制
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.2.20
+
+- 同步上游 Sub2API `v0.2.20`（`v0.2.19` → `v0.2.20`，459 个文件、+29482/−1457），完整保留 Recurdream 本地定制：红包活动、邀请返利与提现、余额明细、分组利润控制、上游倍率探测、OpenAI 首字（TTFT）优化、OpenCode Go / Ollama Cloud 用量查询、中文品牌页面、备份脚本、Docker Compose blue/green 热部署与主机侧更新代理。
+- 新增基于 OAuth 的管理 MCP 接口及前端授权确认/连接管理页面，需显式配置 `MCP_PUBLIC_URL` 才会启用（默认关闭）。
+- 管理员密钥补全细粒度权限项与中英文展示，新增需输入确认文字才能开启的「全权兼容模式」。
+- 注册邮箱精确黑名单：支持批量粘贴（上限 20000 条），按收件箱身份匹配 Gmail 点号/`+` 后缀变体，保存时可批量禁用命中的已注册用户。
+- 网关请求体内存预算与上下游读写超时全面设限：新增 `security.request_body_memory_budget_bytes`（默认 1GiB）、`security.request_body_read_timeout_seconds` 与 `downstream_write_timeout_seconds`（默认 120s）。
+- OpenAI 生图账号支持按 1K/2K/4K 尺寸档位分流；Antigravity 用量按真实 5 小时/每周窗口展示，INTERNAL 500 仅冷却单个模型；新增 `gateway.disable_openai_transport_error_cooldown` 开关。
+- 修复 Anthropic setup-token 账号周用量丢失、异步生图全部 503、WebSocket 透传部分轮次未记录首 token、Gemini SSE 读取无上限、OpenAI 响应空 instructions 返回 403、API Key 校验被误报 500 等问题。
+- 新增数据库迁移 `249_mcp_oauth.sql`，升级时自动执行。
+- 本地修复：系统设置页「点页签内容不切换」——网关面板缺少闭合导致 6 张卡片（OpenCode Go 用量、使用记录等）恒常显示，已补回面板闭合与缩进，页签切换恢复正常。
+- 升级注意：小内存或长上下文高并发部署需按实际情况调整 `security.request_body_memory_budget_bytes`；后端要求 Go `1.27.3+`，本机 Go `1.26.5` 无法编译（缺 `encoding/json/jsontext`），请在容器或服务器侧构建。
 
 ### v0.2.19
 
