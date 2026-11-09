@@ -1,0 +1,9 @@
+[Unit]
+Description=sub2api payment security guard (fast-paid / rogue webhook / new-user big recharge)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /data/sub2api/security/payguard.py guard
+Nice=10

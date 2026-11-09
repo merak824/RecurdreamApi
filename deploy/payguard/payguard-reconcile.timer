@@ -1,0 +1,11 @@
+[Unit]
+Description=Run sub2api payment reconciliation every 30 minutes
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+AccuracySec=60s
+Unit=payguard-reconcile.service
+
+[Install]
+WantedBy=timers.target

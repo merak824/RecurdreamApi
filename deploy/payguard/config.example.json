@@ -1,0 +1,24 @@
+{
+  "gateway_ips": [
+    "159.75.222.226",
+    "123.207.78.140",
+    "203.195.200.21",
+    "118.31.74.116",
+    "134.175.49.240"
+  ],
+  "mail": {
+    "enabled": true,
+    "to": ["recurdream@163.com"]
+  },
+  "wechat": {
+    "type": "",
+    "token": ""
+  },
+  "notify_url": "",
+  "fast_paid_seconds": 2,
+  "new_user_hours": 24,
+  "new_user_max_amount": 200,
+  "reconcile_hours": 3,
+  "lookback_days": 90,
+  "verify_fail_threshold": 10
+}

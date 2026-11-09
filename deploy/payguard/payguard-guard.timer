@@ -1,0 +1,11 @@
+[Unit]
+Description=Run sub2api payment security guard every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=20s
+Unit=payguard-guard.service
+
+[Install]
+WantedBy=timers.target
