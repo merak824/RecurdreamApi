@@ -25,6 +25,7 @@
 - 修复 Anthropic setup-token 账号周用量丢失、异步生图全部 503、WebSocket 透传部分轮次未记录首 token、Gemini SSE 读取无上限、OpenAI 响应空 instructions 返回 403、API Key 校验被误报 500 等问题。
 - 新增数据库迁移 `249_mcp_oauth.sql`，升级时自动执行。
 - 本地修复：系统设置页「点页签内容不切换」——网关面板缺少闭合导致 6 张卡片（OpenCode Go 用量、使用记录等）恒常显示，已补回面板闭合与缩进，页签切换恢复正常。
+- 发布产物命名统一：GHCR 包名改用仓库名（`ghcr.io/merak824/recurdreamapi`，会自动链接到本仓库并继承可见性），镜像 tag 保留 git tag 的 `v` 前缀（`v0.2.20`、`v0.2.20-rd.1`），Docker Hub 同步使用同名仓库；浮动标签为 `v0.2`、`v0` 与 `latest`。旧包 `ghcr.io/merak824/sub2api` 不再更新，历史镜像仍可拉取。
 - 升级注意：小内存或长上下文高并发部署需按实际情况调整 `security.request_body_memory_budget_bytes`；后端要求 Go `1.27.3+`，本机 Go `1.26.5` 无法编译（缺 `encoding/json/jsontext`），请在容器或服务器侧构建。
 
 ### v0.2.19
