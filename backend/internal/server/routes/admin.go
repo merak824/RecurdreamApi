@@ -134,6 +134,20 @@ func RegisterAdminRoutes(
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)
+
+		// 账号风控（异常检测与自动封禁）
+		registerAccountRiskRoutes(admin, h)
+	}
+}
+
+// registerAccountRiskRoutes 账号风控配置与命中记录。
+// 命中记录直接读审计日志（action 前缀 security.risk.），不单独建表。
+func registerAccountRiskRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	accountRisk := admin.Group("/account-risk")
+	{
+		accountRisk.GET("/config", h.Admin.AccountRisk.GetConfig)
+		accountRisk.PUT("/config", h.Admin.AccountRisk.UpdateConfig)
+		accountRisk.GET("/events", h.Admin.AccountRisk.ListEvents)
 	}
 }
 

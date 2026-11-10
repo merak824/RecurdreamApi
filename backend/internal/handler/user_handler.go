@@ -140,8 +140,44 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	response.Success(c, profileResp)
 }
 
-// ChangePassword handles changing user password
-// POST /api/v1/users/me/password
+// IssueEmbedTokenRequest 申请 iframe 嵌入令牌的请求体。
+type IssueEmbedTokenRequest struct {
+	// TargetURL 要被嵌入的第三方页面地址，用于校验其 origin 是否在 iframe 白名单内。
+	TargetURL string `json:"target_url" binding:"required"`
+}
+
+// IssueEmbedToken 为 iframe 嵌入签发受限短期令牌（5 分钟、只读、不绑会话指纹）。
+//
+// 安全边界：嵌入页面拿到的不是会话 JWT，而是只能读 /user/profile 的窄权限令牌，
+// 且目标 origin 必须已在 iframe 白名单中（与 CSP frame-src 同源）。
+func (h *UserHandler) IssueEmbedToken(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	var req IssueEmbedTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	user, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	token, expiresIn, err := h.authService.IssueEmbedToken(c.Request.Context(), user, req.TargetURL)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"token":      token,
+		"expires_in": expiresIn,
+	})
+}
+
+// ChangePassword handles changing user password// POST /api/v1/users/me/password
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {

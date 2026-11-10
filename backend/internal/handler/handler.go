@@ -43,6 +43,7 @@ type AdminHandlers struct {
 	Affiliate              *admin.AffiliateHandler
 	Compliance             *admin.ComplianceHandler
 	AuditLog               *admin.AuditLogHandler
+	AccountRisk            *admin.AccountRiskHandler
 	RedPacket              *admin.RedPacketHandler
 }
 

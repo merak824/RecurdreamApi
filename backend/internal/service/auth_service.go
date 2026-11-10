@@ -66,6 +66,9 @@ type JWTClaims struct {
 	SessionID string `json:"sid,omitempty"`
 	// BindingHash 会话指纹哈希（IP+UA），会话绑定开启时校验；空值表示旧 token（平滑升级）。
 	BindingHash string `json:"bnd,omitempty"`
+	// Scope 令牌用途：空表示普通会话令牌；"embed" 表示 iframe 嵌入用的受限短期令牌
+	// （见 embed_token.go，只能访问只读白名单路由、不参与会话指纹绑定）。
+	Scope string `json:"scp,omitempty"`
 	jwt.RegisteredClaims
 }
 

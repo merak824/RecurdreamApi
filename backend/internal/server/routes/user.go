@@ -29,6 +29,8 @@ func RegisterUserRoutes(
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)
+			// 为 iframe 嵌入签发受限短期令牌（替代把 24h 会话 JWT 拼进第三方 URL）。
+			user.POST("/embed-token", h.User.IssueEmbedToken)
 			if h.MCPOAuth != nil {
 				user.GET("/mcp/config", h.MCPOAuth.ConnectionConfig)
 				user.GET("/mcp/grants", h.MCPOAuth.ListGrants)

@@ -92,6 +92,15 @@ func jwtAuth(
 			return
 		}
 
+		// 受限嵌入令牌（iframe 嵌入用，5 分钟、scope=embed）：只允许访问只读白名单路由。
+		// 这些令牌会出现在第三方页面 URL 里，泄露后的影响范围必须被压到最小。
+		if claims.Scope == service.JWTScopeEmbed {
+			if !service.IsEmbedScopePathAllowed(c.Request.Method, c.FullPath()) {
+				AbortWithError(c, 403, "EMBED_SCOPE_FORBIDDEN", "Embed token can only access the allowed read-only endpoints")
+				return
+			}
+		}
+
 		// 会话绑定校验：IP/UA 任一变化即撤销会话（功能可在系统设置中关闭）
 		if !enforceSessionBinding(c, authService, settingService, auditService, claims) {
 			return
