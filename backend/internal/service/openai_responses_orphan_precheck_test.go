@@ -125,15 +125,43 @@ func TestOpenAIResponsesOrphanPrecheckCompatibilityErrors(t *testing.T) {
 	}
 }
 
+// largeEscapedPrecheckBody 构造带大量转义字符的大 payload（约 256KB），
+// 用于验证预检只做"借位扫描"而不反转义、不复制字符串。
+func largeEscapedPrecheckBody() []byte {
+	return []byte(`{"vendor":"` + strings.Repeat(`\n\"`, 1<<16) + `","input":[{"content":"` + strings.Repeat(`\n\"`, 1<<16) + `","type":"message"}]}`)
+}
+
+// TestOpenAIResponsesOrphanPrecheckLargeEscapedContent 只断言功能正确性。
+//
+// 零分配护栏放在 BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent 里：
+// testing.AllocsPerRun 读的是进程级 Mallocs 计数，而本包里大量测试使用
+// t.Parallel()，异步抢占发生时其他 goroutine 的分配会被计入本次测量，
+// 在 CI 上表现为间歇性的 "Should be zero, but was N"（本机单独跑则为 0）。
+// 因此把"不复制大字符串"的约束交给 benchmark（b.ReportAllocs，allocs/op 应为 0），
+// 它不在 CI 门禁里跑，但可用 `go test -bench OrphanPrecheckLargeEscaped ./internal/service/`
+// 随时回归。
 func TestOpenAIResponsesOrphanPrecheckLargeEscapedContent(t *testing.T) {
-	body := []byte(`{"vendor":"` + strings.Repeat(`\n\"`, 1<<16) + `","input":[{"content":"` + strings.Repeat(`\n\"`, 1<<16) + `","type":"message"}]}`)
+	body := largeEscapedPrecheckBody()
 	require.False(t, openAIResponsesInputMayNeedOrphanCleanup(body))
-	allocations := testing.AllocsPerRun(5, func() {
+
+	// 重复调用仍然只返回 false，且大 payload 不会触发解码路径。
+	for i := 0; i < 5; i++ {
+		require.False(t, openAIResponsesInputMayNeedOrphanCleanup(body))
+	}
+}
+
+// BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent 守护"借位扫描、零分配"
+// 的实现约束：若有人把它改成反转义或复制字符串，allocs/op 会从 0 变成非 0。
+func BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent(b *testing.B) {
+	body := largeEscapedPrecheckBody()
+	b.SetBytes(int64(len(body)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		if openAIResponsesInputMayNeedOrphanCleanup(body) {
-			panic("unexpected cleanup candidate")
+			b.Fatal("unexpected cleanup candidate")
 		}
-	})
-	require.Zero(t, allocations, "large borrowed strings must not be unescaped or copied")
+	}
 }
 
 func FuzzOpenAIResponsesOrphanPrecheck(f *testing.F) {
