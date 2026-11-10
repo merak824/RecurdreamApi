@@ -99,5 +99,8 @@ func (h *AccountRiskHandler) ListEvents(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, list)
+	// 必须走 response.Paginated 统一成 {items,total,page,page_size,pages}：
+	// 直接序列化 Service 的返回结构会得到 {Logs,Total,Page,PageSize}（大驼峰），
+	// 与前端 AuditLogListResponse（PaginatedResponse.items）对不上，表格会空白。
+	response.Paginated(c, list.Logs, int64(list.Total), list.Page, list.PageSize)
 }
