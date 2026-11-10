@@ -79,8 +79,51 @@ jobs:
           PY
           exit 1
       - name: Integration tests
+        id: integration
         working-directory: backend
-        run: make test-integration
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          make test-integration 2>&1 | tee "$RUNNER_TEMP/integration.log"
+      - name: Report integration test failures
+        if: steps.integration.outcome == 'failure'
+        shell: bash
+        run: |
+          LOG="$RUNNER_TEMP/integration.log"
+          {
+            echo '### Integration test failure summary'
+            echo '```'
+            grep -E '^(FAIL|--- FAIL|# |panic:|.*test timed out)' "$LOG" | head -60 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 集成测试常见的失败形态有三种：--- FAIL 块、包级编译错误（# pkg）、
+          # 以及包级 panic / 超时（此时没有 --- FAIL 行）。按这三种边界切块，
+          # 每块一条注解，否则只会看到 "exit code 2" 这类无信息量的报错。
+          python3 - "$LOG" <<'PY' || true
+          import re, sys
+
+          text = open(sys.argv[1], errors='replace').read()
+          keep = re.compile(
+              r'(--- FAIL:|Error Trace:|Error:|expected:|actual|Messages:|Test:|\.go:\d+:\d+:'
+              r'|panic:|test timed out|^\s*# |^\s*FAIL\s)'
+          )
+          boundary = re.compile(r'\n(?=\s*(?:--- FAIL:|--- FAIL\b|panic:|\# )|.*test timed out)')
+          n = 0
+          for chunk in boundary.split(text):
+              if not re.search(r'(--- FAIL:|panic:|test timed out|^\s*# )', chunk, re.M):
+                  continue
+              lines = [ln.strip() for ln in chunk.splitlines() if keep.search(ln)]
+              if not lines:
+                  continue
+              msg = '\n'.join(lines[:14])[:3400]
+              msg = msg.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              n += 1
+              print('::error title=integration-fail-%02d::%s' % (n, msg))
+              if n >= 10:
+                  break
+          PY
+          exit 1
 
   frontend:
     runs-on: ubuntu-latest
