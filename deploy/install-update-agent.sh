@@ -55,7 +55,10 @@ require_absolute_path() {
 }
 
 is_valid_version() {
-  [[ "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+  # 允许 semver 的预发布/构建后缀：本仓库版本形如 0.2.20-rd.4，
+  # 镜像 tag 带 -rd.N，而旧规则只认纯 x.y.z，导致部署时
+  # "current version file is invalid: 0.2.20-rd.2" 直接中断。
+  [[ "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.]+)?(\+[0-9A-Za-z.]+)?$ ]]
 }
 
 [ -f "$agent_binary" ] || fail "agent binary not found: $agent_binary"
