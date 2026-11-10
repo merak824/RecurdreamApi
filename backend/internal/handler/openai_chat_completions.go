@@ -426,6 +426,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		sessionID := service.ExtractClientSessionID(c)
 
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+		// 渠道用量字段依赖 gin.Context 里的"客户端请求模型"，必须与上面的
+		// userAgent/clientIP 一样在提交异步任务前快照，不能在 goroutine 里回调 gin.Context。
+		channelUsageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
@@ -441,7 +444,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				QuotaPlatform:      quotaPlatform,
 				SessionID:          sessionID,
 				SessionHash:        sessionHash,
-				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+				ChannelUsageFields: channelUsageFields,
 				PricingAt:          pricingAt,
 				CyberBlocked:       cyberBlocked,
 			}); err != nil {
