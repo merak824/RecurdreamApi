@@ -138,3 +138,40 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 - 邮箱验证：`email_verify_enabled`。
 - 人机验证：`turnstile_enabled`（Cloudflare Turnstile）。
 - 内容审计自动封禁：`content_moderation_config`（与本文框架相互独立，按违规次数封禁）。
+
+## 7. 管理端入口
+
+管理端侧边栏 → **账号风控**（`/admin/account-risk`），分两块：
+
+- **规则配置**：总开关 + 四条规则的开关、阈值、处置动作，保存后约 30s 生效。
+  后端会对越界值做收敛（例如窗口上限 24h、锁定时长上限 24h），页面回显的是落库后的真实值。
+- **命中记录**：直接读操作日志（action 前缀 `security.risk.`），可按「已封禁 / 注册被拦 /
+  登录锁定 / 仅留痕」筛选。记录里能看到规则名、阈值、UA、路径，用于复盘误判。
+
+对应接口（均为管理员权限）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/admin/account-risk/config` | 读配置 + 已注册规则名 |
+| PUT | `/api/v1/admin/account-risk/config` | 保存配置（归一化后回显） |
+| GET | `/api/v1/admin/account-risk/events` | 分页查命中记录，`action` 留空取全部 |
+
+## 8. iframe 嵌入令牌（配合自定义菜单）
+
+自定义菜单 / 首页内容把第三方页面嵌入工作台时，**不要再把会话 JWT 拼进 iframe URL**。
+改用受限令牌：
+
+1. 前端调 `POST /api/v1/user/embed-token`，body `{"target_url": "https://第三方/页面"}`；
+2. 后端校验该 URL 的 origin 已在 iframe 白名单内（与 CSP `frame-src` 同一份来源），
+   签发 5 分钟有效、`scope=embed` 的窄权限令牌并返回；
+3. 前端把返回的 `token` 拼进 iframe URL（形式与原来一致，第三方无需改动）。
+
+约束：
+
+- 有效期 5 分钟，泄露窗口从 24 小时缩到 5 分钟；
+- 只能访问 `GET /api/v1/user/profile`，其他任何路由一律 403 `EMBED_SCOPE_FORBIDDEN`；
+- 不携带会话 ID 与 IP/UA 指纹（第三方服务端来源 IP 必然不同，不能绑）；
+- 签发时校验目标 origin，避免本接口变成"给任意站点签发凭证"。
+
+> 该能力当前只在后端就绪，前端自定义菜单仍在使用会话 JWT；切换到 embed-token
+> 需要改 `frontend/src/utils/embedded-url.ts` + `CustomPageView.vue`（尚未执行）。

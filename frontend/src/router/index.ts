@@ -659,6 +659,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/account-risk',
+    name: 'AdminAccountRisk',
+    component: () => import('@/views/admin/AccountRiskView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Account Risk',
+      titleKey: 'admin.accountRisk.title',
+      descriptionKey: 'admin.accountRisk.description'
+    }
+  },
+  {
     path: '/admin/prompt-audit',
     name: 'AdminPromptAudit',
     component: () => import('@/features/prompt-audit/PromptAuditView.vue'),

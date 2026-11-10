@@ -218,6 +218,7 @@ export default {
     contentModeration: '内容审计',
     promptAudit: '提示词审计',
     auditLogs: '操作日志',
+    accountRisk: '账号风控',
   },
 
   // Auth

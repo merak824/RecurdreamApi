@@ -35,6 +35,7 @@ import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
+import accountRiskAPI from './accountRisk'
 import pluginsAPI from './plugins'
 import redPacketsAPI from './redPackets'
 
@@ -74,6 +75,7 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
+  accountRisk: accountRiskAPI,
   plugins: pluginsAPI,
   redPackets: redPacketsAPI
 }
@@ -111,6 +113,7 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   auditAPI,
+  accountRiskAPI,
   pluginsAPI,
   redPacketsAPI
 }
@@ -119,6 +122,12 @@ export default adminAPI
 
 // Re-export types used by components
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
+export type {
+  AccountRiskConfig,
+  AccountRiskConfigResponse,
+  AccountRiskAction,
+  AccountRiskEventQuery
+} from './accountRisk'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
