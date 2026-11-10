@@ -24,6 +24,10 @@ linters:
             - "!**/internal/service/ops_cleanup_service.go"
             - "!**/internal/service/ops_metrics_collector.go"
             - "!**/internal/service/ops_scheduled_report_service.go"
+            # 账号风控的窗口计数必须跨实例共享（封禁判定依赖全局计数），
+            # 只有存储适配层这一处需要 redis；其余风控逻辑只依赖
+            # AccountRiskCounterStore 接口。
+            - "!**/internal/service/account_risk_store_redis.go"
             - "!**/internal/service/wire.go"
           deny:
             - pkg: github.com/Wei-Shaw/sub2api/internal/repository

@@ -255,6 +255,11 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		Status:       StatusActive,
 	}
 
+	// 风控：同 IP 批量注册前置拦截（必须在建号之前，避免先建号再封号）。
+	if riskErr := AccountRisk().CheckRegistration(ctx, email, riskClientIP(ctx), riskClientUserAgent(ctx)); riskErr != nil {
+		return "", nil, riskErr
+	}
+
 	if err := s.createUserAndClaimInvitation(ctx, user, invitationRedeemCode); err != nil {
 		// 优先检查邮箱冲突错误（竞态条件下可能发生）
 		switch {
@@ -270,6 +275,8 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		}
 	}
 	s.postAuthUserBootstrap(ctx, user, "email", true)
+	// 风控：登记注册信号（IP 维度计数），并异步评估"注册类"规则。
+	AccountRisk().ObserveRegistration(ctx, user, riskClientIP(ctx), riskClientUserAgent(ctx))
 	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
 	// snapshot user × platform quota（fail-open）
 	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
@@ -543,10 +550,21 @@ func (s *AuthService) IsEmailVerifyEnabled(ctx context.Context) bool {
 
 // Login 用户登录，返回JWT token
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, *User, error) {
+	// 登录暴力破解防护：命中锁定直接拒绝，不再校验密码（省一次 bcrypt）。
+	risk := AccountRisk()
+	if err := risk.LoginPreCheck(ctx); err != nil {
+		return "", nil, err
+	}
+	if err := risk.LoginAccountPreCheck(ctx, email); err != nil {
+		return "", nil, err
+	}
+
 	// 查找用户
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
+			// 账号不存在也计入失败次数，避免被用来探测邮箱是否已注册。
+			_ = risk.LoginFailed(ctx, email)
 			return "", nil, ErrInvalidCredentials
 		}
 		// 记录数据库错误但不暴露给用户
@@ -556,8 +574,10 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 
 	// 验证密码
 	if !s.CheckPassword(password, user.PasswordHash) {
+		_ = risk.LoginFailed(ctx, email)
 		return "", nil, ErrInvalidCredentials
 	}
+	risk.LoginSucceeded(ctx, email)
 
 	// 检查用户状态
 	if !user.IsActive() {

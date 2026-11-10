@@ -97,6 +97,17 @@ func jwtAuth(
 			return
 		}
 
+		// 账号风控：新账号窗口期内的鉴权请求进入"注册即探测"评估。
+		// ShouldObserveNewUser 只是一次进程内缓存的比较，对热路径几乎无开销。
+		if risk := service.AccountRisk(); risk.ShouldObserveNewUser(c.Request.Context(), user) {
+			binding := requestSessionBinding(c)
+			path := c.FullPath()
+			if path == "" {
+				path = c.Request.URL.Path
+			}
+			risk.ObserveNewUserRequest(c.Request.Context(), user, binding.IP, binding.UserAgent, path)
+		}
+
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      user.ID,
 			Concurrency: user.Concurrency,

@@ -27,6 +27,27 @@ func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthCli
 	return svc
 }
 
+// ProvideAccountRiskService 构造账号异常检测与自动封禁服务，
+// 并注册为进程级实例，供中间件等没有 wire 注入点的位置上报事件
+// （与 SetWebSearchManager 同一模式）。
+func ProvideAccountRiskService(
+	redisClient *redis.Client,
+	settingService *SettingService,
+	userRepo UserRepository,
+	auditService *AuditLogService,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+) *AccountRiskService {
+	svc := NewAccountRiskService(
+		settingService,
+		userRepo,
+		auditService,
+		authCacheInvalidator,
+		NewRedisAccountRiskStore(redisClient),
+	)
+	SetAccountRiskService(svc)
+	return svc
+}
+
 // BuildInfo contains build information
 type BuildInfo struct {
 	Version   string
@@ -983,6 +1004,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewModelPlazaService,
 	NewContentModerationService,
+	ProvideAccountRiskService,
 	NewAffiliateService,
 	NewRedPacketService,
 	ProvideRedPacketWorker,

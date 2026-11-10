@@ -163,6 +163,11 @@ type SettingService struct {
 	openAIQuotaAutoPauseSettingsSF    singleflight.Group
 	openAIAPIKeyHealthBreakerCache    atomic.Value // *cachedOpenAIAPIKeyHealthBreakerSettings
 
+	// accountRiskConfigCache 账号风控配置进程内缓存（*cachedAccountRiskConfig，30s TTL）。
+	// 注册 / 登录 / 鉴权三条热路径都会读取，禁止每次访问 DB。
+	accountRiskConfigMu    sync.Mutex
+	accountRiskConfigCache atomic.Value
+
 	channelMonitorRuntimeListenersMu sync.Mutex
 	channelMonitorRuntimeListeners   []func()
 }

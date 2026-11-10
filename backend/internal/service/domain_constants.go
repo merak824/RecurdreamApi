@@ -237,6 +237,7 @@ const (
 	SettingKeyAffiliateRebatePerInviteeCap        = "affiliate_rebate_per_invitee_cap" // 单人返利上限（0=无上限）
 	SettingKeyAffiliateAdminRechargeEnabled       = "affiliate_admin_recharge_enabled" // 管理员充值是否产生返利
 	SettingKeyRiskControlEnabled                  = "risk_control_enabled"             // 是否启用风控中心入口与审计链路
+	SettingKeyAccountRiskConfig                   = "account_risk_config"              // 账号异常检测与自动封禁配置（JSON）
 	SettingKeyContentModerationConfig             = "content_moderation_config"        // 内容审计配置（JSON）
 	SettingKeyCyberSessionBlockEnabled            = "cyber_session_block_enabled"      // cyber 命中后会话级自动屏蔽总开关(默认关)
 	SettingKeyCyberPolicyUserAllowlist            = "cyber_policy_user_allowlist"      // Platform user IDs with log-only cyber handling

@@ -80,12 +80,12 @@ func enforceSessionBinding(
 	if authService != nil {
 		_ = authService.RevokeSessionFamily(c.Request.Context(), claims.SessionID)
 	}
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
+	}
 	if auditService != nil {
 		uid := claims.UserID
-		path := c.FullPath()
-		if path == "" {
-			path = c.Request.URL.Path
-		}
 		auditService.Record(&service.AuditLog{
 			ActorUserID: &uid,
 			ActorEmail:  claims.Email,
@@ -98,6 +98,17 @@ func enforceSessionBinding(
 			UserAgent:   normalizePersistentText(c.Request.UserAgent(), maxPersistentUserAgentBytes),
 			StatusCode:  401,
 		})
+	}
+	// 账号风控：同一账号反复指纹漂移可能是 token 被复制到其他环境使用。
+	if risk := service.AccountRisk(); risk != nil {
+		risk.ObserveSessionMismatch(
+			c.Request.Context(),
+			claims.UserID,
+			claims.Email,
+			binding.IP,
+			normalizePersistentText(c.Request.UserAgent(), maxPersistentUserAgentBytes),
+			path,
+		)
 	}
 	AbortWithError(c, 401, "SESSION_BINDING_MISMATCH", "Session network fingerprint changed, please login again")
 	return false

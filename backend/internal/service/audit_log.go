@@ -22,6 +22,8 @@ const (
 	AuditAuthMethodPasskey     = "passkey"
 	// AuditAuthMethodMCPOAuth 标记管理 MCP 的 OAuth 访问令牌（机器凭证）。
 	AuditAuthMethodMCPOAuth = "mcp_oauth"
+	// AuditAuthMethodSystemService 标记由服务端自动执行的动作（账号风控自动封禁等）。
+	AuditAuthMethodSystemService = "system"
 
 	// auditRequestBodyMaxBytes 请求体脱敏后入库的最大长度（字节），超出截断。
 	auditRequestBodyMaxBytes = 16 * 1024
@@ -39,6 +41,12 @@ const (
 	AuditActionSessionBindingMismatch = "auth.session_binding.mismatch"
 	AuditActionStepUpVerify           = "auth.step_up.verify"
 	AuditActionAuditLogClear          = "admin.audit_log.clear"
+
+	// 账号风控（账号异常检测与自动封禁）事件。
+	AuditActionAccountRiskTriggered   = "security.risk.triggered"
+	AuditActionAccountRiskBanned      = "security.risk.account_banned"
+	AuditActionAccountRiskBlocked     = "security.risk.registration_blocked"
+	AuditActionAccountRiskLoginLocked = "security.risk.login_locked"
 )
 
 // AuditLog 一条管理面操作审计记录。

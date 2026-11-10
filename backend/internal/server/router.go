@@ -36,8 +36,12 @@ func SetupRouter(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 	redisClient *redis.Client,
+	accountRiskService *service.AccountRiskService,
 ) *gin.Engine {
 	middleware2.SetIngressRejectRecorder(opsService)
+	// 账号风控实例由 wire 构造时已注册为进程级单例，这里再显式绑定一次：
+	// 既是幂等的，也让"风控是否装配成功"在启动路径上一目了然。
+	service.SetAccountRiskService(accountRiskService)
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
 	var cachedFrameOrigins atomic.Pointer[[]string]
 	emptyOrigins := []string{}
