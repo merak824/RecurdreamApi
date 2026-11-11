@@ -58,7 +58,7 @@ func (s *TurnstileServiceSuite) TestVerifyToken_SendsFormAndDecodesJSON() {
 	case values := <-s.received:
 		require.Equal(s.T(), "sk", values.Get("secret"))
 		require.Equal(s.T(), "token", values.Get("response"))
-		require.Equal(s.T(), "1.1.1.1", values.Get("remoteip"))
+		require.Empty(s.T(), values.Get("remoteip"), "remoteip must never be sent to Cloudflare siteverify")
 	default:
 		require.Fail(s.T(), "expected server to receive request")
 	}
@@ -77,7 +77,7 @@ func (s *TurnstileServiceSuite) TestVerifyToken_ContentType() {
 	require.True(s.T(), strings.HasPrefix(contentType, "application/x-www-form-urlencoded"), "unexpected content-type: %s", contentType)
 }
 
-func (s *TurnstileServiceSuite) TestVerifyToken_EmptyRemoteIP_NotSent() {
+func (s *TurnstileServiceSuite) TestVerifyToken_RemoteIPNeverSent() {
 	s.setupTransport(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		values, _ := url.ParseQuery(string(body))
@@ -87,12 +87,12 @@ func (s *TurnstileServiceSuite) TestVerifyToken_EmptyRemoteIP_NotSent() {
 		_ = json.NewEncoder(w).Encode(service.TurnstileVerifyResponse{Success: true})
 	}))
 
-	_, err := s.verifier.VerifyToken(s.ctx, "sk", "token", "")
+	_, err := s.verifier.VerifyToken(s.ctx, "sk", "token", "8.8.8.8")
 	require.NoError(s.T(), err)
 
 	select {
 	case values := <-s.received:
-		require.Equal(s.T(), "", values.Get("remoteip"), "remoteip should be empty or not sent")
+		require.Empty(s.T(), values.Get("remoteip"), "remoteip should not be sent even when provided")
 	default:
 		require.Fail(s.T(), "expected server to receive request")
 	}

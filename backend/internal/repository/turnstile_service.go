@@ -35,12 +35,13 @@ func NewTurnstileVerifier() service.TurnstileVerifier {
 }
 
 func (v *turnstileVerifier) VerifyToken(ctx context.Context, secretKey, token, remoteIP string) (*service.TurnstileVerifyResponse, error) {
+	// 说明：不向 Cloudflare 传 remoteip。该参数要求"解验证码的 IP"与"提交登录的 IP"
+	// 严格一致，在客户端使用代理/VPN（出口按连接轮换）或站点套 CDN 时必然误伤，
+	// 会导致合法用户登录被 CF 以 invalid-input-secret/invalid-input-response 拒绝。
+	// token 本身一次性且绑定 sitekey，去掉 remoteip 不降低校验强度。
 	formData := url.Values{}
 	formData.Set("secret", secretKey)
 	formData.Set("response", token)
-	if remoteIP != "" {
-		formData.Set("remoteip", remoteIP)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.verifyURL, strings.NewReader(formData.Encode()))
 	if err != nil {
