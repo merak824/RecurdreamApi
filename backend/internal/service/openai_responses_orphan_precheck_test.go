@@ -1,8 +1,13 @@
 package service
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -131,23 +136,38 @@ func largeEscapedPrecheckBody() []byte {
 	return []byte(`{"vendor":"` + strings.Repeat(`\n\"`, 1<<16) + `","input":[{"content":"` + strings.Repeat(`\n\"`, 1<<16) + `","type":"message"}]}`)
 }
 
-// TestOpenAIResponsesOrphanPrecheckLargeEscapedContent 只断言功能正确性。
+// TestOpenAIResponsesOrphanPrecheckLargeEscapedContent 验证大 payload 只做"借位扫描"，
+// 既不反转义也不复制字符串。
 //
-// 零分配护栏放在 BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent 里：
-// testing.AllocsPerRun 读的是进程级 Mallocs 计数，而本包里大量测试使用
-// t.Parallel()，异步抢占发生时其他 goroutine 的分配会被计入本次测量，
-// 在 CI 上表现为间歇性的 "Should be zero, but was N"（本机单独跑则为 0）。
-// 因此把"不复制大字符串"的约束交给 benchmark（b.ReportAllocs，allocs/op 应为 0），
-// 它不在 CI 门禁里跑，但可用 `go test -bench OrphanPrecheckLargeEscaped ./internal/service/`
-// 随时回归。
+// testing.AllocsPerRun 读的是进程级 Mallocs 计数，而本包里大量测试使用 t.Parallel()，
+// 异步抢占发生时其他 goroutine 的分配会被计入本次测量，在 CI 上表现为间歇性的
+// "Should be zero, but was N"（本机单独跑则为 0）。因此零分配断言放到子进程里执行，
+// 与上游做法一致；BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent 仍保留，
+// 可用 `go test -bench OrphanPrecheckLargeEscaped ./internal/service/` 随时回归。
 func TestOpenAIResponsesOrphanPrecheckLargeEscapedContent(t *testing.T) {
+	// AllocsPerRun counts allocations across the process, including background
+	// goroutines left by other service tests. Measure only this case in a child.
+	const childEnv = "SUB2API_OPENAI_ORPHAN_ALLOC_TEST_CHILD"
+	if os.Getenv(childEnv) != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		executable, err := os.Executable()
+		require.NoError(t, err)
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^"+regexp.QuoteMeta(t.Name())+"$", "-test.count=1")
+		cmd.Env = append(os.Environ(), childEnv+"=1")
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "isolated allocation test failed://n%s", output)
+		return
+	}
+
 	body := largeEscapedPrecheckBody()
 	require.False(t, openAIResponsesInputMayNeedOrphanCleanup(body))
-
-	// 重复调用仍然只返回 false，且大 payload 不会触发解码路径。
-	for i := 0; i < 5; i++ {
-		require.False(t, openAIResponsesInputMayNeedOrphanCleanup(body))
-	}
+	allocations := testing.AllocsPerRun(5, func() {
+		if openAIResponsesInputMayNeedOrphanCleanup(body) {
+			panic("unexpected cleanup candidate")
+		}
+	})
+	require.Zero(t, allocations, "large borrowed strings must not be unescaped or copied")
 }
 
 // BenchmarkOpenAIResponsesOrphanPrecheckLargeEscapedContent 守护"借位扫描、零分配"

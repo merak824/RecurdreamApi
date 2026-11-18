@@ -1,18 +1,30 @@
 # 递归梦境API
 
-递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.20`，并保留 Recurdream 的本地定制。
+递归梦境API 是一个面向个人、团队和中转站运营场景的 AI API 网关系统。项目基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 二次开发，当前主线已升级到 Sub2API `v0.2.23`，并保留 Recurdream 的本地定制。
 
 ## 当前版本
 
-- 当前版本：`v0.2.20`
+- 当前版本：`v0.2.23`
 - 本仓库主分支：`main`
 - 上游项目：[Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)
-- 上游最新同步版本：[v0.2.20](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.20)
-- Recurdream 定制基线：`v0.2.20` + 本地业务定制
+- 上游最新同步版本：[v0.2.23](https://github.com/Wei-Shaw/sub2api/releases/tag/v0.2.23)
+- Recurdream 定制基线：`v0.2.23` + 本地业务定制
 
 ## 发布记录
 
 这里记录递归梦境API同步上游和本地定制的主要发布节点，方便在 GitHub 主页直接查看版本变化。
+
+### v0.2.23
+
+- 同步上游 Sub2API `v0.2.23`（`v0.2.20` → `v0.2.23`，524 个文件、+32586/−2574，301 个提交），完整保留 Recurdream 本地定制：红包活动、邀请返利与提现、余额明细、分组利润控制、上游倍率探测、OpenAI 首字（TTFT）优化、账号风控、OpenCode Go / Ollama Cloud 用量查询、中文品牌页面、备份脚本、Docker Compose blue/green 热部署与主机侧更新代理。
+- 新增 GPT-6.2 Sol / Astra 模型：上下文超过 272K 按长上下文计费，Fast 档 2 倍价，Ultra Fast 档在 2027-03-01 00:00（太平洋时间）前为 3 倍促销价、之后自动切 6 倍；Ultra Fast 按订阅套餐放行（Pro 200 只开放 Sol，Pro 500 开放 Sol 和 Astra），渠道定价新增「Ultra Fast 倍率」覆盖项。
+- OpenAI 流式链路重做超时与重试：首次输出前空闲超时改为切换账号重试（最多切换 1 次，避免单个卡住的请求把超时惩罚扩散到整个账号池）；流式空闲计时改为每收到上游数据就重置，长流不再被误判超时；原生 Chat Completions 流式透传减少 flush 次数；DeepSeek / Ollama Cloud 的 reasoning 占位与回填改为一次改写请求体。
+- 计费修复：Anthropic ↔ OpenAI Responses / Chat Completions 互转不再丢失缓存写入 TTL（5m/1h）明细；缓存写入明细之和小于总量时，差额按 5m 价格补计；OpenAI 网关走 Anthropic 原生路径时 1h 缓存写入按 1h 价格计费；流式过程中只更新缓存字段时 prompt 总量与缓存写入总量不再被覆盖或算错。
+- `usage_logs` 新增 `cache_creation_30m_tokens`、`cache_creation_12h_tokens` 两列。本地插入列清单同步从 62 列扩到 68 列，并同步 `usageLogInsertArgTypes`、`usageLogSelectColumns`、`scanUsageLog` 与三处单测的偏移断言（`native_compaction_v2` 由倒数第 6 变倒数第 8，`upstream_request_id` 由倒数第 8 变倒数第 10）。
+- Go 工具链对齐 `1.27.4`：`backend/Dockerfile`、`deploy/Dockerfile`、`Dockerfile.prebuilt` 一并升级；本地 Go 1.26.5 与 Docker（wsl 被安全策略拦）均无法编译，本次编译回归走 GitHub Actions。
+- OpenAI WS 首 token 判定合并双方实现：采用上游新增的 `options.IsFirstTokenEvent` 钩子（按 TTFT 模式分流、排除 `codex.*` 事件），并在 `startsFirstToken` 内保留本地「reasoning / function_call 等真实内容语义事件也计入首 token」的逻辑。
+- 大 payload 预检的零分配护栏改为上游的子进程隔离方案（`testing.AllocsPerRun` 在独立子进程中测量，规避并行测试的进程级分配干扰），本地 benchmark 仍保留用于随时回归。
+- 升级方式调整：本次改用真正的双亲 merge commit（父 = 本地 `main` + 上游 `v0.2.23`），把上游正式并入历史，后续合并可用正确的 merge-base，不再依赖人工 diff 合成。
 
 ### v0.2.20
 
