@@ -29,12 +29,11 @@ func newSessionIDUsageLog(sessionID *string) *service.UsageLog {
 }
 
 // TestPrepareUsageLogInsert_SessionIDArgWiring pins the session_id column to the
-// TestPrepareUsageLogInsert_SessionIDArgWiring pins the session_id column to the
 // arg slice / arg-type table so the five INSERT column lists stay in sync. session_id
-// is immediately before native_compaction_v2; created_at, the three local TTFT
-// fields, and the profit cost source follow it.
+// is immediately before native_compaction_v2; cache_creation_30m/12h tokens,
+// created_at, the three local TTFT fields, and the profit cost source follow it.
 func TestPrepareUsageLogInsert_SessionIDArgWiring(t *testing.T) {
-	require.Len(t, usageLogInsertArgTypes, 66, "arg-type table must include native_compaction_v2, upstream model audit, TTFT, and profit fields")
+	require.Len(t, usageLogInsertArgTypes, 68, "arg-type table must include native_compaction_v2, upstream model audit, cache write TTL, TTFT, and profit fields")
 
 	sessionID := "sess-persisted-123"
 	prepared := prepareUsageLogInsert(newSessionIDUsageLog(&sessionID))
