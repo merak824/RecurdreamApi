@@ -44,10 +44,12 @@ export async function getRealtimeMetrics(): Promise<{
   return data
 }
 
+export type DashboardGranularity = 'hour' | 'day' | 'week' | 'month'
+
 export interface TrendParams {
   start_date?: string
   end_date?: string
-  granularity?: 'day' | 'hour'
+  granularity?: DashboardGranularity
   user_id?: number
   api_key_id?: number
   model?: string

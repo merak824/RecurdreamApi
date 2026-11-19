@@ -269,8 +269,11 @@
           </div>
 
           <div class="card p-4">
-            <div class="mb-3 flex items-center justify-between">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.profitTrend') }}</h3>
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.profitTrend') }}</h3>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitTrendHint') }}</p>
+              </div>
               <div v-if="profitMonitor.summary.upstream_actual_cost !== undefined && profitMonitor.summary.upstream_actual_cost !== null" class="text-right text-xs text-gray-500 dark:text-gray-400">
                 <span>{{ t('admin.dashboard.profitUpstreamActualCost') }}: ${{ formatCost(profitMonitor.summary.upstream_actual_cost) }}</span>
                 <span v-if="profitMonitor.summary.reconciliation_difference !== undefined && profitMonitor.summary.reconciliation_difference !== null" class="ml-3" :class="profitMonitor.summary.reconciliation_status === 'difference' ? 'text-red-600 dark:text-red-400' : ''">
@@ -278,8 +281,8 @@
                 </span>
               </div>
             </div>
-            <div class="h-64">
-              <Line v-if="profitTrendChartData" :data="profitTrendChartData" :options="profitLineOptions" />
+            <div class="h-72">
+              <Bar v-if="profitTrendChartData" :data="profitTrendChartData" :options="profitBarOptions" />
               <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">
                 {{ t('admin.dashboard.profitNoData') }}
               </div>
@@ -287,7 +290,7 @@
           </div>
 
           <div class="card overflow-hidden">
-            <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+            <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-dark-700">
               <button
                 v-for="tab in profitTabs"
                 :key="tab.value"
@@ -298,6 +301,18 @@
               >
                 {{ tab.label }}
               </button>
+              <div class="ml-auto flex items-center gap-2">
+                <LoadingSpinner v-if="profitTableLoading" size="sm" />
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitRangeLabel') }}</span>
+                <div class="profit-range-select w-44" :class="profitTableLoading ? 'opacity-60' : ''">
+                  <Select
+                    v-model="profitTableRange"
+                    :options="profitTableRangeOptions"
+                    :aria-label="t('admin.dashboard.profitRangeLabel')"
+                    data-testid="profit-range-select"
+                  />
+                </div>
+              </div>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200 text-left text-xs dark:divide-dark-700">
@@ -431,12 +446,22 @@
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t('admin.dashboard.granularity') }}:</span
                 >
-                <div class="w-28">
-                  <Select
-                    v-model="granularity"
-                    :options="granularityOptions"
-                    @change="loadChartData"
-                  />
+                <div class="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-dark-800">
+                  <button
+                    v-for="option in granularityOptions"
+                    :key="option.value"
+                    type="button"
+                    class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    :class="
+                      granularity === option.value
+                        ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-700 dark:text-primary-300'
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                    "
+                    :data-testid="`granularity-${option.value}`"
+                    @click="setGranularity(option.value)"
+                  >
+                    {{ option.label }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -493,14 +518,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
 import { adminAPI } from '@/api/admin'
-import type { ProfitMonitorDimensionStat, ProfitMonitorResponse } from '@/api/admin/dashboard'
+import type {
+  DashboardGranularity,
+  ProfitMonitorDimensionStat,
+  ProfitMonitorResponse
+} from '@/api/admin/dashboard'
 import type {
   DashboardStats,
   TrendDataPoint,
@@ -508,6 +537,7 @@ import type {
   UserUsageTrendPoint,
   UserSpendingRankingItem
 } from '@/types'
+import type { ChartData } from 'chart.js'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -523,11 +553,12 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Tooltip,
   Legend,
   Filler
 } from 'chart.js'
-import { Line } from 'vue-chartjs'
+import { Bar, Line } from 'vue-chartjs'
 
 // Register Chart.js components
 ChartJS.register(
@@ -535,6 +566,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Tooltip,
   Legend,
   Filler
@@ -543,6 +575,9 @@ ChartJS.register(
 const appStore = useAppStore()
 const router = useRouter()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+
+type ProfitTableRange = 'inherit' | 'last7' | 'last30' | 'last90' | 'quarter'
+
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
 const chartsLoading = ref(false)
@@ -561,9 +596,13 @@ const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
 const profitMonitor = ref<ProfitMonitorResponse | null>(null)
 const profitDimension = ref<'groups' | 'models' | 'accounts'>('groups')
+const profitTableRange = ref<ProfitTableRange>('inherit')
+const profitTableMonitor = ref<ProfitMonitorResponse | null>(null)
+const profitTableLoading = ref(false)
 let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
+let profitTableLoadSeq = 0
 let profitRefreshTimer: ReturnType<typeof setTimeout> | undefined
 const rankingLimit = 12
 
@@ -573,9 +612,22 @@ const profitTabs = computed(() => [
   { value: 'accounts' as const, label: t('admin.dashboard.profitAccounts') }
 ])
 
+const profitTableRangeOptions = computed(() => [
+  { value: 'inherit' as const, label: t('admin.dashboard.profitRangeInherit') },
+  { value: 'last7' as const, label: t('admin.dashboard.profitRangeLast7') },
+  { value: 'last30' as const, label: t('admin.dashboard.profitRangeLast30') },
+  { value: 'last90' as const, label: t('admin.dashboard.profitRangeLast90') },
+  { value: 'quarter' as const, label: t('admin.dashboard.profitRangeQuarter') }
+])
+
+// 明细表可以独立于上方日期选择器取数：默认跟随，切换后按自己的区间重新请求。
+const profitTableSource = computed<ProfitMonitorResponse | null>(() =>
+  profitTableRange.value === 'inherit' ? profitMonitor.value : profitTableMonitor.value
+)
+
 const profitRows = computed<ProfitMonitorDimensionStat[]>(() => {
-  if (!profitMonitor.value) return []
-  return profitMonitor.value[profitDimension.value] || []
+  if (!profitTableSource.value) return []
+  return profitTableSource.value[profitDimension.value] || []
 })
 
 // Helper function to format date in local timezone
@@ -593,15 +645,17 @@ const getLast24HoursRangeDates = (): { start: string; end: string } => {
 }
 
 // Date range
-const granularity = ref<'day' | 'hour'>('hour')
+const granularity = ref<DashboardGranularity>('hour')
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [
-  { value: 'day', label: t('admin.dashboard.day') },
-  { value: 'hour', label: t('admin.dashboard.hour') }
+  { value: 'hour' as const, label: t('admin.dashboard.hour') },
+  { value: 'day' as const, label: t('admin.dashboard.day') },
+  { value: 'week' as const, label: t('admin.dashboard.week') },
+  { value: 'month' as const, label: t('admin.dashboard.month') }
 ])
 
 // Dark mode detection
@@ -676,60 +730,150 @@ const lineOptions = computed(() => ({
   }
 }))
 
-const profitLineOptions = computed(() => ({
-  ...lineOptions.value,
+// 分桶标签按粒度美化：week 是 IYYY-IW（2026-46），month 是 YYYY-MM，day/hour 取括号外的短格式。
+const formatProfitTrendLabel = (date: string): string => {
+  const raw = (date || '').trim()
+  if (!raw) return ''
+  if (granularity.value === 'week') {
+    const [year, week] = raw.split('-')
+    const weekNumber = Number(week)
+    if (year && Number.isFinite(weekNumber)) return t('admin.dashboard.profitWeekLabel', { year, week: weekNumber })
+    return raw
+  }
+  if (granularity.value === 'month') return raw
+  if (granularity.value === 'hour') {
+    const [dayPart, timePart] = raw.split(' ')
+    if (dayPart && timePart) return `${dayPart.slice(5)} ${timePart}`
+    return raw
+  }
+  return raw.length === 10 ? raw.slice(5) : raw
+}
+
+const profitBarOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    intersect: false,
+    mode: 'index' as const
+  },
   plugins: {
-    ...lineOptions.value.plugins,
+    legend: {
+      position: 'top' as const,
+      labels: {
+        color: chartColors.value.text,
+        usePointStyle: true,
+        pointStyle: 'rectRounded',
+        padding: 15,
+        font: {
+          size: 11
+        }
+      }
+    },
     tooltip: {
       callbacks: {
-        label: (context: any) => `${context.dataset.label}: $${formatCost(Number(context.raw))}`
+        label: (context: any) => {
+          const value = Number(context.parsed?.y ?? 0)
+          if (context.dataset.yAxisID === 'margin') {
+            return `${context.dataset.label}: ${formatMargin(value)}`
+          }
+          return `${context.dataset.label}: $${formatCost(value)}`
+        },
+        footer: (items: any[]) => {
+          if (!items?.length) return ''
+          const point = profitMonitor.value?.trend?.[items[0].dataIndex]
+          if (!point) return ''
+          return `${t('admin.dashboard.profit')}: $${formatCost(point.profit)}`
+        }
       }
     }
   },
   scales: {
-    ...lineOptions.value.scales,
-    y: {
-      ...lineOptions.value.scales.y,
+    x: {
+      grid: {
+        display: false
+      },
       ticks: {
-        ...lineOptions.value.scales.y.ticks,
+        color: chartColors.value.text,
+        font: {
+          size: 10
+        },
+        autoSkip: true,
+        maxRotation: 45
+      }
+    },
+    y: {
+      position: 'left' as const,
+      beginAtZero: true,
+      grid: {
+        color: chartColors.value.grid
+      },
+      ticks: {
+        color: chartColors.value.text,
+        font: {
+          size: 10
+        },
         callback: (value: string | number) => `$${formatCost(Number(value))}`
+      }
+    },
+    margin: {
+      position: 'right' as const,
+      beginAtZero: true,
+      grid: {
+        display: false
+      },
+      ticks: {
+        color: '#8b5cf6',
+        font: {
+          size: 10
+        },
+        callback: (value: string | number) => `${Number(value).toFixed(0)}%`
       }
     }
   }
 }))
 
-const profitTrendChartData = computed(() => {
+const profitTrendChartData = computed<ChartData<'bar'> | null>(() => {
   const trend = profitMonitor.value?.trend || []
   if (!trend.length) return null
-  return {
-    labels: trend.map((point) => point.date),
+  // Chart.js 支持 dataset 级 `type: 'line'` 做柱线混排，但其内置类型把混合 dataset 排除在
+  // ChartData<'bar'> 之外，这里在边界处收窄一次，运行期行为不受影响。
+  const data = {
+    labels: trend.map((point) => formatProfitTrendLabel(point.date)),
     datasets: [
       {
         label: t('admin.dashboard.profitSales'),
         data: trend.map((point) => point.sales),
-        borderColor: '#10b981',
-        backgroundColor: '#10b98120',
-        tension: 0.3,
-        fill: false
+        backgroundColor: '#3b82f6',
+        borderRadius: 3,
+        barPercentage: 0.85,
+        categoryPercentage: 0.62,
+        yAxisID: 'y'
       },
       {
         label: t('admin.dashboard.profitCost'),
         data: trend.map((point) => point.cost),
-        borderColor: '#f59e0b',
-        backgroundColor: '#f59e0b20',
-        tension: 0.3,
-        fill: false
+        backgroundColor: '#f59e0b',
+        borderRadius: 3,
+        barPercentage: 0.85,
+        categoryPercentage: 0.62,
+        yAxisID: 'y'
       },
       {
-        label: t('admin.dashboard.profit'),
-        data: trend.map((point) => point.profit),
-        borderColor: '#3b82f6',
-        backgroundColor: '#3b82f620',
+        type: 'line' as const,
+        label: t('admin.dashboard.profitMargin'),
+        data: trend.map((point) => (typeof point.margin_percent === 'number' ? point.margin_percent : 0)),
+        borderColor: '#8b5cf6',
+        backgroundColor: '#8b5cf6',
+        borderWidth: 2,
+        pointRadius: 2.5,
+        pointBackgroundColor: '#8b5cf6',
         tension: 0.3,
-        fill: false
+        fill: false,
+        yAxisID: 'margin'
       }
     ]
   }
+  return data as unknown as ChartData<'bar'>
 })
 
 // User trend chart data
@@ -954,6 +1098,12 @@ const goToUserUsage = (item: UserSpendingRankingItem) => {
 }
 
 // Date range change handler
+const setGranularity = (value: DashboardGranularity) => {
+  if (granularity.value === value) return
+  granularity.value = value
+  void loadChartData()
+}
+
 const onDateRangeChange = (range: {
   startDate: string
   endDate: string
@@ -964,11 +1114,15 @@ const onDateRangeChange = (range: {
   const end = new Date(range.endDate)
   const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
 
-  // If range is 1 day, use hourly granularity
+  // 1 天内按小时、两个月内按天、一年内按周，更长按月，避免柱子过多或过少。
   if (daysDiff <= 1) {
     granularity.value = 'hour'
-  } else {
+  } else if (daysDiff <= 62) {
     granularity.value = 'day'
+  } else if (daysDiff <= 366) {
+    granularity.value = 'week'
+  } else {
+    granularity.value = 'month'
   }
 
   loadChartData()
@@ -1029,6 +1183,58 @@ async function loadDashboardSnapshot(includeStats: boolean) {
     }
   }
 }
+
+// 明细表的独立统计区间：inherit 时直接复用上方快照结果，其余按预设窗口单独取数。
+const resolveProfitTableRange = (): { start: string; end: string } | null => {
+  if (profitTableRange.value === 'inherit') return null
+  const end = new Date()
+  if (profitTableRange.value === 'quarter') {
+    const quarterStartMonth = Math.floor(end.getMonth() / 3) * 3
+    const quarterStart = new Date(end.getFullYear(), quarterStartMonth, 1)
+    return { start: formatLocalDate(quarterStart), end: formatLocalDate(end) }
+  }
+  const days = profitTableRange.value === 'last7' ? 7 : profitTableRange.value === 'last90' ? 90 : 30
+  const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000)
+  return { start: formatLocalDate(start), end: formatLocalDate(end) }
+}
+
+const loadProfitTable = async () => {
+  const range = resolveProfitTableRange()
+  if (!range) {
+    profitTableMonitor.value = null
+    profitTableLoading.value = false
+    return
+  }
+  const currentSeq = ++profitTableLoadSeq
+  profitTableLoading.value = true
+  try {
+    const response = await adminAPI.dashboard.getSnapshotV2({
+      start_date: range.start,
+      end_date: range.end,
+      granularity: granularity.value,
+      include_stats: false,
+      include_trend: false,
+      include_model_stats: false,
+      include_group_stats: false,
+      include_users_trend: false,
+      include_profit: true
+    })
+    if (currentSeq !== profitTableLoadSeq) return
+    profitTableMonitor.value = response.profit || null
+  } catch (error) {
+    if (currentSeq !== profitTableLoadSeq) return
+    appStore.showError(t('admin.dashboard.failedToLoad'))
+    console.error('Error loading profit table snapshot:', error)
+  } finally {
+    if (currentSeq === profitTableLoadSeq) {
+      profitTableLoading.value = false
+    }
+  }
+}
+
+watch(profitTableRange, () => {
+  void loadProfitTable()
+})
 
 const setUserTrendMetric = (metric: 'tokens' | 'actual_cost') => {
   if (userTrendMetric.value === metric) return
@@ -1120,4 +1326,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 明细表工具栏里的区间下拉要与左侧 tab 同一高度，覆盖 Select 默认的大号内边距。 */
+.profit-range-select :deep(.select-trigger) {
+  @apply rounded-lg px-3 py-1.5 text-xs;
+}
 </style>

@@ -17,6 +17,25 @@ import (
 
 var dashboardSnapshotV2Cache = newSnapshotCache(30 * time.Second)
 
+// normalizeSnapshotGranularity keeps the requested bucket inside the set the
+// aggregation layer supports (see dateFormatWhitelist in the repository), so
+// week/month views reach SQL as-is instead of being flattened to day.
+// Unknown or empty values fall back to day.
+func normalizeSnapshotGranularity(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "hour":
+		return "hour"
+	case "week":
+		return "week"
+	case "month":
+		return "month"
+	case "day":
+		return "day"
+	default:
+		return "day"
+	}
+}
+
 type dashboardSnapshotV2Stats struct {
 	usagestats.DashboardStats
 	Uptime int64 `json:"uptime"`
@@ -75,10 +94,7 @@ type dashboardSnapshotV2CacheKey struct {
 
 func (h *DashboardHandler) GetSnapshotV2(c *gin.Context) {
 	startTime, endTime := parseTimeRange(c)
-	granularity := strings.TrimSpace(c.DefaultQuery("granularity", "day"))
-	if granularity != "hour" {
-		granularity = "day"
-	}
+	granularity := normalizeSnapshotGranularity(c.DefaultQuery("granularity", "day"))
 
 	includeStats := parseBoolQueryWithDefault(c.Query("include_stats"), true)
 	includeTrend := parseBoolQueryWithDefault(c.Query("include_trend"), true)

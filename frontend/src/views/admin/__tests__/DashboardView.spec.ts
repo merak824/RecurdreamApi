@@ -12,7 +12,8 @@ const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(
 }))
 
 vi.mock('vue-chartjs', () => ({
-  Line: { name: 'Line', props: ['data', 'options'], template: '<div class="line-chart" />' }
+  Line: { name: 'Line', props: ['data', 'options'], template: '<div class="line-chart" />' },
+  Bar: { name: 'Bar', props: ['data', 'options'], template: '<div class="bar-chart" />' }
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -52,6 +53,14 @@ const formatLocalDate = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+// 明细表区间下拉需要真实双向绑定，才能断言切换区间后的重新取数。
+const SelectStub = {
+  name: 'Select',
+  props: ['modelValue', 'options'],
+  emits: ['update:modelValue', 'change'],
+  template: '<div class="select-stub" />'
 }
 
 const createDashboardStats = (): DashboardStats => ({
@@ -372,5 +381,131 @@ describe('admin DashboardView', () => {
     expect(getSnapshotV2).toHaveBeenCalledTimes(2)
 
     wrapper.unmount()
+  })
+
+  it('renders the profit trend as bars with margin on a second axis', async () => {
+    getSnapshotV2.mockResolvedValueOnce({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-10T00:00:00Z',
+        summary: {
+          sales: 10,
+          cost: 7,
+          profit: 3,
+          margin_percent: 30,
+          requests: 2,
+          tokens: 100,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified'
+        },
+        trend: [
+          { date: '2026-08-09T00:00:00Z', sales: 10, cost: 7, profit: 3, margin_percent: 30 },
+          { date: '2026-08-10T00:00:00Z', sales: 4, cost: 5, profit: -1, margin_percent: -25 }
+        ],
+        groups: [],
+        models: [],
+        accounts: []
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const chart = wrapper.findComponent({ name: 'Bar' })
+    expect(chart.exists()).toBe(true)
+    const datasets = chart.props('data').datasets
+    expect(datasets.map((dataset: any) => dataset.label)).toEqual([
+      'admin.dashboard.profitSales',
+      'admin.dashboard.profitCost',
+      'admin.dashboard.profitMargin'
+    ])
+    expect(datasets[0].yAxisID).toBe('y')
+    expect(datasets[1].yAxisID).toBe('y')
+    expect(datasets[2].type).toBe('line')
+    expect(datasets[2].yAxisID).toBe('margin')
+    expect(datasets[2].data).toEqual([30, -25])
+    expect(chart.props('options').scales.margin.ticks.callback(30)).toBe('30%')
+    expect(chart.props('options').scales.y.ticks.callback(7)).toBe('$7.00')
+  })
+
+  it('reloads the profit table with its own range once it leaves inherit mode', async () => {
+    getSnapshotV2.mockResolvedValue({
+      stats: createDashboardStats(),
+      trend: [],
+      models: [],
+      profit: {
+        generated_at: '2026-08-10T00:00:00Z',
+        summary: {
+          sales: 10,
+          cost: 7,
+          profit: 3,
+          margin_percent: 30,
+          requests: 2,
+          tokens: 100,
+          unknown_cost_count: 0,
+          unverified_cost_count: 0,
+          cost_source: 'upstream_probe',
+          verification_status: 'unverified'
+        },
+        trend: [],
+        groups: [
+          { id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }
+        ],
+        models: [],
+        accounts: []
+      }
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: SelectStub,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true
+        }
+      }
+    })
+
+    await flushPromises()
+    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    expect(getSnapshotV2.mock.calls[0][0].include_profit).toBe(true)
+
+    wrapper.findComponent(SelectStub).vm.$emit('update:modelValue', 'last7')
+    await flushPromises()
+
+    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
+    const request = getSnapshotV2.mock.calls[1][0]
+    const now = new Date()
+    const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
+    expect(request.start_date).toBe(formatLocalDate(sixDaysAgo))
+    expect(request.end_date).toBe(formatLocalDate(now))
+    expect(request.include_profit).toBe(true)
+    expect(request.include_trend).toBe(false)
+
+    // 回到跟随模式不再额外请求，直接复用上方快照。
+    wrapper.findComponent(SelectStub).vm.$emit('update:modelValue', 'inherit')
+    await flushPromises()
+    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
   })
 })
