@@ -55,14 +55,6 @@ const formatLocalDate = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-// 明细表区间下拉需要真实双向绑定，才能断言切换区间后的重新取数。
-const SelectStub = {
-  name: 'Select',
-  props: ['modelValue', 'options'],
-  emits: ['update:modelValue', 'change'],
-  template: '<div class="select-stub" />'
-}
-
 const createDashboardStats = (): DashboardStats => ({
   total_users: 0,
   today_new_users: 0,
@@ -99,6 +91,43 @@ const createDashboardStats = (): DashboardStats => ({
   tpm: 0
 })
 
+// SelectStub 在上方定义；弹窗直通渲染，方便断言自定义区间。
+const BaseDialogStub = {
+  name: 'BaseDialog',
+  props: ['show', 'title'],
+  emits: ['close'],
+  template: '<div v-if="show" class="dialog-stub"><slot /><slot name="footer" /></div>'
+}
+
+const mountView = () =>
+  mount(DashboardView, {
+    global: {
+      stubs: {
+        AppLayout: { template: '<div><slot /></div>' },
+        LoadingSpinner: true,
+        Icon: true,
+        DateRangePicker: true,
+        ModelDistributionChart: true,
+        TokenUsageTrend: true,
+        BaseDialog: BaseDialogStub
+      }
+    }
+  })
+
+// 主快照与利润快照分流：利润模块用自己的请求（include_profit: true）取值。
+const withProfit = (profit: any) => {
+  getSnapshotV2.mockImplementation((params: any) =>
+    Promise.resolve(
+      params?.include_profit
+        ? { trend: [], models: [], profit }
+        : { stats: createDashboardStats(), trend: [], models: [] }
+    )
+  )
+}
+
+const profitCalls = () =>
+  getSnapshotV2.mock.calls.map((call) => call[0]).filter((params: any) => params?.include_profit === true)
+
 describe('admin DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -107,11 +136,14 @@ describe('admin DashboardView', () => {
     getUserUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
 
-    getSnapshotV2.mockResolvedValue({
-      stats: createDashboardStats(),
-      trend: [],
-      models: []
-    })
+    // 主快照不再带 profit，利润模块用自己的请求（include_profit: true）取值。
+    getSnapshotV2.mockImplementation((params: any) =>
+      Promise.resolve(
+        params?.include_profit
+          ? { trend: [], models: [], profit: undefined }
+          : { stats: createDashboardStats(), trend: [], models: [] }
+      )
+    )
     getUserUsageTrend.mockResolvedValue({
       trend: [],
       start_date: '',
@@ -157,76 +189,43 @@ describe('admin DashboardView', () => {
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
-    mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: { template: '<div />' }
-        }
-      }
-    })
+    mountView()
 
     await flushPromises()
 
     const now = new Date()
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
       granularity: 'hour',
-      include_profit: true
+      include_profit: false
     }))
   })
 
-  it('renders profit summary and switches dimension tabs from snapshot data', async () => {
-    getSnapshotV2.mockResolvedValueOnce({
-      stats: createDashboardStats(),
+  it('renders profit summary and switches dimension tabs from the profit snapshot', async () => {
+    withProfit({
+      generated_at: '2026-08-10T00:00:00Z',
+      summary: {
+        sales: 10,
+        cost: 7,
+        profit: 3,
+        margin_percent: 30,
+        requests: 2,
+        tokens: 100,
+        unknown_cost_count: 1,
+        unverified_cost_count: 2,
+        cost_source: 'mixed',
+        verification_status: 'unverified'
+      },
       trend: [],
-      models: [],
-      profit: {
-        generated_at: '2026-08-10T00:00:00Z',
-        summary: {
-          sales: 10,
-          cost: 7,
-          profit: 3,
-          margin_percent: 30,
-          requests: 2,
-          tokens: 100,
-          unknown_cost_count: 1,
-          unverified_cost_count: 2,
-          cost_source: 'mixed',
-          verification_status: 'unverified'
-        },
-        trend: [],
-        groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }],
-        models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'group_break_even_estimate', verification_status: 'unverified' }],
-        accounts: []
-      }
+      groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }],
+      models: [{ name: 'gpt-test', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'group_break_even_estimate', verification_status: 'unverified' }],
+      accounts: []
     })
 
-    const wrapper = mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: { template: '<div />' }
-        }
-      }
-    })
-
+    const wrapper = mountView()
     await flushPromises()
 
     const monitor = wrapper.get('[data-testid="profit-monitor"]')
@@ -243,58 +242,40 @@ describe('admin DashboardView', () => {
   })
 
   it('renders automatic upstream reconciliation states and the mismatch amount', async () => {
-    getSnapshotV2.mockResolvedValueOnce({
-      stats: createDashboardStats(),
+    withProfit({
+      generated_at: '2026-08-18T08:20:00Z',
+      summary: {
+        sales: 50,
+        cost: 40,
+        profit: 10,
+        margin_percent: 20,
+        requests: 5,
+        tokens: 500,
+        unknown_cost_count: 0,
+        unverified_cost_count: 0,
+        cost_source: 'upstream_probe',
+        verification_status: 'unverified',
+        reconciliation_status: 'difference',
+        upstream_actual_cost: 42,
+        reconciliation_difference: 2,
+        reconciliation_difference_percent: 4.7619,
+        reconciliation_observed_at: '2026-08-18T08:20:00Z'
+      },
       trend: [],
+      groups: [],
       models: [],
-      profit: {
-        generated_at: '2026-08-18T08:20:00Z',
-        summary: {
-          sales: 50,
-          cost: 40,
-          profit: 10,
-          margin_percent: 20,
-          requests: 5,
-          tokens: 500,
-          unknown_cost_count: 0,
-          unverified_cost_count: 0,
-          cost_source: 'upstream_probe',
-          verification_status: 'unverified',
-          reconciliation_status: 'difference',
-          upstream_actual_cost: 42,
-          reconciliation_difference: 2,
-          reconciliation_difference_percent: 4.7619,
-          reconciliation_observed_at: '2026-08-18T08:20:00Z'
-        },
-        trend: [],
-        groups: [],
-        models: [],
-        accounts: [
-          { id: 1, name: 'matched-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'matched', upstream_actual_cost: 8.005, reconciliation_difference: 0.005 },
-          { id: 2, name: 'difference-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'difference', upstream_actual_cost: 10, reconciliation_difference: 2, reconciliation_difference_percent: 20 },
-          { id: 3, name: 'pending-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'pending' },
-          { id: 4, name: 'unavailable-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'unavailable' },
-          { id: 5, name: 'estimated-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'group_break_even_estimate', verification_status: 'unverified', reconciliation_status: 'estimated' }
-        ]
-      }
+      accounts: [
+        { id: 1, name: 'matched-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'matched', upstream_actual_cost: 8.005, reconciliation_difference: 0.005 },
+        { id: 2, name: 'difference-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'difference', upstream_actual_cost: 10, reconciliation_difference: 2, reconciliation_difference_percent: 20 },
+        { id: 3, name: 'pending-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'pending' },
+        { id: 4, name: 'unavailable-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'upstream_probe', verification_status: 'unverified', reconciliation_status: 'unavailable' },
+        { id: 5, name: 'estimated-account', requests: 1, tokens: 100, sales: 10, cost: 8, profit: 2, margin_percent: 20, cost_source: 'group_break_even_estimate', verification_status: 'unverified', reconciliation_status: 'estimated' }
+      ]
     })
 
-    const wrapper = mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: { template: '<div />' }
-        }
-      }
-    })
-
+    const wrapper = mountView()
     await flushPromises()
+
     const monitor = wrapper.get('[data-testid="profit-monitor"]')
     const accountTab = monitor.findAll('button').find((button) => button.text() === 'admin.dashboard.profitAccounts')
     expect(accountTab).toBeDefined()
@@ -312,120 +293,84 @@ describe('admin DashboardView', () => {
   it('explains a missing start sample and refreshes after the next sampling time', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-19T07:26:00Z'))
-    getSnapshotV2.mockResolvedValue({
-      stats: createDashboardStats(),
+    withProfit({
+      generated_at: '2026-08-19T07:26:00Z',
+      last_sample_at: '2026-08-19T07:20:13Z',
+      next_sample_at: '2026-08-19T07:30:00Z',
+      summary: {
+        sales: 10,
+        cost: 8,
+        profit: 2,
+        margin_percent: 20,
+        requests: 1,
+        tokens: 100,
+        unknown_cost_count: 0,
+        unverified_cost_count: 0,
+        cost_source: 'upstream_probe',
+        verification_status: 'unverified',
+        reconciliation_status: 'missing_start'
+      },
       trend: [],
+      groups: [],
       models: [],
-      profit: {
-        generated_at: '2026-08-19T07:26:00Z',
+      accounts: [{
+        id: 7,
+        name: 'upstream-7',
+        requests: 1,
+        tokens: 100,
+        sales: 10,
+        cost: 8,
+        profit: 2,
+        margin_percent: 20,
+        cost_source: 'upstream_probe',
+        verification_status: 'unverified',
+        reconciliation_status: 'missing_start',
         last_sample_at: '2026-08-19T07:20:13Z',
-        next_sample_at: '2026-08-19T07:30:00Z',
-        summary: {
-          sales: 10,
-          cost: 8,
-          profit: 2,
-          margin_percent: 20,
-          requests: 1,
-          tokens: 100,
-          unknown_cost_count: 0,
-          unverified_cost_count: 0,
-          cost_source: 'upstream_probe',
-          verification_status: 'unverified',
-          reconciliation_status: 'missing_start'
-        },
-        trend: [],
-        groups: [],
-        models: [],
-        accounts: [{
-          id: 7,
-          name: 'upstream-7',
-          requests: 1,
-          tokens: 100,
-          sales: 10,
-          cost: 8,
-          profit: 2,
-          margin_percent: 20,
-          cost_source: 'upstream_probe',
-          verification_status: 'unverified',
-          reconciliation_status: 'missing_start',
-          last_sample_at: '2026-08-19T07:20:13Z',
-          next_sample_at: '2026-08-19T07:30:00Z'
-        }]
-      }
+        next_sample_at: '2026-08-19T07:30:00Z'
+      }]
     })
 
-    const wrapper = mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: { template: '<div />' }
-        }
-      }
-    })
-
+    const wrapper = mountView()
     await flushPromises()
+
     const monitor = wrapper.get('[data-testid="profit-monitor"]')
     expect(monitor.text()).toContain('admin.dashboard.profitReconciliationMissingStart')
     expect(monitor.text()).toContain('admin.dashboard.profitLastSample')
     expect(monitor.text()).toContain('admin.dashboard.profitNextSample')
 
-    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
+    expect(profitCalls()).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(4 * 60 * 1000 + 21 * 1000)
     await flushPromises()
-    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
+    expect(profitCalls()).toHaveLength(2)
 
     wrapper.unmount()
   })
 
   it('renders the profit trend as bars with margin on a second axis', async () => {
-    getSnapshotV2.mockResolvedValueOnce({
-      stats: createDashboardStats(),
-      trend: [],
+    withProfit({
+      generated_at: '2026-08-10T00:00:00Z',
+      summary: {
+        sales: 10,
+        cost: 7,
+        profit: 3,
+        margin_percent: 30,
+        requests: 2,
+        tokens: 100,
+        unknown_cost_count: 0,
+        unverified_cost_count: 0,
+        cost_source: 'upstream_probe',
+        verification_status: 'unverified'
+      },
+      trend: [
+        { date: '2026-08-09T00:00:00Z', sales: 10, cost: 7, profit: 3, margin_percent: 30 },
+        { date: '2026-08-10T00:00:00Z', sales: 4, cost: 5, profit: -1, margin_percent: -25 }
+      ],
+      groups: [],
       models: [],
-      profit: {
-        generated_at: '2026-08-10T00:00:00Z',
-        summary: {
-          sales: 10,
-          cost: 7,
-          profit: 3,
-          margin_percent: 30,
-          requests: 2,
-          tokens: 100,
-          unknown_cost_count: 0,
-          unverified_cost_count: 0,
-          cost_source: 'upstream_probe',
-          verification_status: 'unverified'
-        },
-        trend: [
-          { date: '2026-08-09T00:00:00Z', sales: 10, cost: 7, profit: 3, margin_percent: 30 },
-          { date: '2026-08-10T00:00:00Z', sales: 4, cost: 5, profit: -1, margin_percent: -25 }
-        ],
-        groups: [],
-        models: [],
-        accounts: []
-      }
+      accounts: []
     })
 
-    const wrapper = mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true
-        }
-      }
-    })
-
+    const wrapper = mountView()
     await flushPromises()
 
     const chart = wrapper.findComponent({ name: 'Bar' })
@@ -445,67 +390,63 @@ describe('admin DashboardView', () => {
     expect(chart.props('options').scales.y.ticks.callback(7)).toBe('$7.00')
   })
 
-  it('reloads the profit table with its own range once it leaves inherit mode', async () => {
-    getSnapshotV2.mockResolvedValue({
-      stats: createDashboardStats(),
+  it('switches the whole profit module to the last 7 days', async () => {
+    withProfit({
+      generated_at: '2026-08-10T00:00:00Z',
+      summary: {
+        sales: 10, cost: 7, profit: 3, margin_percent: 30, requests: 2, tokens: 100,
+        unknown_cost_count: 0, unverified_cost_count: 0, cost_source: 'upstream_probe', verification_status: 'unverified'
+      },
       trend: [],
+      groups: [{ id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }],
       models: [],
-      profit: {
-        generated_at: '2026-08-10T00:00:00Z',
-        summary: {
-          sales: 10,
-          cost: 7,
-          profit: 3,
-          margin_percent: 30,
-          requests: 2,
-          tokens: 100,
-          unknown_cost_count: 0,
-          unverified_cost_count: 0,
-          cost_source: 'upstream_probe',
-          verification_status: 'unverified'
-        },
-        trend: [],
-        groups: [
-          { id: 1, name: 'default', requests: 2, tokens: 100, sales: 10, cost: 7, profit: 3, margin_percent: 30, cost_source: 'upstream_probe', verification_status: 'unverified' }
-        ],
-        models: [],
-        accounts: []
-      }
+      accounts: []
     })
 
-    const wrapper = mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: SelectStub,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true
-        }
-      }
-    })
-
+    const wrapper = mountView()
     await flushPromises()
-    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
-    expect(getSnapshotV2.mock.calls[0][0].include_profit).toBe(true)
+    expect(profitCalls()).toHaveLength(1)
+    expect(wrapper.get('[data-testid="profit-monitor"]').text()).toContain('default')
 
-    wrapper.findComponent(SelectStub).vm.$emit('update:modelValue', 'last7')
+    await wrapper.get('[data-testid="profit-range-last7"]').trigger('click')
     await flushPromises()
 
-    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
-    const request = getSnapshotV2.mock.calls[1][0]
+    expect(profitCalls()).toHaveLength(2)
+    const request = profitCalls()[1] as any
     const now = new Date()
     const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
     expect(request.start_date).toBe(formatLocalDate(sixDaysAgo))
     expect(request.end_date).toBe(formatLocalDate(now))
-    expect(request.include_profit).toBe(true)
+    expect(request.granularity).toBe('day')
     expect(request.include_trend).toBe(false)
+    expect(request.include_stats).toBe(false)
+  })
 
-    // 回到跟随模式不再额外请求，直接复用上方快照。
-    wrapper.findComponent(SelectStub).vm.$emit('update:modelValue', 'inherit')
+  it('applies a custom range chosen in the dialog', async () => {
+    withProfit({
+      generated_at: '2026-08-10T00:00:00Z',
+      summary: {
+        sales: 10, cost: 7, profit: 3, margin_percent: 30, requests: 2, tokens: 100,
+        unknown_cost_count: 0, unverified_cost_count: 0, cost_source: 'upstream_probe', verification_status: 'unverified'
+      },
+      trend: [],
+      groups: [],
+      models: [],
+      accounts: []
+    })
+
+    const wrapper = mountView()
     await flushPromises()
-    expect(getSnapshotV2).toHaveBeenCalledTimes(2)
+
+    await wrapper.get('[data-testid="profit-range-custom"]').trigger('click')
+    await wrapper.get('[data-testid="profit-custom-start"]').setValue('2026-09-01')
+    await wrapper.get('[data-testid="profit-custom-end"]').setValue('2026-09-20')
+    await wrapper.get('[data-testid="profit-custom-apply"]').trigger('click')
+    await flushPromises()
+
+    const request = profitCalls().at(-1) as any
+    expect(request.start_date).toBe('2026-09-01')
+    expect(request.end_date).toBe('2026-09-20')
+    expect(request.granularity).toBe('day')
   })
 })

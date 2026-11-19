@@ -216,9 +216,9 @@
           </div>
         </div>
 
-        <!-- Profit monitor is part of the dashboard, using the same date range. -->
-        <section v-if="profitMonitor" class="space-y-4" data-testid="profit-monitor">
-          <div class="flex flex-wrap items-start justify-between gap-3">
+        <!-- 利润监控：一张卡包住「时间选择 + 指标 + 趋势 + 明细」，切换时间三者一起变 -->
+        <section class="card p-4" data-testid="profit-monitor">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 pb-3 dark:border-dark-700">
             <div>
               <h2 class="text-base font-semibold text-gray-900 dark:text-white">
                 {{ t('admin.dashboard.profitMonitor') }}
@@ -227,58 +227,94 @@
                 {{ t('admin.dashboard.profitMonitorHint') }}
               </p>
             </div>
-            <div class="text-right">
-              <span
-                class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
-                :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
-              >
-                <Icon name="shield" size="xs" :stroke-width="2" />
-                {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
-              </span>
-              <p v-if="profitMonitor.last_sample_at || profitMonitor.next_sample_at" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                <span v-if="profitMonitor.last_sample_at">{{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(profitMonitor.last_sample_at) }}</span>
-                <span v-if="profitMonitor.last_sample_at && profitMonitor.next_sample_at"> · </span>
-                <span v-if="profitMonitor.next_sample_at">{{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(profitMonitor.next_sample_at) }}</span>
+            <div class="flex flex-col items-end gap-1.5">
+              <div class="inline-flex rounded-lg bg-gray-100 p-0.5 dark:bg-dark-800">
+                <button
+                  v-for="option in profitRangeOptions"
+                  :key="option.value"
+                  type="button"
+                  class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="
+                    profitRange === option.value
+                      ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-700 dark:text-primary-300'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                  "
+                  :data-testid="`profit-range-${option.value}`"
+                  @click="setProfitRange(option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+              <p class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <LoadingSpinner v-if="profitLoading" size="sm" />
+                <span>{{ profitRangeCaption }}</span>
+                <span v-if="profitMonitor?.last_sample_at" class="text-gray-400 dark:text-dark-500">
+                  · {{ t('admin.dashboard.profitLastSample') }} {{ formatSampleTime(profitMonitor.last_sample_at) }}
+                </span>
               </p>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <div class="card border-l-4 border-emerald-500 p-4">
+          <div v-if="profitLoading && !profitMonitor" class="flex justify-center py-16">
+            <LoadingSpinner />
+          </div>
+          <div v-else-if="!profitMonitor" class="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
+            {{ t('admin.dashboard.profitNoData') }}
+          </div>
+          <template v-else>
+          <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span
+              class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset"
+              :class="profitReconciliationClass(profitMonitor.summary.reconciliation_status)"
+            >
+              <Icon name="shield" size="xs" :stroke-width="2" />
+              {{ formatProfitReconciliationStatus(profitMonitor.summary.reconciliation_status) }}
+            </span>
+            <span v-if="profitMonitor.summary.upstream_actual_cost !== undefined && profitMonitor.summary.upstream_actual_cost !== null" class="text-gray-500 dark:text-gray-400">
+              {{ t('admin.dashboard.profitUpstreamActualCost') }}: ${{ formatCost(profitMonitor.summary.upstream_actual_cost) }}
+            </span>
+            <span
+              v-if="profitMonitor.summary.reconciliation_difference !== undefined && profitMonitor.summary.reconciliation_difference !== null"
+              :class="profitMonitor.summary.reconciliation_status === 'difference' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"
+            >
+              {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }}: {{ formatSignedCost(profitMonitor.summary.reconciliation_difference) }}
+            </span>
+            <span v-if="profitMonitor.next_sample_at" class="text-gray-400 dark:text-dark-500">
+              {{ t('admin.dashboard.profitNextSample') }} {{ formatSampleTime(profitMonitor.next_sample_at) }}
+            </span>
+          </div>
+
+          <div class="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-800/60">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitSales') }}</p>
               <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">${{ formatCost(profitMonitor.summary.sales) }}</p>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ formatNumber(profitMonitor.summary.requests) }} {{ t('admin.dashboard.requests') }}</p>
             </div>
-            <div class="card border-l-4 border-amber-500 p-4">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-800/60">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitCost') }}</p>
-              <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">${{ formatCost(profitMonitor.summary.cost) }}</p>
+              <p class="mt-1 text-xl font-bold text-amber-600 dark:text-amber-400">${{ formatCost(profitMonitor.summary.cost) }}</p>
               <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ formatProfitSource(profitMonitor.summary.cost_source) }}</p>
             </div>
-            <div class="card border-l-4 p-4" :class="profitMonitor.summary.profit < 0 ? 'border-red-500' : 'border-blue-500'">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-800/60">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profit') }}</p>
               <p class="mt-1 text-xl font-bold" :class="profitMonitor.summary.profit < 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'">
                 ${{ formatCost(profitMonitor.summary.profit) }}
               </p>
               <p v-if="profitMonitor.summary.profit < 0" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ t('admin.dashboard.profitNegative') }}</p>
+              <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitPendingCostCount') }}: {{ formatNumber(profitMonitor.summary.unknown_cost_count) }}</p>
             </div>
-            <div class="card border-l-4 border-violet-500 p-4">
+            <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-800/60">
               <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitMargin') }}</p>
               <p class="mt-1 text-xl font-bold text-violet-600 dark:text-violet-400">{{ formatMargin(profitMonitor.summary.margin_percent) }}</p>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitPendingCostCount') }}: {{ formatNumber(profitMonitor.summary.unknown_cost_count) }}</p>
             </div>
           </div>
 
-          <div class="card p-4">
-            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div class="mt-4">
+            <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.profitTrend') }}</h3>
                 <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitTrendHint') }}</p>
-              </div>
-              <div v-if="profitMonitor.summary.upstream_actual_cost !== undefined && profitMonitor.summary.upstream_actual_cost !== null" class="text-right text-xs text-gray-500 dark:text-gray-400">
-                <span>{{ t('admin.dashboard.profitUpstreamActualCost') }}: ${{ formatCost(profitMonitor.summary.upstream_actual_cost) }}</span>
-                <span v-if="profitMonitor.summary.reconciliation_difference !== undefined && profitMonitor.summary.reconciliation_difference !== null" class="ml-3" :class="profitMonitor.summary.reconciliation_status === 'difference' ? 'text-red-600 dark:text-red-400' : ''">
-                  {{ t('admin.dashboard.profitReconciliationDifferenceAmount') }}: {{ formatSignedCost(profitMonitor.summary.reconciliation_difference) }}
-                </span>
               </div>
             </div>
             <div class="h-72">
@@ -289,8 +325,8 @@
             </div>
           </div>
 
-          <div class="card overflow-hidden">
-            <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-dark-700">
+          <div class="mt-4 border-t border-gray-200 pt-3 dark:border-dark-700">
+            <div class="flex flex-wrap items-center gap-2 pb-2">
               <button
                 v-for="tab in profitTabs"
                 :key="tab.value"
@@ -301,18 +337,7 @@
               >
                 {{ tab.label }}
               </button>
-              <div class="ml-auto flex items-center gap-2">
-                <LoadingSpinner v-if="profitTableLoading" size="sm" />
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitRangeLabel') }}</span>
-                <div class="profit-range-select w-44" :class="profitTableLoading ? 'opacity-60' : ''">
-                  <Select
-                    v-model="profitTableRange"
-                    :options="profitTableRangeOptions"
-                    :aria-label="t('admin.dashboard.profitRangeLabel')"
-                    data-testid="profit-range-select"
-                  />
-                </div>
-              </div>
+              <span class="ml-auto text-xs text-gray-400 dark:text-dark-500">{{ profitTableCaption }}</span>
             </div>
             <div class="overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200 text-left text-xs dark:divide-dark-700">
@@ -374,7 +399,47 @@
               </table>
             </div>
           </div>
+          </template>
         </section>
+
+        <BaseDialog
+          :show="profitCustomOpen"
+          :title="t('admin.dashboard.profitCustomTitle')"
+          width="narrow"
+          @close="profitCustomOpen = false"
+        >
+          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.dashboard.profitCustomHint') }}</p>
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="flex-1">
+              <span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dates.startDate') }}</span>
+              <input
+                v-model="profitCustomDraft.start"
+                type="date"
+                :max="profitCustomDraft.end || undefined"
+                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-100"
+                data-testid="profit-custom-start"
+              />
+            </label>
+            <label class="flex-1">
+              <span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dates.endDate') }}</span>
+              <input
+                v-model="profitCustomDraft.end"
+                type="date"
+                :min="profitCustomDraft.start || undefined"
+                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-100"
+                data-testid="profit-custom-end"
+              />
+            </label>
+          </div>
+          <template #footer>
+            <button type="button" class="btn btn-secondary" @click="profitCustomOpen = false">
+              {{ t('common.cancel') }}
+            </button>
+            <button type="button" class="btn btn-primary" data-testid="profit-custom-apply" @click="applyProfitCustom">
+              {{ t('admin.dashboard.profitCustomApply') }}
+            </button>
+          </template>
+        </BaseDialog>
 
         <!-- Quick Actions -->
         <div class="card p-4">
@@ -518,7 +583,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -542,7 +607,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
-import Select from '@/components/common/Select.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
@@ -576,7 +641,8 @@ const appStore = useAppStore()
 const router = useRouter()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 
-type ProfitTableRange = 'inherit' | 'last7' | 'last30' | 'last90' | 'quarter'
+// 利润模块自带时间范围：当天 / 近 7 天 / 近一个月 / 自定义，与上方全局时间范围解耦。
+type ProfitRangePreset = 'today' | 'last7' | 'month' | 'custom'
 
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
@@ -596,13 +662,16 @@ const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
 const profitMonitor = ref<ProfitMonitorResponse | null>(null)
 const profitDimension = ref<'groups' | 'models' | 'accounts'>('groups')
-const profitTableRange = ref<ProfitTableRange>('inherit')
-const profitTableMonitor = ref<ProfitMonitorResponse | null>(null)
-const profitTableLoading = ref(false)
+const profitRange = ref<ProfitRangePreset>('today')
+// 首屏即为加载态，避免挂载到首个响应之间闪一下「暂无数据」。
+const profitLoading = ref(true)
+const profitCustomOpen = ref(false)
+const profitCustomRange = ref<{ start: string; end: string }>({ start: '', end: '' })
+const profitCustomDraft = ref<{ start: string; end: string }>({ start: '', end: '' })
 let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
-let profitTableLoadSeq = 0
+let profitLoadSeq = 0
 let profitRefreshTimer: ReturnType<typeof setTimeout> | undefined
 const rankingLimit = 12
 
@@ -612,22 +681,17 @@ const profitTabs = computed(() => [
   { value: 'accounts' as const, label: t('admin.dashboard.profitAccounts') }
 ])
 
-const profitTableRangeOptions = computed(() => [
-  { value: 'inherit' as const, label: t('admin.dashboard.profitRangeInherit') },
+const profitRangeOptions = computed(() => [
+  { value: 'today' as const, label: t('admin.dashboard.profitRangeToday') },
   { value: 'last7' as const, label: t('admin.dashboard.profitRangeLast7') },
-  { value: 'last30' as const, label: t('admin.dashboard.profitRangeLast30') },
-  { value: 'last90' as const, label: t('admin.dashboard.profitRangeLast90') },
-  { value: 'quarter' as const, label: t('admin.dashboard.profitRangeQuarter') }
+  { value: 'month' as const, label: t('admin.dashboard.profitRangeMonth') },
+  { value: 'custom' as const, label: t('admin.dashboard.profitRangeCustom') }
 ])
 
-// 明细表可以独立于上方日期选择器取数：默认跟随，切换后按自己的区间重新请求。
-const profitTableSource = computed<ProfitMonitorResponse | null>(() =>
-  profitTableRange.value === 'inherit' ? profitMonitor.value : profitTableMonitor.value
-)
-
+// 明细表与指标、趋势共用同一份 profit 快照，切换时间三者一起变。
 const profitRows = computed<ProfitMonitorDimensionStat[]>(() => {
-  if (!profitTableSource.value) return []
-  return profitTableSource.value[profitDimension.value] || []
+  if (!profitMonitor.value) return []
+  return profitMonitor.value[profitDimension.value] || []
 })
 
 // Helper function to format date in local timezone
@@ -657,6 +721,54 @@ const granularityOptions = computed(() => [
   { value: 'week' as const, label: t('admin.dashboard.week') },
   { value: 'month' as const, label: t('admin.dashboard.month') }
 ])
+
+// 自定义区间的默认值：最近 10 天（含今天）。
+const defaultProfitCustomRange = (): { start: string; end: string } => {
+  const end = new Date()
+  const start = new Date(end.getTime() - 9 * 24 * 60 * 60 * 1000)
+  return { start: formatLocalDate(start), end: formatLocalDate(end) }
+}
+profitCustomRange.value = defaultProfitCustomRange()
+profitCustomDraft.value = { ...profitCustomRange.value }
+
+// 后端只接受 YYYY-MM-DD，end 会补到次日 00:00；当天用同一天表示「今天整天」，趋势再由前端裁掉未来时段。
+const resolveProfitRange = (): { start: string; end: string } => {
+  if (profitRange.value === 'custom') {
+    return { start: profitCustomRange.value.start, end: profitCustomRange.value.end }
+  }
+  const now = new Date()
+  const today = formatLocalDate(now)
+  if (profitRange.value === 'today') return { start: today, end: today }
+  const days = profitRange.value === 'last7' ? 7 : 30
+  const start = new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000)
+  return { start: formatLocalDate(start), end: today }
+}
+
+const profitSpanDays = computed(() => {
+  const { start, end } = resolveProfitRange()
+  const diff = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
+  return Math.round(diff / (24 * 60 * 60 * 1000)) + 1
+})
+
+// 当天按小时看走势；其余按跨度选天/周/月，保证柱数既不过密也不过疏。
+const profitGranularity = computed<DashboardGranularity>(() => {
+  if (profitRange.value === 'today') return 'hour'
+  const days = profitSpanDays.value
+  if (days <= 1) return 'hour'
+  if (days <= 62) return 'day'
+  if (days <= 366) return 'week'
+  return 'month'
+})
+
+const profitRangeCaption = computed(() => {
+  const { start, end } = resolveProfitRange()
+  if (profitRange.value === 'today') return t('admin.dashboard.profitRangeUntilNow', { start })
+  return `${start} ~ ${end}`
+})
+
+const profitTableCaption = computed(() =>
+  `${t('admin.dashboard.profitTableCaption')} · ${profitGranularity.value === 'hour' ? t('admin.dashboard.hour') : profitGranularity.value === 'day' ? t('admin.dashboard.day') : profitGranularity.value === 'week' ? t('admin.dashboard.week') : t('admin.dashboard.month')}`
+)
 
 // Dark mode detection
 const isDarkMode = computed(() => {
@@ -734,20 +846,30 @@ const lineOptions = computed(() => ({
 const formatProfitTrendLabel = (date: string): string => {
   const raw = (date || '').trim()
   if (!raw) return ''
-  if (granularity.value === 'week') {
+  const unit = profitGranularity.value
+  if (unit === 'week') {
     const [year, week] = raw.split('-')
     const weekNumber = Number(week)
     if (year && Number.isFinite(weekNumber)) return t('admin.dashboard.profitWeekLabel', { year, week: weekNumber })
     return raw
   }
-  if (granularity.value === 'month') return raw
-  if (granularity.value === 'hour') {
+  if (unit === 'month') return raw
+  if (unit === 'hour') {
     const [dayPart, timePart] = raw.split(' ')
     if (dayPart && timePart) return `${dayPart.slice(5)} ${timePart}`
     return raw
   }
   return raw.length === 10 ? raw.slice(5) : raw
 }
+
+// 「当天」后端按整天返回小时桶，未来的时段还没有数据，这里裁掉避免右侧挂一串空柱。
+const profitTrendPoints = computed(() => {
+  const trend = profitMonitor.value?.trend || []
+  if (profitRange.value !== 'today' || profitGranularity.value !== 'hour') return trend
+  const now = new Date()
+  const limit = `${formatLocalDate(now)} ${String(now.getHours()).padStart(2, '0')}:00`
+  return trend.filter((point) => (point.date || '').trim() <= limit)
+})
 
 const profitBarOptions = computed(() => ({
   responsive: true,
@@ -780,7 +902,7 @@ const profitBarOptions = computed(() => ({
         },
         footer: (items: any[]) => {
           if (!items?.length) return ''
-          const point = profitMonitor.value?.trend?.[items[0].dataIndex]
+          const point = profitTrendPoints.value[items[0].dataIndex]
           if (!point) return ''
           return `${t('admin.dashboard.profit')}: $${formatCost(point.profit)}`
         }
@@ -833,7 +955,7 @@ const profitBarOptions = computed(() => ({
 }))
 
 const profitTrendChartData = computed<ChartData<'bar'> | null>(() => {
-  const trend = profitMonitor.value?.trend || []
+  const trend = profitTrendPoints.value
   if (!trend.length) return null
   // Chart.js 支持 dataset 级 `type: 'line'` 做柱线混排，但其内置类型把混合 dataset 排除在
   // ChartData<'bar'> 之外，这里在边界处收窄一次，运行期行为不受影响。
@@ -1141,7 +1263,7 @@ const scheduleProfitRefresh = (nextSampleAt?: string) => {
 
   profitRefreshTimer = setTimeout(() => {
     profitRefreshTimer = undefined
-    void loadDashboardSnapshot(false)
+    void loadProfit()
   }, delay)
 }
 
@@ -1162,7 +1284,7 @@ async function loadDashboardSnapshot(includeStats: boolean) {
       include_model_stats: true,
       include_group_stats: false,
       include_users_trend: false,
-      include_profit: true
+      include_profit: false
     })
     if (currentSeq !== chartLoadSeq) return
     if (includeStats && response.stats) {
@@ -1170,8 +1292,6 @@ async function loadDashboardSnapshot(includeStats: boolean) {
     }
     trendData.value = response.trend || []
     modelStats.value = response.models || []
-    profitMonitor.value = response.profit || null
-    scheduleProfitRefresh(response.profit?.next_sample_at)
   } catch (error) {
     if (currentSeq !== chartLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
@@ -1184,34 +1304,16 @@ async function loadDashboardSnapshot(includeStats: boolean) {
   }
 }
 
-// 明细表的独立统计区间：inherit 时直接复用上方快照结果，其余按预设窗口单独取数。
-const resolveProfitTableRange = (): { start: string; end: string } | null => {
-  if (profitTableRange.value === 'inherit') return null
-  const end = new Date()
-  if (profitTableRange.value === 'quarter') {
-    const quarterStartMonth = Math.floor(end.getMonth() / 3) * 3
-    const quarterStart = new Date(end.getFullYear(), quarterStartMonth, 1)
-    return { start: formatLocalDate(quarterStart), end: formatLocalDate(end) }
-  }
-  const days = profitTableRange.value === 'last7' ? 7 : profitTableRange.value === 'last90' ? 90 : 30
-  const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000)
-  return { start: formatLocalDate(start), end: formatLocalDate(end) }
-}
-
-const loadProfitTable = async () => {
-  const range = resolveProfitTableRange()
-  if (!range) {
-    profitTableMonitor.value = null
-    profitTableLoading.value = false
-    return
-  }
-  const currentSeq = ++profitTableLoadSeq
-  profitTableLoading.value = true
+// 利润模块独立取数：一次拿到 summary / trend / 三个维度的明细，切换时间时整体刷新。
+const loadProfit = async () => {
+  const currentSeq = ++profitLoadSeq
+  const range = resolveProfitRange()
+  profitLoading.value = true
   try {
     const response = await adminAPI.dashboard.getSnapshotV2({
       start_date: range.start,
       end_date: range.end,
-      granularity: granularity.value,
+      granularity: profitGranularity.value,
       include_stats: false,
       include_trend: false,
       include_model_stats: false,
@@ -1219,22 +1321,42 @@ const loadProfitTable = async () => {
       include_users_trend: false,
       include_profit: true
     })
-    if (currentSeq !== profitTableLoadSeq) return
-    profitTableMonitor.value = response.profit || null
+    if (currentSeq !== profitLoadSeq) return
+    profitMonitor.value = response.profit || null
+    scheduleProfitRefresh(response.profit?.next_sample_at)
   } catch (error) {
-    if (currentSeq !== profitTableLoadSeq) return
+    if (currentSeq !== profitLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
-    console.error('Error loading profit table snapshot:', error)
+    console.error('Error loading profit snapshot:', error)
   } finally {
-    if (currentSeq === profitTableLoadSeq) {
-      profitTableLoading.value = false
+    if (currentSeq === profitLoadSeq) {
+      profitLoading.value = false
     }
   }
 }
 
-watch(profitTableRange, () => {
-  void loadProfitTable()
-})
+const setProfitRange = (value: ProfitRangePreset) => {
+  if (value === 'custom') {
+    profitCustomDraft.value = { ...profitCustomRange.value }
+    profitCustomOpen.value = true
+    return
+  }
+  if (profitRange.value === value) return
+  profitRange.value = value
+  void loadProfit()
+}
+
+const applyProfitCustom = () => {
+  const { start, end } = profitCustomDraft.value
+  if (!start || !end || start > end) {
+    appStore.showError(t('admin.dashboard.profitCustomInvalid'))
+    return
+  }
+  profitCustomRange.value = { start, end }
+  profitRange.value = 'custom'
+  profitCustomOpen.value = false
+  void loadProfit()
+}
 
 const setUserTrendMetric = (metric: 'tokens' | 'actual_cost') => {
   if (userTrendMetric.value === metric) return
@@ -1301,7 +1423,8 @@ const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
     loadUsersTrend(),
-    loadUserSpendingRanking()
+    loadUserSpendingRanking(),
+    loadProfit()
   ])
 }
 
@@ -1326,8 +1449,4 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 明细表工具栏里的区间下拉要与左侧 tab 同一高度，覆盖 Select 默认的大号内边距。 */
-.profit-range-select :deep(.select-trigger) {
-  @apply rounded-lg px-3 py-1.5 text-xs;
-}
 </style>
